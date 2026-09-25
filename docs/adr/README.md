@@ -18,6 +18,7 @@ immutable once accepted; a reversal is a new ADR that supersedes the old one.
 | [0011](0011-typescript-5-pin.md) | Pin TypeScript to 5.x | Accepted |
 | [0012](0012-contract-first-generated-code.md) | Contract-first OpenAPI 3.1 with committed, drift-checked generated code | Accepted |
 | [0013](0013-money-integer-minor-units.md) | Money as integer minor units | Accepted |
+| [0014](0014-phase-1-runtime.md) | Phase 1 runtime: in-process outbox relay, signed service calls, documents in Postgres | Accepted |
 
 ## Writing a new ADR
 

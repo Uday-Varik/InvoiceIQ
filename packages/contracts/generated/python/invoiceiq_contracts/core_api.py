@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from enum import StrEnum
 from uuid import UUID
+from datetime import date
 
 
 class Health(BaseModel):
@@ -21,6 +22,9 @@ class Problem(BaseModel):
     title: str
     status: int = Field(..., ge=100, le=599)
     detail: str | None = None
+    code: str | None = Field(
+        None, description="Machine-readable cause, e.g. a TransitionError such as HUMAN_REQUIRED."
+    )
 
 
 class InvoiceState(StrEnum):
@@ -177,26 +181,80 @@ class Money(BaseModel):
     currency: str = Field(..., pattern="^[A-Z]{3}$")
 
 
-class DocumentContentType(StrEnum):
-    application_pdf = "application/pdf"
-    image_png = "image/png"
-    image_jpeg = "image/jpeg"
-    image_tiff = "image/tiff"
-
-
 class SourceChannel(StrEnum):
     upload = "upload"
     email = "email"
     api = "api"
 
 
-class InvoiceCreate(BaseModel):
+class InvoiceUpload(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    documentSha256: str = Field(..., pattern="^[0-9a-f]{64}$")
-    documentContentType: DocumentContentType
-    sourceChannel: SourceChannel
+    file: str = Field(
+        ...,
+        description="PDF, PNG or JPEG, at most 10 MiB. The type is sniffed from the bytes, not trusted from the client.",
+        json_schema_extra={"contentMediaType": "application/octet-stream"},
+    )
+    sourceChannel: SourceChannel | None = "upload"
+
+
+class ContentType(StrEnum):
+    application_pdf = "application/pdf"
+    image_png = "image/png"
+    image_jpeg = "image/jpeg"
+
+
+class InvoiceDocument(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    sha256: str = Field(..., pattern="^[0-9a-f]{64}$")
+    contentType: ContentType
+    filename: str = Field(..., max_length=255)
+    sizeBytes: int = Field(..., ge=1)
+
+
+class ExtractedField(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    value: str | None
+    confidence: float = Field(..., ge=0.0, le=1.0)
+
+
+class Fields(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    vendorName: ExtractedField
+    invoiceNumber: ExtractedField
+    invoiceDate: ExtractedField
+    currency: ExtractedField
+    totalMinor: ExtractedField
+
+
+class InvoiceExtraction(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    provider: str
+    extractedAt: AwareDatetime
+    fields: Fields
+
+
+class InvoiceEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    seq: int = Field(..., ge=0)
+    type: str
+    from_: InvoiceState | None = Field(None, alias="from")
+    to: InvoiceState | None = None
+    actor: Actor
+    reasons: list[ReasonCode] | None = None
+    comment: str | None = None
+    occurredAt: AwareDatetime
 
 
 class Invoice(BaseModel):
@@ -206,10 +264,21 @@ class Invoice(BaseModel):
     id: UUID
     tenantId: UUID
     vendorId: UUID | None = None
+    vendorName: str | None = Field(None, max_length=256)
     invoiceNumber: str | None = Field(None, max_length=64)
+    invoiceDate: date | None = None
     total: Money | None = None
     state: InvoiceState
-    reasons: list[ReasonCode]
+    reasons: list[ReasonCode] = Field(
+        ...,
+        description="Reasons for the transition into the current state. Empty unless the state is HOLD, EXCEPTION or REJECTED.",
+    )
+    version: int = Field(..., description="Incremented on every state change.", ge=1)
+    document: InvoiceDocument | None = None
+    extraction: InvoiceExtraction | None = None
+    history: list[InvoiceEvent] | None = Field(
+        None, description="Audit entries for this invoice, oldest first. Present on getInvoice only."
+    )
     createdAt: AwareDatetime
     updatedAt: AwareDatetime
 
@@ -228,6 +297,21 @@ class InvoiceTransition(BaseModel):
     )
     to: InvoiceState
     reasons: list[ReasonCode] | None = Field(None, max_length=18)
+    comment: str | None = Field(None, max_length=2000)
+
+
+class InvoiceApproval(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    comment: str | None = Field(None, max_length=2000)
+
+
+class InvoiceRejection(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    reasons: list[ReasonCode] = Field(..., max_length=18, min_length=1)
     comment: str | None = Field(None, max_length=2000)
 
 

@@ -8,7 +8,8 @@ UV ?= uv
 PY_SRC := services/ai-service/src services/ai-service/tests data/src data/tests packages/contracts/scripts tests/guardrails
 
 .PHONY: install install-ts install-py check check-ts check-py lint-ts typecheck-ts test-ts openapi-lint \
-        contracts-verify contracts-verify-py lint-py typecheck-py test-py arch-py data-check contracts data fmt clean
+        contracts-verify contracts-verify-py lint-py typecheck-py test-py arch-py data-check contracts data fmt clean \
+        test-db up smoke down
 
 install: install-ts install-py
 
@@ -62,6 +63,24 @@ data-check:
 
 test-py:
 	$(UV) run --frozen pytest services/ai-service/tests data/tests tests/guardrails
+
+## ---- local stack ----------------------------------------------------------
+# core-api's Postgres integration tests run inside `make check` whenever
+# TEST_DATABASE_URL is set (CI always sets it). `make test-db` makes it explicit.
+DB_PORT ?= 5432
+TEST_DATABASE_URL ?= postgres://invoiceiq:invoiceiq-local-only@localhost:$(DB_PORT)/invoiceiq
+
+test-db:
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) REQUIRE_DB_TESTS=1 $(PNPM) --filter @invoiceiq/core-api run test
+
+up:
+	docker compose up --build --detach --wait
+
+smoke:
+	./scripts/smoke.sh
+
+down:
+	docker compose down
 
 ## ---- generators -------------------------------------------------------------
 contracts:

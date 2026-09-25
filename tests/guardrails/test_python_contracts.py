@@ -20,16 +20,19 @@ CORE_SPEC: dict[str, Any] = yaml.safe_load((ROOT / "packages/contracts/openapi/c
 CATALOG: dict[str, Any] = json.loads((ROOT / "packages/contracts/catalog/reason-codes.json").read_text())
 
 
-def _phase0_ops(spec: dict[str, Any]) -> set[str]:
+IMPLEMENTED_PHASE = 1
+
+
+def _implemented_ops(spec: dict[str, Any]) -> set[str]:
     return {
         f"{method.upper()} {path}"
         for path, item in spec["paths"].items()
         for method, op in item.items()
-        if isinstance(op, dict) and op.get("x-phase") == 0
+        if isinstance(op, dict) and op.get("x-phase", 99) <= IMPLEMENTED_PHASE
     }
 
 
-def test_ai_service_routes_equal_phase0_contract() -> None:
+def test_ai_service_routes_equal_implemented_contract() -> None:
     app = create_app(HeuristicProvider())
     routes = {
         f"{method} {r.path}"
@@ -38,7 +41,7 @@ def test_ai_service_routes_equal_phase0_contract() -> None:
         for method in (r.methods or set())
         if method != "HEAD"
     }
-    assert routes == _phase0_ops(AI_SPEC)
+    assert routes == _implemented_ops(AI_SPEC)
 
 
 def test_generated_ai_reason_enum_matches_catalog() -> None:

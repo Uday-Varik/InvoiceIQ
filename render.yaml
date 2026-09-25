@@ -1,0 +1,66 @@
+# Render Blueprint for the two backends (free plan, scale to zero).
+#
+# W-UNV (Written-unverified): the sandbox that wrote this has no Render account,
+# so this file has not been applied. The Dockerfiles it points at are built and
+# run in CI. Setup steps: docs/runbooks/deploy-free-tier.md.
+
+envVarGroups:
+  - name: invoiceiq-shared
+    envVars:
+      # core-api signs every call to ai-service with this (HMAC-SHA256).
+      - key: AI_SIGNING_SECRET
+        generateValue: true
+
+services:
+  - type: web
+    name: invoiceiq-ai-service
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./services/ai-service/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - services/ai-service/**
+        - packages/contracts/generated/python/**
+        - pyproject.toml
+        - uv.lock
+    envVars:
+      - fromGroup: invoiceiq-shared
+      # Deliberately no DATABASE_URL (ADR-0007).
+
+  - type: web
+    name: invoiceiq-core-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./services/core-api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - services/core-api/**
+        - packages/contracts/**
+        - package.json
+        - pnpm-lock.yaml
+    envVars:
+      - fromGroup: invoiceiq-shared
+      # Neon *pooled* URL for the invoiceiq_app role (RLS applies to it).
+      - key: DATABASE_URL
+        sync: false
+      # Neon *direct* (unpooled) URL for the owner role. Migrations run on boot,
+      # because the free plan has no pre-deploy command.
+      - key: MIGRATION_DATABASE_URL
+        sync: false
+      # The public demo: one shared demo tenant, no login. Switch to oidc and set
+      # OIDC_ISSUER, OIDC_AUDIENCE and OIDC_JWKS_URL for a real deployment.
+      - key: AUTH_MODE
+        value: demo
+      # https://invoiceiq-ai-service.onrender.com once that service exists.
+      - key: AI_SERVICE_URL
+        sync: false
+      - key: NODE_ENV
+        value: production

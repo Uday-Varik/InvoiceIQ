@@ -15,7 +15,7 @@ export function renderCatalog(): string {
     reasonCodes: Object.fromEntries(
       REASON_CODES.map((code) => {
         const r = REASON_CATALOG[code];
-        return [code, { source: r.source, severity: r.severity, allowedOutcomes: r.allowedOutcomes }];
+        return [code, { source: r.source, severity: r.severity, allowedOutcomes: r.allowedOutcomes, description: r.description }];
       }),
     ),
   };

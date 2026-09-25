@@ -18,29 +18,47 @@ export type BankChangeRequest = z.infer<typeof BankChangeRequest>;
 export const BankChangeStatus = z.object({ "vendorId": z.string().uuid(), "quarantined": z.boolean(), "releasesAt": z.union([z.string().datetime({ offset: true }), z.null()]).optional(), "why": z.enum(["WINDOW_OPEN","UNVERIFIED","SELF_VERIFIED"]).optional() }).strict();
 export type BankChangeStatus = z.infer<typeof BankChangeStatus>;
 
+export const ExtractedField = z.object({ "value": z.union([z.string(), z.null()]), "confidence": z.number().gte(0).lte(1) }).strict();
+export type ExtractedField = z.infer<typeof ExtractedField>;
+
 export const Health = z.object({ "status": z.literal("ok"), "service": z.string() }).strict();
 export type Health = z.infer<typeof Health>;
+
+export const InvoiceDocument = z.object({ "sha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")), "contentType": z.enum(["application/pdf","image/png","image/jpeg"]), "filename": z.string().max(255), "sizeBytes": z.number().int().gte(1) }).strict();
+export type InvoiceDocument = z.infer<typeof InvoiceDocument>;
 
 export const InvoiceState = z.enum(["RECEIVED","EXTRACTING","EXTRACTED","VALIDATING","VALIDATED","MATCHING","MATCHED","PENDING_APPROVAL","APPROVED","REJECTED","HOLD","EXCEPTION","PAYMENT_QUEUED","PAID"]).describe("The 14-state invoice lifecycle.");
 export type InvoiceState = z.infer<typeof InvoiceState>;
 
-export const Money = z.object({ "amountMinor": z.string().regex(new RegExp("^-?[0-9]{1,19}$")), "currency": z.string().regex(new RegExp("^[A-Z]{3}$")) }).strict().describe("Integer minor units as a decimal string (never a float) plus ISO 4217 currency.");
-export type Money = z.infer<typeof Money>;
-
 export const ReasonCode = z.enum(["MATCH_PRICE_VARIANCE","MATCH_QUANTITY_VARIANCE","MATCH_PO_NOT_FOUND","MATCH_RECEIPT_MISSING","DUPLICATE_EXACT","DUPLICATE_NEAR","VENDOR_BANK_CHANGE_QUARANTINE","VENDOR_UNKNOWN","VENDOR_INACTIVE","VALIDATION_MISSING_FIELD","VALIDATION_TOTALS_MISMATCH","VALIDATION_CURRENCY_UNSUPPORTED","APPROVAL_LIMIT_EXCEEDED","POLICY_MANUAL_REVIEW_REQUIRED","AI_EXTRACTION_LOW_CONFIDENCE","AI_ANOMALY_SUSPECTED","AI_DOCUMENT_TAMPERING_SUSPECTED","AI_SEMANTIC_DUPLICATE_SUSPECTED"]).describe("The 18-code reason catalog. Codes prefixed AI_ are AI-derived and HOLD-only.");
 export type ReasonCode = z.infer<typeof ReasonCode>;
 
-export const Invoice = z.object({ "id": z.string().uuid(), "tenantId": z.string().uuid(), "vendorId": z.string().uuid().optional(), "invoiceNumber": z.string().max(64).optional(), "total": Money.optional(), "state": InvoiceState, "reasons": z.array(ReasonCode), "createdAt": z.string().datetime({ offset: true }), "updatedAt": z.string().datetime({ offset: true }) }).strict();
+export const InvoiceEvent = z.object({ "seq": z.number().int().gte(0), "type": z.string(), "from": InvoiceState.optional(), "to": InvoiceState.optional(), "actor": Actor, "reasons": z.array(ReasonCode).optional(), "comment": z.string().optional(), "occurredAt": z.string().datetime({ offset: true }) }).strict();
+export type InvoiceEvent = z.infer<typeof InvoiceEvent>;
+
+export const InvoiceExtraction = z.object({ "provider": z.string(), "extractedAt": z.string().datetime({ offset: true }), "fields": z.object({ "vendorName": ExtractedField, "invoiceNumber": ExtractedField, "invoiceDate": ExtractedField, "currency": ExtractedField, "totalMinor": ExtractedField }).strict() }).strict();
+export type InvoiceExtraction = z.infer<typeof InvoiceExtraction>;
+
+export const Money = z.object({ "amountMinor": z.string().regex(new RegExp("^-?[0-9]{1,19}$")), "currency": z.string().regex(new RegExp("^[A-Z]{3}$")) }).strict().describe("Integer minor units as a decimal string (never a float) plus ISO 4217 currency.");
+export type Money = z.infer<typeof Money>;
+
+export const Invoice = z.object({ "id": z.string().uuid(), "tenantId": z.string().uuid(), "vendorId": z.string().uuid().optional(), "vendorName": z.string().max(256).optional(), "invoiceNumber": z.string().max(64).optional(), "invoiceDate": z.string().date().optional(), "total": Money.optional(), "state": InvoiceState, "reasons": z.array(ReasonCode).describe("Reasons for the transition into the current state. Empty unless the state is HOLD, EXCEPTION or REJECTED."), "version": z.number().int().gte(1).describe("Incremented on every state change."), "document": InvoiceDocument.optional(), "extraction": InvoiceExtraction.optional(), "history": z.array(InvoiceEvent).describe("Audit entries for this invoice, oldest first. Present on getInvoice only.").optional(), "createdAt": z.string().datetime({ offset: true }), "updatedAt": z.string().datetime({ offset: true }) }).strict();
 export type Invoice = z.infer<typeof Invoice>;
 
-export const InvoiceCreate = z.object({ "documentSha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")), "documentContentType": z.enum(["application/pdf","image/png","image/jpeg","image/tiff"]), "sourceChannel": z.enum(["upload","email","api"]) }).strict();
-export type InvoiceCreate = z.infer<typeof InvoiceCreate>;
+export const InvoiceApproval = z.object({ "comment": z.string().max(2000).optional() }).strict();
+export type InvoiceApproval = z.infer<typeof InvoiceApproval>;
 
 export const InvoicePage = z.object({ "items": z.array(Invoice), "nextCursor": z.string().optional() }).strict();
 export type InvoicePage = z.infer<typeof InvoicePage>;
 
+export const InvoiceRejection = z.object({ "reasons": z.array(ReasonCode).min(1).max(18), "comment": z.string().max(2000).optional() }).strict();
+export type InvoiceRejection = z.infer<typeof InvoiceRejection>;
+
 export const InvoiceTransition = z.object({ "to": InvoiceState, "reasons": z.array(ReasonCode).max(18).optional(), "comment": z.string().max(2000).optional() }).strict();
 export type InvoiceTransition = z.infer<typeof InvoiceTransition>;
+
+export const InvoiceUpload = z.object({ "file": z.string().describe("PDF, PNG or JPEG, at most 10 MiB. The type is sniffed from the bytes, not trusted from the client."), "sourceChannel": z.enum(["upload","email","api"]).default("upload") }).strict();
+export type InvoiceUpload = z.infer<typeof InvoiceUpload>;
 
 export const LifecycleState = z.object({ "state": InvoiceState, "next": z.array(InvoiceState) }).strict();
 export type LifecycleState = z.infer<typeof LifecycleState>;
@@ -48,7 +66,7 @@ export type LifecycleState = z.infer<typeof LifecycleState>;
 export const LifecycleStates = z.object({ "states": z.array(LifecycleState) }).strict();
 export type LifecycleStates = z.infer<typeof LifecycleStates>;
 
-export const Problem = z.object({ "type": z.string(), "title": z.string(), "status": z.number().int().gte(100).lte(599), "detail": z.string().optional() });
+export const Problem = z.object({ "type": z.string(), "title": z.string(), "status": z.number().int().gte(100).lte(599), "detail": z.string().optional(), "code": z.string().describe("Machine-readable cause, e.g. a TransitionError such as HUMAN_REQUIRED.").optional() });
 export type Problem = z.infer<typeof Problem>;
 
 export const ReasonOutcome = z.enum(["HOLD","EXCEPTION","REJECTED"]);

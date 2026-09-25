@@ -12,11 +12,15 @@
     "catalog:check": "tsx scripts/export-catalog.ts --check"
   },
   "dependencies": {
+    "@fastify/multipart": "10.1.2",
     "fastify": "5.12.5",
+    "jose": "6.2.12",
+    "pg": "8.23.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
     "@invoiceiq/contracts": "workspace:*",
+    "@types/pg": "8.23.1",
     "tsx": "4.23.15"
   }
 }

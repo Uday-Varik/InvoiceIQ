@@ -7,6 +7,7 @@ export interface ReasonView {
   source: 'deterministic' | 'ai';
   severity: string;
   allowedOutcomes: readonly Outcome[];
+  description: string;
 }
 
 export interface StateView {
