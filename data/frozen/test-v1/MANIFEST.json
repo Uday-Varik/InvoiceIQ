@@ -1,0 +1,12 @@
+{
+  "algorithm": "sha256",
+  "files": [
+    {
+      "bytes": 14368,
+      "path": "test.jsonl",
+      "sha256": "223dcdf66585fa5329d482b2c4efc68075d20075ab7f2a77ebc3a500cfe01a07"
+    }
+  ],
+  "root": "743883d13b3955714d585274bf0d0775702ab5aafa9904f91695f35a93f407cf",
+  "version": 1
+}

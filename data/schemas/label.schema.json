@@ -1,0 +1,92 @@
+{
+  "$id": "https://github.com/Uday-Varik/InvoiceIQ/data/schemas/label.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Ground truth for one synthetic invoice document.",
+  "properties": {
+    "currency": {
+      "pattern": "^[A-Z]{3}$",
+      "title": "Currency",
+      "type": "string"
+    },
+    "doc_id": {
+      "pattern": "^DOC-[0-9a-f]{12}$",
+      "title": "Doc Id",
+      "type": "string"
+    },
+    "expected_outcome": {
+      "enum": [
+        "PASS",
+        "HOLD",
+        "EXCEPTION",
+        "REJECTED"
+      ],
+      "title": "Expected Outcome",
+      "type": "string"
+    },
+    "expected_reason_codes": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Expected Reason Codes",
+      "type": "array"
+    },
+    "family_id": {
+      "pattern": "^FAM-[0-9a-f]{8}$",
+      "title": "Family Id",
+      "type": "string"
+    },
+    "invoice_date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Invoice Date",
+      "type": "string"
+    },
+    "invoice_number": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Invoice Number",
+      "type": "string"
+    },
+    "is_attack": {
+      "title": "Is Attack",
+      "type": "boolean"
+    },
+    "total_minor": {
+      "minimum": 0,
+      "title": "Total Minor",
+      "type": "integer"
+    },
+    "variant_id": {
+      "anyOf": [
+        {
+          "pattern": "^RT-[A-Z]{3}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Variant Id"
+    },
+    "vendor_id": {
+      "pattern": "^VEN-\\d{4}$",
+      "title": "Vendor Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "doc_id",
+    "family_id",
+    "is_attack",
+    "vendor_id",
+    "invoice_number",
+    "invoice_date",
+    "currency",
+    "total_minor",
+    "expected_outcome"
+  ],
+  "title": "LabelRecord",
+  "type": "object"
+}

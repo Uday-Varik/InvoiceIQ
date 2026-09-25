@@ -1,0 +1,28 @@
+{
+  "name": "@invoiceiq/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./core-api": "./generated/ts/core-api.ts",
+    "./core-api/zod": "./generated/ts/core-api.zod.ts",
+    "./ai-service": "./generated/ts/ai-service.ts",
+    "./ai-service/zod": "./generated/ts/ai-service.zod.ts",
+    "./openapi/*": "./openapi/*",
+    "./catalog/reason-codes.json": "./catalog/reason-codes.json"
+  },
+  "scripts": {
+    "generate": "node scripts/generate-ts.mjs",
+    "verify": "node scripts/generate-ts.mjs --check",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "json-schema-to-zod": "2.8.1",
+    "openapi-typescript": "7.13.0",
+    "yaml": "2.9.1"
+  }
+}

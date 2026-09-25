@@ -1,0 +1,38 @@
+# uv workspace root (virtual: no [project]). Python members share one lockfile.
+[tool.uv.workspace]
+members = ["packages/contracts", "services/ai-service", "data"]
+
+[dependency-groups]
+dev = [
+  "datamodel-code-generator==0.83.0",
+  "httpx2==2.13.1",
+  "import-linter==2.15",
+  "mypy==2.3.1",
+  "pytest==9.1.1",
+  "ruff==0.16.9",
+  "types-PyYAML==6.0.12.20260906",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = ["packages/contracts/generated"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "PT", "N"]
+ignore = ["S101"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+mypy_path = ["packages/contracts/generated/python", "services/ai-service/src", "data/src"]
+explicit_package_bases = true
+exclude = ["tests/guardrails/fixtures"]
+
+[tool.pytest.ini_options]
+addopts = "-q --import-mode=importlib"
+
+[tool.ruff.lint.isort]
+known-first-party = ["ai_service", "invoiceiq_contracts", "invoiceiq_data"]
