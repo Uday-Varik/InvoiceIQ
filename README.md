@@ -10,9 +10,10 @@ bank-detail-change quarantine and a hash-chained audit ledger. Models help with
 extraction and risk signals, but every AI output is structurally limited to
 putting an invoice on HOLD.
 
-> Status: **Phase 0 (foundations).** The domain model, contracts, guardrails,
-> data tooling and design docs are in place and tested. Persistence, the review
-> UI and live model calls start in Phase 1.
+> Status: **Phase 1 (walking skeleton).** An invoice can be uploaded,
+> extracted (baseline, no LLM), validated, reviewed and approved end to end,
+> on Postgres with row-level security, a transactional outbox and a
+> hash-chained audit log. Live model calls start in Phase 2.
 
 ## The problem
 
@@ -26,7 +27,7 @@ deterministic, auditable controls between every document and the money.
 
 | Deployable | Stack | Role |
 | --- | --- | --- |
-| `apps/web` | Next.js, React, TypeScript | Reviewer UI (Phase 0: shell reading the contract catalog) |
+| `apps/web` | Next.js, React, TypeScript | Upload and review UI; talks to core-api through a same-origin proxy |
 | `services/core-api` | TypeScript, Fastify | Owns money tables, the lifecycle gate and the audit ledger |
 | `services/ai-service` | Python, FastAPI | Extraction and HOLD-only signals; no database credentials |
 | Postgres | 16 | System of record, queue and outbox, row-level security |
@@ -73,6 +74,27 @@ it is written but could not be executed there (no Docker daemon, no cloud).
 "Verified" for docs means the guardrail tests parse them and check them
 against the code.
 
+## Phase 1 deliverables
+
+Same labels as above. The Dockerfiles were built and run in the sandbox with
+its egress proxy's CA injected at build time (the committed files do not
+contain it); CI builds them unmodified.
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | Postgres migrations, tenant bootstrap, RLS enabled and forced on every table | Verified-in-sandbox | `services/core-api/migrations/`, `src/db/` |
+| 2 | Invoice API: upload, list, get, document, approve, reject, transitions, audit verify | Verified-in-sandbox | `services/core-api/src/http/app.ts` |
+| 3 | Every state change through the gate, with audit entry and outbox event in one transaction | Verified-in-sandbox | `services/core-api/src/invoices/lifecycle.ts` |
+| 4 | OIDC/JWT auth, plus an explicit open demo mode | Verified-in-sandbox | `services/core-api/src/auth/auth.ts` |
+| 5 | Wake-and-drain outbox relay: leases, backoff, dead-letter to HOLD | Verified-in-sandbox | `services/core-api/src/outbox/worker.ts` |
+| 6 | Integration tests on real Postgres (RLS, API, auth, worker, migrations) | Verified-in-sandbox | `services/core-api/test/integration/` |
+| 7 | ai-service baseline PDF extraction and HMAC-signed calls from core-api | Verified-in-sandbox | `services/ai-service/src/ai_service/` |
+| 8 | Web upload, review with confidence, approve/reject, "Waking the demo" | Verified-in-sandbox | `apps/web/` |
+| 9 | Dockerfiles for core-api and ai-service (multi-stage, non-root, health checks) | Verified-in-sandbox | `services/*/Dockerfile` |
+| 10 | Docker compose stack and end-to-end smoke script | Verified-in-sandbox | `docker-compose.yml`, `scripts/smoke.sh` |
+| 11 | Render blueprint and Vercel config for the free-tier deploy (W-UNV) | Written-unverified | `render.yaml`, `apps/web/vercel.json` |
+| 12 | Neon, Render and Vercel deploy runbook (W-UNV) | Written-unverified | [docs/runbooks/deploy-free-tier.md](docs/runbooks/deploy-free-tier.md) |
+
 ## Getting started
 
 ```bash
@@ -81,18 +103,27 @@ make install             # pnpm install + uv sync
 make check               # lint, types, OpenAPI lint, drift checks, all tests
 ```
 
+Run it:
+
+```bash
+make up                                   # Postgres, ai-service, core-api in Docker
+make smoke                                # upload -> extract -> approve -> verify audit
+CORE_API_URL=http://localhost:3001 pnpm --filter @invoiceiq/web dev
+```
+
 More in [docs/runbooks/local-development.md](docs/runbooks/local-development.md).
 
 ## Repository map
 
 ```
-apps/web                 Next.js reviewer UI (shell)
+apps/web                 Next.js upload and review UI
 services/core-api        Fastify API + pure domain model
 services/ai-service      FastAPI extraction and signals
 packages/contracts       OpenAPI specs, generated TS/Zod/Pydantic, reason catalog
 data/                    Synthetic labels, red-team taxonomy, splits, frozen sets
 evals/                   Evaluation harness (Phase 2)
 infra/                   Local DB bootstrap, hosting sketches (unverified)
+scripts/                 End-to-end smoke test
 docs/                    ADRs, C4, threat model, runbooks, domain model
 tests/guardrails         Cross-cutting drift and architecture tests
 ```

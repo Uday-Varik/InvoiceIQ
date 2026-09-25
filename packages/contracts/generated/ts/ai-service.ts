@@ -36,6 +36,28 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/v1/extract/document": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Extract header fields from an invoice document (baseline, no LLM)
+         * @description Reads the text layer of a PDF and runs the same field extraction as
+         *     /v1/extract. Images have no text layer in the baseline, so every field
+         *     comes back null with confidence 0, which core-api turns into a HOLD.
+         */
+        readonly post: operations["extractDocument"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/v1/signals": {
         readonly parameters: {
             readonly query?: never;
@@ -62,6 +84,15 @@ export type components = {
          * @enum {string}
          */
         readonly AiReasonCode: "AI_EXTRACTION_LOW_CONFIDENCE" | "AI_ANOMALY_SUSPECTED" | "AI_DOCUMENT_TAMPERING_SUSPECTED" | "AI_SEMANTIC_DUPLICATE_SUSPECTED";
+        readonly DocumentExtractionRequest: {
+            readonly contentBase64: string;
+            /** @enum {string} */
+            readonly contentType: "application/pdf" | "image/png" | "image/jpeg";
+            /** @description Must equal sha256 of the decoded bytes. */
+            readonly documentSha256: string;
+            /** Format: uuid */
+            readonly tenantId: string;
+        };
         readonly ExtractedField: {
             readonly confidence: number;
             readonly value: string | null;
@@ -174,6 +205,34 @@ export interface operations {
                     readonly "application/json": components["schemas"]["ExtractionResult"];
                 };
             };
+            readonly 401: components["responses"]["Problem"];
+            readonly 422: components["responses"]["Problem"];
+            readonly 503: components["responses"]["Problem"];
+        };
+    };
+    readonly extractDocument: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["DocumentExtractionRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Extracted fields with per-field confidence */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ExtractionResult"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
             readonly 422: components["responses"]["Problem"];
             readonly 503: components["responses"]["Problem"];
         };
@@ -200,6 +259,7 @@ export interface operations {
                     readonly "application/json": components["schemas"]["SignalResponse"];
                 };
             };
+            readonly 401: components["responses"]["Problem"];
             readonly 422: components["responses"]["Problem"];
         };
     };

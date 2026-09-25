@@ -7,6 +7,7 @@ dependencies = [
   "fastapi==0.141.1",
   "invoiceiq-contracts",
   "pydantic==2.13.5",
+  "pypdf==6.19.0",
   "uvicorn==0.54.0",
 ]
 
@@ -34,10 +35,11 @@ forbidden_modules = ["sqlalchemy", "psycopg", "psycopg2", "asyncpg", "sqlite3", 
 
 [[tool.importlinter.contracts]]
 id = "layers"
-name = "api -> domain (extraction, signals) -> providers"
+name = "api -> domain (extraction, signals) -> documents -> providers"
 type = "layers"
 layers = [
   "ai_service.api",
   "ai_service.extraction | ai_service.signals",
+  "ai_service.documents",
   "ai_service.providers",
 ]

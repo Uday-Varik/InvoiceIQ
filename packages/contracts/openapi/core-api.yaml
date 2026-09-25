@@ -6,8 +6,8 @@ info:
   description: |
     core-api owns every money-bearing table. It is the only service allowed to
     change invoice state, and every state change goes through the lifecycle gate
-    (`evaluateTransition`). Operations tagged `x-phase: 0` are implemented today;
-    later phases are specified here first so contracts lead code.
+    (`evaluateTransition`). Operations tagged `x-phase: 0` and `x-phase: 1` are
+    implemented; later phases are specified here first so contracts lead code.
   license:
     name: MIT
     identifier: MIT
@@ -139,7 +139,12 @@ paths:
           $ref: '#/components/responses/Problem'
     post:
       operationId: createInvoice
-      summary: Register an uploaded invoice document
+      summary: Upload an invoice document
+      description: |
+        Stores the document, creates the invoice in RECEIVED and queues extraction
+        through the outbox in the same transaction. Uploading the same bytes twice
+        for one tenant is refused with 409; retrying with the same Idempotency-Key
+        returns the original response.
       tags: [invoices]
       x-phase: 1
       parameters:
@@ -147,9 +152,9 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: '#/components/schemas/InvoiceCreate'
+              $ref: '#/components/schemas/InvoiceUpload'
       responses:
         '201':
           description: Invoice created in RECEIVED
@@ -159,7 +164,13 @@ paths:
                 $ref: '#/components/schemas/Invoice'
         '400':
           $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
         '409':
+          $ref: '#/components/responses/Problem'
+        '413':
+          $ref: '#/components/responses/Problem'
+        '415':
           $ref: '#/components/responses/Problem'
   /v1/invoices/{invoiceId}:
     get:
@@ -176,7 +187,100 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Problem'
         '404':
+          $ref: '#/components/responses/Problem'
+  /v1/invoices/{invoiceId}/document:
+    get:
+      operationId: getInvoiceDocument
+      summary: Download the original invoice document
+      tags: [invoices]
+      x-phase: 1
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200':
+          description: The document bytes, with the content type it was uploaded with
+          content:
+            application/pdf:
+              schema:
+                type: string
+                contentMediaType: application/pdf
+            image/png:
+              schema:
+                type: string
+                contentMediaType: image/png
+            image/jpeg:
+              schema:
+                type: string
+                contentMediaType: image/jpeg
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/invoices/{invoiceId}/approve:
+    post:
+      operationId: approveInvoice
+      summary: Approve an invoice that is PENDING_APPROVAL
+      description: |
+        Human-only (enforced by the lifecycle gate). The caller's role must cover
+        the approval tier for the invoice total in the tenant policy.
+      tags: [invoices]
+      x-phase: 1
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceApproval'
+      responses:
+        '200':
+          description: Invoice is APPROVED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/invoices/{invoiceId}/reject:
+    post:
+      operationId: rejectInvoice
+      summary: Reject an invoice with at least one reason that allows REJECTED
+      tags: [invoices]
+      x-phase: 1
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceRejection'
+      responses:
+        '200':
+          description: Invoice is REJECTED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
           $ref: '#/components/responses/Problem'
   /v1/invoices/{invoiceId}/transitions:
     post:
@@ -200,6 +304,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
         '409':
@@ -211,7 +317,7 @@ paths:
       operationId: requestVendorBankChange
       summary: Record a vendor bank-detail change (starts quarantine)
       tags: [vendors]
-      x-phase: 1
+      x-phase: 2
       parameters:
         - name: vendorId
           in: path
@@ -304,6 +410,9 @@ components:
           maximum: 599
         detail:
           type: string
+        code:
+          type: string
+          description: Machine-readable cause, e.g. a TransitionError such as HUMAN_REQUIRED.
     InvoiceState:
       type: string
       description: The 14-state invoice lifecycle.
@@ -466,24 +575,103 @@ components:
         currency:
           type: string
           pattern: '^[A-Z]{3}$'
-    InvoiceCreate:
+    InvoiceUpload:
       type: object
       additionalProperties: false
-      required: [documentSha256, documentContentType, sourceChannel]
+      required: [file]
       properties:
-        documentSha256:
+        file:
           type: string
-          pattern: '^[0-9a-f]{64}$'
-        documentContentType:
-          type: string
-          enum: [application/pdf, image/png, image/jpeg, image/tiff]
+          contentMediaType: application/octet-stream
+          description: PDF, PNG or JPEG, at most 10 MiB. The type is sniffed from the bytes, not trusted from the client.
         sourceChannel:
           type: string
           enum: [upload, email, api]
+          default: upload
+    InvoiceDocument:
+      type: object
+      additionalProperties: false
+      required: [sha256, contentType, filename, sizeBytes]
+      properties:
+        sha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        contentType:
+          type: string
+          enum: [application/pdf, image/png, image/jpeg]
+        filename:
+          type: string
+          maxLength: 255
+        sizeBytes:
+          type: integer
+          minimum: 1
+    ExtractedField:
+      type: object
+      additionalProperties: false
+      required: [value, confidence]
+      properties:
+        value:
+          type:
+            - string
+            - 'null'
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+    InvoiceExtraction:
+      type: object
+      additionalProperties: false
+      required: [provider, fields, extractedAt]
+      properties:
+        provider:
+          type: string
+        extractedAt:
+          type: string
+          format: date-time
+        fields:
+          type: object
+          additionalProperties: false
+          required: [vendorName, invoiceNumber, invoiceDate, currency, totalMinor]
+          properties:
+            vendorName:
+              $ref: '#/components/schemas/ExtractedField'
+            invoiceNumber:
+              $ref: '#/components/schemas/ExtractedField'
+            invoiceDate:
+              $ref: '#/components/schemas/ExtractedField'
+            currency:
+              $ref: '#/components/schemas/ExtractedField'
+            totalMinor:
+              $ref: '#/components/schemas/ExtractedField'
+    InvoiceEvent:
+      type: object
+      additionalProperties: false
+      required: [seq, type, actor, occurredAt]
+      properties:
+        seq:
+          type: integer
+          minimum: 0
+        type:
+          type: string
+        from:
+          $ref: '#/components/schemas/InvoiceState'
+        to:
+          $ref: '#/components/schemas/InvoiceState'
+        actor:
+          $ref: '#/components/schemas/Actor'
+        reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReasonCode'
+        comment:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
     Invoice:
       type: object
       additionalProperties: false
-      required: [id, tenantId, state, reasons, createdAt, updatedAt]
+      required: [id, tenantId, state, reasons, version, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -494,17 +682,37 @@ components:
         vendorId:
           type: string
           format: uuid
+        vendorName:
+          type: string
+          maxLength: 256
         invoiceNumber:
           type: string
           maxLength: 64
+        invoiceDate:
+          type: string
+          format: date
         total:
           $ref: '#/components/schemas/Money'
         state:
           $ref: '#/components/schemas/InvoiceState'
         reasons:
           type: array
+          description: Reasons for the transition into the current state. Empty unless the state is HOLD, EXCEPTION or REJECTED.
           items:
             $ref: '#/components/schemas/ReasonCode'
+        version:
+          type: integer
+          minimum: 1
+          description: Incremented on every state change.
+        document:
+          $ref: '#/components/schemas/InvoiceDocument'
+        extraction:
+          $ref: '#/components/schemas/InvoiceExtraction'
+        history:
+          type: array
+          description: Audit entries for this invoice, oldest first. Present on getInvoice only.
+          items:
+            $ref: '#/components/schemas/InvoiceEvent'
         createdAt:
           type: string
           format: date-time
@@ -531,6 +739,27 @@ components:
           $ref: '#/components/schemas/InvoiceState'
         reasons:
           type: array
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/ReasonCode'
+        comment:
+          type: string
+          maxLength: 2000
+    InvoiceApproval:
+      type: object
+      additionalProperties: false
+      properties:
+        comment:
+          type: string
+          maxLength: 2000
+    InvoiceRejection:
+      type: object
+      additionalProperties: false
+      required: [reasons]
+      properties:
+        reasons:
+          type: array
+          minItems: 1
           maxItems: 18
           items:
             $ref: '#/components/schemas/ReasonCode'

@@ -25,7 +25,7 @@ tags:
   - name: signals
     description: Advisory risk signals
 security:
-  - serviceToken: []
+  - requestSignature: []
 paths:
   /healthz:
     get:
@@ -64,6 +64,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExtractionResult'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '503':
+          $ref: '#/components/responses/Problem'
+  /v1/extract/document:
+    post:
+      operationId: extractDocument
+      summary: Extract header fields from an invoice document (baseline, no LLM)
+      description: |
+        Reads the text layer of a PDF and runs the same field extraction as
+        /v1/extract. Images have no text layer in the baseline, so every field
+        comes back null with confidence 0, which core-api turns into a HOLD.
+      tags: [extraction]
+      x-phase: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentExtractionRequest'
+      responses:
+        '200':
+          description: Extracted fields with per-field confidence
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtractionResult'
+        '401':
+          $ref: '#/components/responses/Problem'
         '422':
           $ref: '#/components/responses/Problem'
         '503':
@@ -87,14 +118,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SignalResponse'
+        '401':
+          $ref: '#/components/responses/Problem'
         '422':
           $ref: '#/components/responses/Problem'
 components:
   securitySchemes:
-    serviceToken:
-      type: http
-      scheme: bearer
-      description: Short-lived service token minted by core-api.
+    requestSignature:
+      type: apiKey
+      in: header
+      name: X-IIQ-Signature
+      description: |
+        HMAC-SHA256 request signature from core-api:
+        `v1=hex(hmac(secret, timestamp + "." + METHOD + "." + path + "." + hex(sha256(body))))`,
+        with the Unix timestamp in `X-IIQ-Timestamp`. Requests older than 300 seconds are refused.
   responses:
     Problem:
       description: RFC 9457 problem details
@@ -150,6 +187,25 @@ components:
           type: string
           minLength: 1
           maxLength: 200000
+    DocumentExtractionRequest:
+      type: object
+      additionalProperties: false
+      required: [tenantId, documentSha256, contentType, contentBase64]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        documentSha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Must equal sha256 of the decoded bytes.
+        contentType:
+          type: string
+          enum: [application/pdf, image/png, image/jpeg]
+        contentBase64:
+          type: string
+          minLength: 4
+          maxLength: 14000000
     ExtractedField:
       type: object
       additionalProperties: false

@@ -46,7 +46,13 @@ export type paths = {
         /** List invoices for the caller's tenant */
         readonly get: operations["listInvoices"];
         readonly put?: never;
-        /** Register an uploaded invoice document */
+        /**
+         * Upload an invoice document
+         * @description Stores the document, creates the invoice in RECEIVED and queues extraction
+         *     through the outbox in the same transaction. Uploading the same bytes twice
+         *     for one tenant is refused with 409; retrying with the same Idempotency-Key
+         *     returns the original response.
+         */
         readonly post: operations["createInvoice"];
         readonly delete?: never;
         readonly options?: never;
@@ -65,6 +71,61 @@ export type paths = {
         readonly get: operations["getInvoice"];
         readonly put?: never;
         readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/invoices/{invoiceId}/approve": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Approve an invoice that is PENDING_APPROVAL
+         * @description Human-only (enforced by the lifecycle gate). The caller's role must cover
+         *     the approval tier for the invoice total in the tenant policy.
+         */
+        readonly post: operations["approveInvoice"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/invoices/{invoiceId}/document": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /** Download the original invoice document */
+        readonly get: operations["getInvoiceDocument"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/invoices/{invoiceId}/reject": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /** Reject an invoice with at least one reason that allows REJECTED */
+        readonly post: operations["rejectInvoice"];
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -185,6 +246,10 @@ export type components = {
             /** @enum {string} */
             readonly why?: "WINDOW_OPEN" | "UNVERIFIED" | "SELF_VERIFIED";
         };
+        readonly ExtractedField: {
+            readonly confidence: number;
+            readonly value: string | null;
+        };
         readonly Health: {
             readonly service: string;
             /** @enum {string} */
@@ -193,9 +258,16 @@ export type components = {
         readonly Invoice: {
             /** Format: date-time */
             readonly createdAt: string;
+            readonly document?: components["schemas"]["InvoiceDocument"];
+            readonly extraction?: components["schemas"]["InvoiceExtraction"];
+            /** @description Audit entries for this invoice, oldest first. Present on getInvoice only. */
+            readonly history?: readonly components["schemas"]["InvoiceEvent"][];
             /** Format: uuid */
             readonly id: string;
+            /** Format: date */
+            readonly invoiceDate?: string;
             readonly invoiceNumber?: string;
+            /** @description Reasons for the transition into the current state. Empty unless the state is HOLD, EXCEPTION or REJECTED. */
             readonly reasons: readonly components["schemas"]["ReasonCode"][];
             readonly state: components["schemas"]["InvoiceState"];
             /** Format: uuid */
@@ -205,17 +277,50 @@ export type components = {
             readonly updatedAt: string;
             /** Format: uuid */
             readonly vendorId?: string;
+            readonly vendorName?: string;
+            /** @description Incremented on every state change. */
+            readonly version: number;
         };
-        readonly InvoiceCreate: {
+        readonly InvoiceApproval: {
+            readonly comment?: string;
+        };
+        readonly InvoiceDocument: {
             /** @enum {string} */
-            readonly documentContentType: "application/pdf" | "image/png" | "image/jpeg" | "image/tiff";
-            readonly documentSha256: string;
-            /** @enum {string} */
-            readonly sourceChannel: "upload" | "email" | "api";
+            readonly contentType: "application/pdf" | "image/png" | "image/jpeg";
+            readonly filename: string;
+            readonly sha256: string;
+            readonly sizeBytes: number;
+        };
+        readonly InvoiceEvent: {
+            readonly actor: components["schemas"]["Actor"];
+            readonly comment?: string;
+            readonly from?: components["schemas"]["InvoiceState"];
+            /** Format: date-time */
+            readonly occurredAt: string;
+            readonly reasons?: readonly components["schemas"]["ReasonCode"][];
+            readonly seq: number;
+            readonly to?: components["schemas"]["InvoiceState"];
+            readonly type: string;
+        };
+        readonly InvoiceExtraction: {
+            /** Format: date-time */
+            readonly extractedAt: string;
+            readonly fields: {
+                readonly currency: components["schemas"]["ExtractedField"];
+                readonly invoiceDate: components["schemas"]["ExtractedField"];
+                readonly invoiceNumber: components["schemas"]["ExtractedField"];
+                readonly totalMinor: components["schemas"]["ExtractedField"];
+                readonly vendorName: components["schemas"]["ExtractedField"];
+            };
+            readonly provider: string;
         };
         readonly InvoicePage: {
             readonly items: readonly components["schemas"]["Invoice"][];
             readonly nextCursor?: string;
+        };
+        readonly InvoiceRejection: {
+            readonly comment?: string;
+            readonly reasons: readonly components["schemas"]["ReasonCode"][];
         };
         /**
          * @description The 14-state invoice lifecycle.
@@ -226,6 +331,15 @@ export type components = {
             readonly comment?: string;
             readonly reasons?: readonly components["schemas"]["ReasonCode"][];
             readonly to: components["schemas"]["InvoiceState"];
+        };
+        readonly InvoiceUpload: {
+            /** @description PDF, PNG or JPEG, at most 10 MiB. The type is sniffed from the bytes, not trusted from the client. */
+            readonly file: string;
+            /**
+             * @default upload
+             * @enum {string}
+             */
+            readonly sourceChannel: "upload" | "email" | "api";
         };
         readonly LifecycleState: {
             readonly next: readonly components["schemas"]["InvoiceState"][];
@@ -240,6 +354,8 @@ export type components = {
             readonly currency: string;
         };
         readonly Problem: {
+            /** @description Machine-readable cause, e.g. a TransitionError such as HUMAN_REQUIRED. */
+            readonly code?: string;
             readonly detail?: string;
             readonly status: number;
             readonly title: string;
@@ -382,7 +498,7 @@ export interface operations {
         };
         readonly requestBody: {
             readonly content: {
-                readonly "application/json": components["schemas"]["InvoiceCreate"];
+                readonly "multipart/form-data": components["schemas"]["InvoiceUpload"];
             };
         };
         readonly responses: {
@@ -396,7 +512,10 @@ export interface operations {
                 };
             };
             readonly 400: components["responses"]["Problem"];
+            readonly 401: components["responses"]["Problem"];
             readonly 409: components["responses"]["Problem"];
+            readonly 413: components["responses"]["Problem"];
+            readonly 415: components["responses"]["Problem"];
         };
     };
     readonly getInvoice: {
@@ -419,7 +538,98 @@ export interface operations {
                     readonly "application/json": components["schemas"]["Invoice"];
                 };
             };
+            readonly 401: components["responses"]["Problem"];
             readonly 404: components["responses"]["Problem"];
+        };
+    };
+    readonly approveInvoice: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                readonly "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            readonly path: {
+                readonly invoiceId: components["parameters"]["InvoiceId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["InvoiceApproval"];
+            };
+        };
+        readonly responses: {
+            /** @description Invoice is APPROVED */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Invoice"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 403: components["responses"]["Problem"];
+            readonly 404: components["responses"]["Problem"];
+            readonly 409: components["responses"]["Problem"];
+        };
+    };
+    readonly getInvoiceDocument: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly invoiceId: components["parameters"]["InvoiceId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The document bytes, with the content type it was uploaded with */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/pdf": string;
+                    readonly "image/jpeg": string;
+                    readonly "image/png": string;
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 404: components["responses"]["Problem"];
+        };
+    };
+    readonly rejectInvoice: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                readonly "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            readonly path: {
+                readonly invoiceId: components["parameters"]["InvoiceId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["InvoiceRejection"];
+            };
+        };
+        readonly responses: {
+            /** @description Invoice is REJECTED */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Invoice"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 404: components["responses"]["Problem"];
+            readonly 409: components["responses"]["Problem"];
+            readonly 422: components["responses"]["Problem"];
         };
     };
     readonly transitionInvoice: {
@@ -448,6 +658,7 @@ export interface operations {
                     readonly "application/json": components["schemas"]["Invoice"];
                 };
             };
+            readonly 401: components["responses"]["Problem"];
             readonly 404: components["responses"]["Problem"];
             readonly 409: components["responses"]["Problem"];
             readonly 422: components["responses"]["Problem"];

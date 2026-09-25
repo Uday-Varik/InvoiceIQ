@@ -1,5 +1,8 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { BackendProvider } from '../components/backend';
+import './globals.css';
 
 export const metadata: Metadata = {
   title: 'InvoiceIQ',
@@ -9,7 +12,20 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ fontFamily: 'system-ui, sans-serif', margin: '0 auto', maxWidth: 960, padding: 24 }}>{children}</body>
+      <body>
+        <header className="topbar">
+          <Link href="/" className="brand">
+            InvoiceIQ
+          </Link>
+          <Link href="/lifecycle" className="small">
+            Lifecycle and reason codes
+          </Link>
+          <span className="muted small">Public demo: every visitor shares one demo tenant</span>
+        </header>
+        <main className="container">
+          <BackendProvider>{children}</BackendProvider>
+        </main>
+      </body>
     </html>
   );
 }

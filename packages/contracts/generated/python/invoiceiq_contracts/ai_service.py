@@ -43,6 +43,24 @@ class ExtractionRequest(BaseModel):
     text: str = Field(..., max_length=200000, min_length=1)
 
 
+class ContentType(StrEnum):
+    application_pdf = "application/pdf"
+    image_png = "image/png"
+    image_jpeg = "image/jpeg"
+
+
+class DocumentExtractionRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    tenantId: UUID
+    documentSha256: str = Field(
+        ..., description="Must equal sha256 of the decoded bytes.", pattern="^[0-9a-f]{64}$"
+    )
+    contentType: ContentType
+    contentBase64: str = Field(..., max_length=14000000, min_length=4)
+
+
 class ExtractedField(BaseModel):
     model_config = ConfigDict(
         extra="forbid",

@@ -38,8 +38,9 @@ describe('docs/architecture/domain-model.md', () => {
 describe('ADRs', () => {
   const index = tableAfter(read('docs/adr/README.md'), '| ADR |'.slice(0, 5));
 
-  it('there are 13 ADRs numbered 0001..0013 without gaps', () => {
-    expect(adrFiles.map((f) => f.slice(0, 4))).toEqual(Array.from({ length: 13 }, (_, i) => String(i + 1).padStart(4, '0')));
+  it('ADRs are numbered from 0001 without gaps', () => {
+    expect(adrFiles.length).toBeGreaterThanOrEqual(14);
+    expect(adrFiles.map((f) => f.slice(0, 4))).toEqual(Array.from({ length: adrFiles.length }, (_, i) => String(i + 1).padStart(4, '0')));
   });
 
   it.each(adrFiles)('%s has a title, status, date and the standard sections', (file) => {

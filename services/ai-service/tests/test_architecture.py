@@ -52,6 +52,7 @@ def _probe(tmp_path: Path, files: dict[str, str]) -> Path:
         "ai_service/api/__init__.py": "",
         "ai_service/extraction.py": "",
         "ai_service/signals.py": "",
+        "ai_service/documents.py": "",
         "ai_service/providers/__init__.py": "",
     }
     for rel, body in {**skeleton, **files}.items():

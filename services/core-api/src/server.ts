@@ -1,10 +1,20 @@
-import { buildApp } from './http/app.js';
+import { loadConfig } from './config.js';
+import { startRuntime } from './runtime.js';
 
-const port = Number(process.env['PORT'] ?? 3001);
-const host = process.env['HOST'] ?? '0.0.0.0';
+const config = loadConfig();
+const runtime = await startRuntime(config);
 
-const app = buildApp({ logger: true });
-app.listen({ port, host }).catch((err: unknown) => {
-  app.log.error(err);
-  process.exit(1);
-});
+await runtime.app.listen({ port: config.PORT, host: config.HOST });
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => {
+    runtime.app.log.info({ signal }, 'shutting down');
+    runtime.close().then(
+      () => process.exit(0),
+      (err: unknown) => {
+        runtime.app.log.error({ err }, 'shutdown failed');
+        process.exit(1);
+      },
+    );
+  });
+}

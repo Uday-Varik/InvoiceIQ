@@ -6,8 +6,15 @@ import json
 
 from pydantic import ValidationError
 
+from ai_service.documents import DocumentError, decode, document_text
 from ai_service.providers import LLMProvider, ProviderError
-from invoiceiq_contracts.ai_service import ExtractedField, ExtractionRequest, ExtractionResult, Fields
+from invoiceiq_contracts.ai_service import (
+    DocumentExtractionRequest,
+    ExtractedField,
+    ExtractionRequest,
+    ExtractionResult,
+    Fields,
+)
 
 TASK = "extract_invoice_fields"
 FIELD_NAMES = ("vendorName", "invoiceNumber", "invoiceDate", "currency", "totalMinor")
@@ -44,4 +51,19 @@ def extract(request: ExtractionRequest, provider: LLMProvider) -> ExtractionResu
     )
 
 
-__all__ = ["ExtractionError", "ProviderError", "extract"]
+def extract_document(request: DocumentExtractionRequest, provider: LLMProvider) -> ExtractionResult:
+    """Extract from document bytes. No text layer means every field is unknown, not guessed."""
+    data = decode(request.contentBase64, request.documentSha256)
+    text = document_text(data, request.contentType.value)
+    if not text.strip():
+        empty = ExtractedField(value=None, confidence=0.0)
+        return ExtractionResult(
+            documentSha256=request.documentSha256,
+            provider=f"{provider.name}:no-text-layer",
+            fields=Fields(**dict.fromkeys(FIELD_NAMES, empty)),
+        )
+    as_text = ExtractionRequest(tenantId=request.tenantId, documentSha256=request.documentSha256, text=text)
+    return extract(as_text, provider)
+
+
+__all__ = ["DocumentError", "ExtractionError", "ProviderError", "extract", "extract_document"]

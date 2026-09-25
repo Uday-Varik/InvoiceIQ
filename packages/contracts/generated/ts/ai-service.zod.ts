@@ -6,6 +6,9 @@ import { z } from 'zod';
 export const AiReasonCode = z.enum(["AI_EXTRACTION_LOW_CONFIDENCE","AI_ANOMALY_SUSPECTED","AI_DOCUMENT_TAMPERING_SUSPECTED","AI_SEMANTIC_DUPLICATE_SUSPECTED"]).describe("AI-derived reason codes. Must equal the AI_ subset of core-api ReasonCode.");
 export type AiReasonCode = z.infer<typeof AiReasonCode>;
 
+export const DocumentExtractionRequest = z.object({ "tenantId": z.string().uuid(), "documentSha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")).describe("Must equal sha256 of the decoded bytes."), "contentType": z.enum(["application/pdf","image/png","image/jpeg"]), "contentBase64": z.string().min(4).max(14000000) }).strict();
+export type DocumentExtractionRequest = z.infer<typeof DocumentExtractionRequest>;
+
 export const ExtractedField = z.object({ "value": z.union([z.string(), z.null()]), "confidence": z.number().gte(0).lte(1) }).strict();
 export type ExtractedField = z.infer<typeof ExtractedField>;
 
