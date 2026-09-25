@@ -69,6 +69,21 @@ class ExtractedField(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0)
 
 
+class ExtractedLineItem(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    description: str = Field(..., max_length=500, min_length=1)
+    quantity: str | None = Field(
+        ...,
+        description="Decimal quantity as a string (never a float).",
+        pattern="^[0-9]{1,12}(\\.[0-9]{1,4})?$",
+    )
+    unitPriceMinor: str | None = Field(..., pattern="^-?[0-9]{1,19}$")
+    amountMinor: str | None = Field(..., pattern="^-?[0-9]{1,19}$")
+    confidence: float = Field(..., ge=0.0, le=1.0)
+
+
 class Fields(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -78,6 +93,9 @@ class Fields(BaseModel):
     invoiceDate: ExtractedField
     currency: ExtractedField
     totalMinor: ExtractedField
+    subtotalMinor: ExtractedField
+    taxMinor: ExtractedField
+    dueDate: ExtractedField
 
 
 class ExtractionResult(BaseModel):
@@ -87,6 +105,11 @@ class ExtractionResult(BaseModel):
     documentSha256: str = Field(..., pattern="^[0-9a-f]{64}$")
     provider: str
     fields: Fields
+    lineItems: list[ExtractedLineItem] = Field(
+        ...,
+        description="Lines of the invoice body in document order. Empty when none were recognised.",
+        max_length=200,
+    )
 
 
 class SignalRequest(BaseModel):

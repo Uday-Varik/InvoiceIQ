@@ -11,13 +11,24 @@ from ai_service.providers import LLMProvider, ProviderError
 from invoiceiq_contracts.ai_service import (
     DocumentExtractionRequest,
     ExtractedField,
+    ExtractedLineItem,
     ExtractionRequest,
     ExtractionResult,
     Fields,
 )
 
 TASK = "extract_invoice_fields"
-FIELD_NAMES = ("vendorName", "invoiceNumber", "invoiceDate", "currency", "totalMinor")
+FIELD_NAMES = (
+    "vendorName",
+    "invoiceNumber",
+    "invoiceDate",
+    "currency",
+    "totalMinor",
+    "subtotalMinor",
+    "taxMinor",
+    "dueDate",
+)
+MAX_LINE_ITEMS = 200
 
 
 class ExtractionError(ValueError):
@@ -35,6 +46,34 @@ def _field(raw: object) -> ExtractedField:
         return ExtractedField(value=None, confidence=0.0)
 
 
+def _line_item(raw: object) -> ExtractedLineItem | None:
+    """A provider line that breaks the contract is dropped, never repaired into something it did not say."""
+    if not isinstance(raw, dict):
+        return None
+
+    def text(key: str) -> str | None:
+        v = raw.get(key)
+        return None if v is None else str(v)
+
+    try:
+        return ExtractedLineItem(
+            description=str(raw.get("description", "")).strip()[:500],
+            quantity=text("quantity"),
+            unitPriceMinor=text("unitPriceMinor"),
+            amountMinor=text("amountMinor"),
+            confidence=float(raw.get("confidence", 0.0)),
+        )
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+
+def _line_items(raw: object) -> list[ExtractedLineItem]:
+    if not isinstance(raw, list):
+        return []
+    items = [_line_item(r) for r in raw[:MAX_LINE_ITEMS]]
+    return [i for i in items if i is not None]
+
+
 def extract(request: ExtractionRequest, provider: LLMProvider) -> ExtractionResult:
     completion = provider.complete(task=TASK, prompt=request.text)
     try:
@@ -47,7 +86,10 @@ def extract(request: ExtractionRequest, provider: LLMProvider) -> ExtractionResu
     # a model can make an extraction less certain, never inject extra fields.
     fields = Fields(**{name: _field(payload.get(name)) for name in FIELD_NAMES})
     return ExtractionResult(
-        documentSha256=request.documentSha256, provider=completion.provider, fields=fields
+        documentSha256=request.documentSha256,
+        provider=completion.provider,
+        fields=fields,
+        lineItems=_line_items(payload.get("lineItems")),
     )
 
 
@@ -61,6 +103,7 @@ def extract_document(request: DocumentExtractionRequest, provider: LLMProvider) 
             documentSha256=request.documentSha256,
             provider=f"{provider.name}:no-text-layer",
             fields=Fields(**dict.fromkeys(FIELD_NAMES, empty)),
+            lineItems=[],
         )
     as_text = ExtractionRequest(tenantId=request.tenantId, documentSha256=request.documentSha256, text=text)
     return extract(as_text, provider)

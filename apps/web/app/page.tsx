@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { InvoiceList } from '../components/invoice-list';
 import { UploadDropzone } from '../components/upload';
 
@@ -15,6 +16,9 @@ export default function Home() {
       <section>
         <h2>Recent invoices</h2>
         <InvoiceList />
+        <p>
+          <Link href="/invoices">All invoices, filters and export →</Link>
+        </p>
       </section>
     </>
   );

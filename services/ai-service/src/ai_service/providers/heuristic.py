@@ -6,6 +6,13 @@ patterns written for real PDF text layers ("Invoice # INV-1 Date 14 Mar 2026",
 "Balance due $1,200.00") are tried and score lower, because each one involves a
 guess (which number is the total, which currency "$" means). A missing field
 scores 0.0. A real model provider plugs in behind the same interface later.
+
+Beyond the header it reads the subtotal, tax (summing split taxes such as
+CGST + SGST), the due date (a labelled date, or "Net 30" terms counted from the
+invoice date) and the body lines. The arithmetic is then cross-checked: when
+subtotal (or the sum of the lines) plus tax equals the total, the total is
+corroborated and its confidence rises; when it does not, the confidence drops
+below any sane hold threshold so a human looks at it.
 """
 
 from __future__ import annotations
@@ -13,7 +20,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
-from datetime import date
+from datetime import date, timedelta
 
 from ai_service.providers.base import Completion
 
@@ -25,7 +32,12 @@ _STRICT: dict[str, re.Pattern[str]] = {
     "invoiceDate": re.compile(r"^\s*(?:invoice\s*)?date\s*[:#]\s*(\d{4}-\d{2}-\d{2})\s*$", re.I | re.M),
     "currency": re.compile(r"^\s*(?i:currency)\s*[:#]\s*([A-Z]{3})\s*$", re.M),
     "total": re.compile(r"^\s*(?:amount\s+due|total)\s*[:#]\s*([0-9][0-9,]*\.\d{2})\s*$", re.I | re.M),
+    "subtotal": re.compile(r"^\s*sub\s*-?\s*total\s*[:#]\s*([0-9][0-9,]*\.\d{2})\s*$", re.I | re.M),
+    "tax": re.compile(r"^\s*(?:tax|vat|gst|sales\s+tax)\s*[:#]\s*([0-9][0-9,]*\.\d{2})\s*$", re.I | re.M),
+    "dueDate": re.compile(r"^\s*due\s*date\s*[:#]\s*(\d{4}-\d{2}-\d{2})\s*$", re.I | re.M),
 }
+# Output key for each pattern name (amounts are reported in minor units).
+_KEYS = {"total": "totalMinor", "subtotal": "subtotalMinor", "tax": "taxMinor"}
 STRICT_CONFIDENCE = 0.95
 
 _MONTHS = {
@@ -35,8 +47,10 @@ _MONTHS = {
     )
 }
 _AMOUNT = r"([0-9]{1,3}(?:,[0-9]{3})+\.\d{2}|[0-9]+\.\d{2})"
-_SYMBOLS = {"$": ("USD", 0.5), "€": ("EUR", 0.8), "£": ("GBP", 0.8)}
+_SYMBOLS = {"$": ("USD", 0.5), "€": ("EUR", 0.8), "£": ("GBP", 0.8), "₹": ("INR", 0.8)}
 _KNOWN_CODES = ("USD", "EUR", "GBP", "CAD", "AUD", "INR", "JPY", "CHF", "SGD", "NZD")
+# An optional currency marker in front of an amount: a known ISO code or a symbol.
+_CUR = r"(?:(?:" + "|".join(_KNOWN_CODES) + r")\s*|[$€£₹]\s*|Rs\.?\s*)"
 
 _LOOSE_NUMBER = re.compile(
     r"\binvoice\s*(?:no\.?|number|num\.?|#|id)\s*[:#.]?\s*([A-Z0-9][A-Z0-9\-/]{1,31})\b", re.I
@@ -49,18 +63,61 @@ _LOOSE_TOTAL = re.compile(
 _LOOSE_VENDOR = re.compile(
     r"\b(?:vendor|supplier|from|bill\s+from|remit\s+to)\s*[:#]\s*(.+?)\s*$", re.I | re.M
 )
-_ISO_DATE = re.compile(r"\b(?:invoice\s+)?date\b[^\n\d]{0,20}(\d{4}-\d{2}-\d{2})\b", re.I)
-_TEXT_DATE = re.compile(
-    r"\b(?:invoice\s+)?date\b[^\n\d]{0,20}"
-    r"(?:\b(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|\b([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4}))",
-    re.I,
+# "Due Date" is not the invoice date: the lookbehinds keep these off it.
+_DATE_LABEL = r"(?<!due\s)(?<!due)\b(?:invoice\s+)?date\b[^\n\d]{0,20}"
+_DUE_LABEL = r"\b(?:due\s+date|payment\s+due|due\s+on|due\s+by|pay\s+by|due)\b[^\n\d]{0,20}"
+_ISO = r"(\d{4}-\d{2}-\d{2})\b"
+_TEXT = r"(?:\b(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|\b([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4}))"
+_SLASH = r"(\d{1,2})/(\d{1,2})/(\d{4})\b"
+_ISO_DATE = re.compile(_DATE_LABEL + _ISO, re.I)
+_TEXT_DATE = re.compile(_DATE_LABEL + _TEXT, re.I)
+_SLASH_DATE = re.compile(_DATE_LABEL + _SLASH, re.I)
+_DUE_ISO = re.compile(_DUE_LABEL + _ISO, re.I)
+_DUE_TEXT = re.compile(_DUE_LABEL + _TEXT, re.I)
+_DUE_SLASH = re.compile(_DUE_LABEL + _SLASH, re.I)
+_NET_TERMS = re.compile(r"\bnet\s*(\d{1,3})\b(?:\s*days)?", re.I)
+
+_SIGNED_AMOUNT = r"(-?(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)\.\d{2})"
+_LOOSE_SUBTOTAL = re.compile(
+    r"\bsub\s*-?\s*total\b\s*(?:\([A-Z]{3}\))?\s*[:#]?\s*" + _CUR + "?" + _AMOUNT, re.I
 )
-_SLASH_DATE = re.compile(r"\b(?:invoice\s+)?date\b[^\n\d]{0,20}(\d{1,2})/(\d{1,2})/(\d{4})\b", re.I)
+_TAX_LINE = re.compile(
+    r"^\s*(?:[A-Za-z]+\s+)?(?:c?gst|sgst|igst|utgst|hst|pst|qst|vat|sales\s+tax|tax)\b"
+    r"(?:\s*(?:@|at)?\s*\(?\d{1,2}(?:\.\d{1,3})?\s*%\)?)?"
+    r"\s*(?:\((?:[A-Z]{3})\))?\s*[:#]?\s*" + _CUR + "?" + _AMOUNT + r"\s*$",
+    re.I | re.M,
+)
+_SUMMARY_LINE = re.compile(
+    r"(?i)\b(sub\s*-?\s*total|total|balance|amount\s+due|c?gst|sgst|igst|utgst|hst|pst|qst|vat|tax)\b"
+)
+# Words that make a line a header, a party, a summary or a payment detail rather than an invoice line.
+_NOT_A_LINE = re.compile(
+    r"(?i)\b(sub\s*-?\s*total|total|balance|amount\s+due|due|paid|payment|tax|vat|c?gst|sgst|igst|hst|"
+    r"invoice|date|currency|vendor|supplier|bill\s+to|ship\s+to|remit|page|iban|discount)\b"
+)
+_LINE_FULL = re.compile(
+    r"^\s*(?P<desc>.*?[A-Za-z].*?)\s+(?P<qty>\d{1,9}(?:\.\d{1,4})?)\s*(?:x\s*|@\s*)?"
+    + _CUR
+    + "?"
+    + r"(?P<unit>-?(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)\.\d{2})\s+"
+    + _CUR
+    + "?"
+    + r"(?P<amount>-?(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)\.\d{2})\s*$"
+)
+_LINE_AMOUNT = re.compile(
+    r"^\s*(?P<desc>.*?[A-Za-z].*?)\s+"
+    + _CUR
+    + "?"
+    + r"(?P<amount>-?(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)\.\d{2})\s*$"
+)
+MAX_LINE_ITEMS = 200
 
 
 def _to_minor(amount: str) -> str:
-    whole, frac = amount.replace(",", "").split(".")
-    return str(int(whole) * 100 + int(frac))
+    neg = amount.startswith("-")
+    whole, frac = amount.lstrip("-").replace(",", "").split(".")
+    minor = int(whole) * 100 + int(frac)
+    return str(-minor if neg else minor)
 
 
 def _iso(y: int, m: int, d: int) -> str | None:
@@ -96,14 +153,16 @@ def _loose_number(text: str) -> tuple[str, float] | None:
     return None
 
 
-def _loose_date(text: str) -> tuple[str, float] | None:
-    m = _ISO_DATE.search(text)
+def _date_from(
+    text: str, iso_re: re.Pattern[str], text_re: re.Pattern[str], slash_re: re.Pattern[str]
+) -> tuple[str, float] | None:
+    m = iso_re.search(text)
     if m:
         y, mo, d = (int(p) for p in m.group(1).split("-"))
         iso = _iso(y, mo, d)
         if iso:
             return iso, 0.85
-    m = _TEXT_DATE.search(text)
+    m = text_re.search(text)
     if m:
         if m.group(1):
             day, mon, year = m.group(1), m.group(2), m.group(3)
@@ -113,7 +172,7 @@ def _loose_date(text: str) -> tuple[str, float] | None:
         iso = _iso(int(year), month, int(day)) if month else None
         if iso:
             return iso, 0.8
-    m = _SLASH_DATE.search(text)
+    m = slash_re.search(text)
     if m:
         # 03/04/2026 is March 4th in the US and April 3rd almost everywhere else.
         a, b, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
@@ -128,6 +187,26 @@ def _loose_date(text: str) -> tuple[str, float] | None:
     return None
 
 
+def _loose_date(text: str) -> tuple[str, float] | None:
+    return _date_from(text, _ISO_DATE, _TEXT_DATE, _SLASH_DATE)
+
+
+def _loose_due_date(text: str) -> tuple[str, float] | None:
+    return _date_from(text, _DUE_ISO, _DUE_TEXT, _DUE_SLASH)
+
+
+def _net_terms_due(text: str, invoice_date: str | None, date_confidence: float) -> tuple[str, float] | None:
+    """ "Net 30" counted from the invoice date. Only as good as the invoice date it builds on."""
+    m = _NET_TERMS.search(text)
+    if not m or not invoice_date:
+        return None
+    days = int(m.group(1))
+    if days > 365:
+        return None
+    due = date.fromisoformat(invoice_date) + timedelta(days=days)
+    return due.isoformat(), min(0.65, date_confidence)
+
+
 def _loose_currency(text: str) -> tuple[str, float] | None:
     codes = [c for c in _KNOWN_CODES if re.search(rf"\b{c}\b", text)]
     if len(codes) == 1:
@@ -136,6 +215,98 @@ def _loose_currency(text: str) -> tuple[str, float] | None:
     if len(symbols) == 1:
         return _SYMBOLS[symbols[0]]
     return None
+
+
+def _loose_subtotal(text: str) -> tuple[str, float] | None:
+    m = _LOOSE_SUBTOTAL.search(text)
+    return (_to_minor(m.group(1)), 0.8) if m else None
+
+
+def _loose_tax(text: str) -> tuple[str, float] | None:
+    """One tax line, or several (CGST + SGST, GST + PST) summed. A total that includes tax is not tax."""
+    amounts = [
+        int(_to_minor(m.group(1)))
+        for m in _TAX_LINE.finditer(text)
+        if not re.search(r"(?i)\b(incl|including|excl|excluding|total|invoice|number|id|no)\b", m.group(0))
+    ]
+    if not amounts:
+        return None
+    return str(sum(amounts)), 0.8 if len(amounts) == 1 else 0.7
+
+
+def _line_items(text: str) -> list[dict[str, str | float | None]]:
+    """Body lines before the first summary line (subtotal, tax, total)."""
+    items: list[dict[str, str | float | None]] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if _SUMMARY_LINE.search(line) and re.search(r"\d\.\d{2}\s*$", line):
+            break
+        if _NOT_A_LINE.search(line):
+            continue
+        full = _LINE_FULL.match(line)
+        if full:
+            qty, unit, amount = (
+                full.group("qty"),
+                _to_minor(full.group("unit")),
+                _to_minor(full.group("amount")),
+            )
+            desc = full.group("desc")
+            # quantity x unit price = amount, to the cent, is strong evidence the columns were read right.
+            product = int(unit) * _quantity_milli(qty)
+            consistent = abs(product - int(amount) * 1000) < 500 * max(1, len(qty))
+            conf = 0.85 if consistent else 0.5
+            items.append(_line(desc, qty, unit, amount, conf))
+        else:
+            only = _LINE_AMOUNT.match(line)
+            if only is None:
+                continue
+            items.append(_line(only.group("desc"), None, None, _to_minor(only.group("amount")), 0.6))
+        if len(items) >= MAX_LINE_ITEMS:
+            break
+    return items
+
+
+def _quantity_milli(qty: str) -> int:
+    whole, _, frac = qty.partition(".")
+    return int(whole) * 1000 + int((frac + "000")[:3])
+
+
+def _line(
+    desc: str, qty: str | None, unit: str | None, amount: str | None, conf: float
+) -> dict[str, str | float | None]:
+    description = re.sub(r"[\s.:\-|]+$", "", desc.strip())[:500] or "(no description)"
+    return {
+        "description": description,
+        "quantity": qty,
+        "unitPriceMinor": unit,
+        "amountMinor": amount,
+        "confidence": conf,
+    }
+
+
+def _cross_check(
+    fields: dict[str, dict[str, str | float | None]], lines: list[dict[str, str | float | None]]
+) -> None:
+    """Corroborate or doubt the total with the arithmetic printed on the same page."""
+    total = fields["totalMinor"]["value"]
+    if total is None:
+        return
+    tax = fields["taxMinor"]["value"]
+    base = fields["subtotalMinor"]["value"]
+    if base is None and lines and all(li["amountMinor"] is not None for li in lines):
+        base = str(sum(int(str(li["amountMinor"])) for li in lines))
+    if base is None:
+        return
+    expected = int(str(base)) + (int(str(tax)) if tax is not None else 0)
+    conf = float(fields["totalMinor"]["confidence"] or 0.0)
+    if expected == int(str(total)):
+        fields["totalMinor"]["confidence"] = max(conf, 0.9)
+    elif tax is not None and fields["subtotalMinor"]["value"] is not None:
+        # A printed subtotal and tax that do not add up to the printed total: someone must look.
+        # (A subtotal alone can legitimately differ: shipping, discounts, rounding.)
+        fields["totalMinor"]["confidence"] = min(conf, 0.5)
 
 
 def _loose_total(text: str) -> tuple[str, float] | None:
@@ -155,22 +326,25 @@ _LOOSE: dict[str, Callable[[str], tuple[str, float] | None]] = {
     "invoiceDate": _loose_date,
     "currency": _loose_currency,
     "total": _loose_total,
+    "subtotal": _loose_subtotal,
+    "tax": _loose_tax,
+    "dueDate": _loose_due_date,
 }
 
 
 class HeuristicProvider:
     name = "heuristic"
-    model = "regex-v2"
+    model = "regex-v3"
 
     def complete(self, *, task: str, prompt: str) -> Completion:
         if task != "extract_invoice_fields":
             return Completion(provider=self.name, model=self.model, text="{}")
         fields: dict[str, dict[str, str | float | None]] = {}
         for name, pattern in _STRICT.items():
-            key = "totalMinor" if name == "total" else name
+            key = _KEYS.get(name, name)
             m = pattern.search(prompt)
             if m is not None:
-                value = _to_minor(m.group(1)) if name == "total" else m.group(1)
+                value = _to_minor(m.group(1)) if name in _KEYS else m.group(1)
                 fields[key] = {"value": value, "confidence": STRICT_CONFIDENCE}
                 continue
             loose = _LOOSE[name](prompt)
@@ -178,4 +352,16 @@ class HeuristicProvider:
                 fields[key] = {"value": None, "confidence": 0.0}
             else:
                 fields[key] = {"value": loose[0], "confidence": loose[1]}
-        return Completion(provider=self.name, model=self.model, text=json.dumps(fields, sort_keys=True))
+        if fields["dueDate"]["value"] is None:
+            invoice_date = fields["invoiceDate"]
+            net = _net_terms_due(
+                prompt,
+                invoice_date["value"] if isinstance(invoice_date["value"], str) else None,
+                float(invoice_date["confidence"] or 0.0),
+            )
+            if net is not None:
+                fields["dueDate"] = {"value": net[0], "confidence": net[1]}
+        lines = _line_items(prompt)
+        _cross_check(fields, lines)
+        out: dict[str, object] = {**fields, "lineItems": lines}
+        return Completion(provider=self.name, model=self.model, text=json.dumps(out, sort_keys=True))

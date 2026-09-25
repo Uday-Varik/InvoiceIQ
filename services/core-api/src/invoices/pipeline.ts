@@ -3,7 +3,18 @@ import { withTenant, type Db, type Tx } from '../db/pool.js';
 import { AiRejectedError, type AiClient, type ExtractionResult } from '../clients/ai-service.js';
 import { appendAudit } from './audit.js';
 import { transition } from './lifecycle.js';
-import { getDocument, getInvoice, saveExtraction, type ExtractedHeader, type InvoiceRow, type StoredExtraction } from './store.js';
+import {
+  getDocument,
+  getInvoice,
+  getLineItems,
+  headerOf,
+  replaceLineItems,
+  saveExtraction,
+  type ExtractedHeader,
+  type InvoiceRow,
+  type LineItemInput,
+  type StoredExtraction,
+} from './store.js';
 
 /**
  * RECEIVED -> EXTRACTING -> EXTRACTED -> (HOLD | VALIDATING -> VALIDATED | EXCEPTION)
@@ -31,6 +42,18 @@ export async function loadPolicy(tx: Tx): Promise<Policy> {
 }
 
 const MAX_BIGINT = 2n ** 63n - 1n;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const QUANTITY_RE = /^[0-9]{1,12}(\.[0-9]{1,4})?$/;
+
+function minor(v: string | null | undefined): bigint | null {
+  if (!v || !/^-?\d{1,19}$/.test(v)) return null;
+  const n = BigInt(v);
+  return n <= MAX_BIGINT && n >= -MAX_BIGINT ? n : null;
+}
+
+function isoDate(v: string | null | undefined): string | null {
+  return v && DATE_RE.test(v) && !Number.isNaN(Date.parse(v)) ? v : null;
+}
 
 /** Only well-formed values reach typed columns; everything else stays in the raw extraction. */
 export function headerFrom(extraction: ExtractionResult): ExtractedHeader {
@@ -39,22 +62,57 @@ export function headerFrom(extraction: ExtractionResult): ExtractedHeader {
     const t = v?.trim();
     return t && t.length <= max ? t : null;
   };
-  const date = f.invoiceDate.value && /^\d{4}-\d{2}-\d{2}$/.test(f.invoiceDate.value) && !Number.isNaN(Date.parse(f.invoiceDate.value))
-    ? f.invoiceDate.value
-    : null;
   const currency = f.currency.value && /^[A-Z]{3}$/.test(f.currency.value) ? f.currency.value : null;
-  let totalMinor: bigint | null = null;
-  if (f.totalMinor.value && /^-?\d{1,19}$/.test(f.totalMinor.value)) {
-    const n = BigInt(f.totalMinor.value);
-    if (n <= MAX_BIGINT && n >= -MAX_BIGINT) totalMinor = n;
-  }
   return {
     vendorName: text(f.vendorName.value, 256),
     invoiceNumber: text(f.invoiceNumber.value, 64),
-    invoiceDate: date,
+    invoiceDate: isoDate(f.invoiceDate.value),
     currency,
-    totalMinor,
+    totalMinor: minor(f.totalMinor.value),
+    subtotalMinor: minor(f.subtotalMinor.value),
+    taxMinor: minor(f.taxMinor.value),
+    dueDate: isoDate(f.dueDate.value),
   };
+}
+
+/** Extracted lines that fit the table; a malformed number is stored as unknown rather than guessed. */
+export function linesFrom(extraction: ExtractionResult): LineItemInput[] {
+  return extraction.lineItems.slice(0, 200).flatMap((l) => {
+    const description = l.description.trim().slice(0, 500);
+    if (!description) return [];
+    const quantity = l.quantity !== null && QUANTITY_RE.test(l.quantity) ? l.quantity : null;
+    const unit = minor(l.unitPriceMinor);
+    const amount = minor(l.amountMinor);
+    return [{ description, quantity, unitPriceMinor: unit === null ? null : unit.toString(), amountMinor: amount === null ? null : amount.toString() }];
+  });
+}
+
+export interface TotalsFinding {
+  readonly check: 'subtotal_plus_tax' | 'lines_plus_tax';
+  readonly expectedTotalMinor: string;
+  readonly totalMinor: string;
+}
+
+/**
+ * The arithmetic an invoice prints must hold exactly, to the minor unit:
+ * subtotal + tax = total, and when every line has an amount, the lines add up
+ * to the subtotal (or, with no subtotal, to total - tax).
+ */
+export function checkTotals(header: ExtractedHeader, lines: readonly LineItemInput[]): TotalsFinding[] {
+  const total = header.totalMinor;
+  if (total === null) return [];
+  const tax = header.taxMinor ?? 0n;
+  const findings: TotalsFinding[] = [];
+  if (header.subtotalMinor !== null && header.subtotalMinor + tax !== total) {
+    findings.push({ check: 'subtotal_plus_tax', expectedTotalMinor: (header.subtotalMinor + tax).toString(), totalMinor: total.toString() });
+  }
+  if (lines.length > 0 && lines.every((l) => l.amountMinor !== null)) {
+    const sum = lines.reduce((acc, l) => acc + BigInt(l.amountMinor as string), 0n);
+    if (sum + tax !== total) {
+      findings.push({ check: 'lines_plus_tax', expectedTotalMinor: (sum + tax).toString(), totalMinor: total.toString() });
+    }
+  }
+  return findings;
 }
 
 async function startExtraction(db: Db, tenantId: string, invoiceId: string): Promise<InvoiceRow | undefined> {
@@ -100,13 +158,15 @@ export async function processReceived(deps: PipelineDeps, tenantId: string, invo
     if (!cur || cur.state !== 'EXTRACTING') return;
     const stored: StoredExtraction = { ...extraction, extractedAt: new Date().toISOString() };
     const header = headerFrom(extraction);
+    const lines = linesFrom(extraction);
     await saveExtraction(tx, invoiceId, header, stored);
+    await replaceLineItems(tx, tenantId, invoiceId, lines);
     await appendAudit(tx, {
       tenantId,
       invoiceId,
       type: 'invoice.extracted',
       actor: AI_ACTOR,
-      payload: { provider: extraction.provider, fields: extraction.fields },
+      payload: { provider: extraction.provider, fields: extraction.fields, lineItems: extraction.lineItems.length },
     });
     cur = await transition(tx, cur, { to: 'EXTRACTED', actor: PIPELINE_ACTOR });
 
@@ -120,20 +180,48 @@ export async function processReceived(deps: PipelineDeps, tenantId: string, invo
       });
       return;
     }
-    await validateMatchAndRoute(tx, cur, header, await loadPolicy(tx));
+    cur = await transition(tx, cur, { to: 'VALIDATING', actor: PIPELINE_ACTOR });
+    await routeFromValidating(tx, cur, header, lines, await loadPolicy(tx));
   });
 }
 
-async function validateMatchAndRoute(tx: Tx, invoice: InvoiceRow, header: ExtractedHeader, policy: Policy): Promise<void> {
-  let cur = await transition(tx, invoice, { to: 'VALIDATING', actor: PIPELINE_ACTOR });
+/**
+ * Re-run validation, matching and routing for an invoice a human just sent
+ * back to VALIDATING (after correcting it, or from the transitions endpoint).
+ * Reads the row as it is now, so human corrections are what gets validated.
+ */
+export async function continueFromValidating(tx: Tx, invoice: InvoiceRow): Promise<InvoiceRow> {
+  if (invoice.state !== 'VALIDATING') return invoice;
+  const lines = (await getLineItems(tx, invoice.id)).map((l) => ({
+    description: l.description,
+    quantity: l.quantity,
+    unitPriceMinor: l.unit_price_minor,
+    amountMinor: l.amount_minor,
+  }));
+  return routeFromValidating(tx, invoice, headerOf(invoice), lines, await loadPolicy(tx));
+}
 
+async function routeFromValidating(
+  tx: Tx,
+  invoice: InvoiceRow,
+  header: ExtractedHeader,
+  lines: readonly LineItemInput[],
+  policy: Policy,
+): Promise<InvoiceRow> {
+  let cur = invoice;
   const missing = REQUIRED_FIELDS.filter((k) => header[k] === null);
   const reasons: ReasonCode[] = [];
   if (missing.length > 0) reasons.push('VALIDATION_MISSING_FIELD');
   if (header.currency !== null && !policy.enabledCurrencies.includes(header.currency)) reasons.push('VALIDATION_CURRENCY_UNSUPPORTED');
+  const totals = checkTotals(header, lines);
+  if (totals.length > 0) reasons.push('VALIDATION_TOTALS_MISMATCH');
   if (reasons.length > 0) {
-    await transition(tx, cur, { to: 'EXCEPTION', actor: PIPELINE_ACTOR, reasons, details: { missing, currency: header.currency } });
-    return;
+    return transition(tx, cur, {
+      to: 'EXCEPTION',
+      actor: PIPELINE_ACTOR,
+      reasons,
+      details: { missing, currency: header.currency, ...(totals.length > 0 ? { totals } : {}) },
+    });
   }
   cur = await transition(tx, cur, { to: 'VALIDATED', actor: PIPELINE_ACTOR });
 
@@ -145,15 +233,13 @@ async function validateMatchAndRoute(tx: Tx, invoice: InvoiceRow, header: Extrac
 
   const total = header.totalMinor ?? 0n;
   if (approvalTierFor(policy, total) === undefined) {
-    await transition(tx, cur, { to: 'HOLD', actor: PIPELINE_ACTOR, reasons: ['APPROVAL_LIMIT_EXCEEDED'], details: { totalMinor: total.toString() } });
-    return;
+    return transition(tx, cur, { to: 'HOLD', actor: PIPELINE_ACTOR, reasons: ['APPROVAL_LIMIT_EXCEEDED'], details: { totalMinor: total.toString() } });
   }
   const manualAt = policy.manualReview.amountAtLeastMinor;
   if (manualAt !== undefined && total >= manualAt) {
-    await transition(tx, cur, { to: 'HOLD', actor: PIPELINE_ACTOR, reasons: ['POLICY_MANUAL_REVIEW_REQUIRED'], details: { cause: 'amount' } });
-    return;
+    return transition(tx, cur, { to: 'HOLD', actor: PIPELINE_ACTOR, reasons: ['POLICY_MANUAL_REVIEW_REQUIRED'], details: { cause: 'amount' } });
   }
-  await transition(tx, cur, { to: 'PENDING_APPROVAL', actor: PIPELINE_ACTOR });
+  return transition(tx, cur, { to: 'PENDING_APPROVAL', actor: PIPELINE_ACTOR });
 }
 
 /** Extraction could not happen (unreadable document, or ai-service down past the retry budget). */

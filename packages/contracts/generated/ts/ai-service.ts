@@ -46,7 +46,7 @@ export type paths = {
         readonly get?: never;
         readonly put?: never;
         /**
-         * Extract header fields from an invoice document (baseline, no LLM)
+         * Extract header fields, tax and line items from an invoice document (baseline, no LLM)
          * @description Reads the text layer of a PDF and runs the same field extraction as
          *     /v1/extract. Images have no text layer in the baseline, so every field
          *     comes back null with confidence 0, which core-api turns into a HOLD.
@@ -97,6 +97,14 @@ export type components = {
             readonly confidence: number;
             readonly value: string | null;
         };
+        readonly ExtractedLineItem: {
+            readonly amountMinor: string | null;
+            readonly confidence: number;
+            readonly description: string;
+            /** @description Decimal quantity as a string (never a float). */
+            readonly quantity: string | null;
+            readonly unitPriceMinor: string | null;
+        };
         readonly ExtractionRequest: {
             readonly documentSha256: string;
             /** Format: uuid */
@@ -107,11 +115,16 @@ export type components = {
             readonly documentSha256: string;
             readonly fields: {
                 readonly currency: components["schemas"]["ExtractedField"];
+                readonly dueDate: components["schemas"]["ExtractedField"];
                 readonly invoiceDate: components["schemas"]["ExtractedField"];
                 readonly invoiceNumber: components["schemas"]["ExtractedField"];
+                readonly subtotalMinor: components["schemas"]["ExtractedField"];
+                readonly taxMinor: components["schemas"]["ExtractedField"];
                 readonly totalMinor: components["schemas"]["ExtractedField"];
                 readonly vendorName: components["schemas"]["ExtractedField"];
             };
+            /** @description Lines of the invoice body in document order. Empty when none were recognised. */
+            readonly lineItems: readonly components["schemas"]["ExtractedLineItem"][];
             readonly provider: string;
         };
         readonly Health: {

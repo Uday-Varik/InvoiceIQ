@@ -47,7 +47,14 @@ def test_well_labelled_pdf_extracts_with_high_confidence() -> None:
         "2026-03-14",
     )
     assert (f.currency.value, f.totalMinor.value) == ("USD", "123450")
-    assert min(getattr(f, n).confidence for n in type(f).model_fields) == 0.95
+    header = ("vendorName", "invoiceNumber", "invoiceDate", "currency", "totalMinor")
+    assert min(getattr(f, n).confidence for n in header) == 0.95
+    # The sample prints no subtotal, tax or due date: unknown, not guessed.
+    assert (f.subtotalMinor.value, f.taxMinor.value, f.dueDate.value) == (None, None, None)
+    assert [(li.description, li.amountMinor) for li in result.lineItems] == [
+        ("Hex bolts M8 x 200", "41200"),
+        ("Safety gloves x 40", "82250"),
+    ]
 
 
 def test_messy_pdf_uses_loose_patterns_with_lower_confidence() -> None:

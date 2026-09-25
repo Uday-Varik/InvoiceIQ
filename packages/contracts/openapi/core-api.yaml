@@ -6,8 +6,9 @@ info:
   description: |
     core-api owns every money-bearing table. It is the only service allowed to
     change invoice state, and every state change goes through the lifecycle gate
-    (`evaluateTransition`). Operations tagged `x-phase: 0` and `x-phase: 1` are
-    implemented; later phases are specified here first so contracts lead code.
+    (`evaluateTransition`). Operations tagged `x-phase: 0`, `x-phase: 1` and
+    `x-phase: 2` are implemented; later phases are specified here first so
+    contracts lead code.
   license:
     name: MIT
     identifier: MIT
@@ -114,6 +115,12 @@ paths:
           required: false
           schema:
             $ref: '#/components/schemas/InvoiceState'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/CurrencyFilter'
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+        - $ref: '#/components/parameters/MinTotalMinor'
+        - $ref: '#/components/parameters/MaxTotalMinor'
         - name: cursor
           in: query
           required: false
@@ -130,7 +137,7 @@ paths:
             default: 50
       responses:
         '200':
-          description: A page of invoices
+          description: A page of invoices, newest first
           content:
             application/json:
               schema:
@@ -172,6 +179,95 @@ paths:
           $ref: '#/components/responses/Problem'
         '415':
           $ref: '#/components/responses/Problem'
+  /v1/invoices/summary:
+    get:
+      operationId: getInvoiceSummary
+      summary: Counts per state and totals per currency for the dashboard
+      description: |
+        Takes the same filters as listInvoices. Totals are summed per currency
+        and never converted.
+      tags: [invoices]
+      x-phase: 2
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/InvoiceState'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/CurrencyFilter'
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+        - $ref: '#/components/parameters/MinTotalMinor'
+        - $ref: '#/components/parameters/MaxTotalMinor'
+      responses:
+        '200':
+          description: The summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceSummary'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/invoices/export:
+    get:
+      operationId: exportInvoices
+      summary: Export invoices as CSV or JSON
+      description: |
+        Takes the same filters as listInvoices and returns every match, newest
+        first, up to `limit` rows. `X-Export-Truncated: true` says more rows
+        matched than were returned. CSV cells that a spreadsheet would read as
+        a formula are prefixed with a single quote.
+      tags: [invoices]
+      x-phase: 2
+      parameters:
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [csv, json]
+            default: csv
+        - name: state
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/InvoiceState'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/CurrencyFilter'
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+        - $ref: '#/components/parameters/MinTotalMinor'
+        - $ref: '#/components/parameters/MaxTotalMinor'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 5000
+      responses:
+        '200':
+          description: The matching invoices
+          headers:
+            X-Export-Truncated:
+              schema:
+                type: string
+                enum: ['true', 'false']
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceExport'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/invoices/{invoiceId}:
     get:
       operationId: getInvoice
@@ -190,6 +286,45 @@ paths:
         '401':
           $ref: '#/components/responses/Problem'
         '404':
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: correctInvoice
+      summary: Correct extracted fields before approval
+      description: |
+        Human-only. Allowed while the invoice is PENDING_APPROVAL, HOLD or
+        EXCEPTION. `expectedVersion` must equal the invoice's current version,
+        so a reviewer never overwrites a change they have not seen. Only the
+        fields present in the body change; `null` clears an optional field.
+        The correction is recorded in the audit ledger with before and after
+        values, then the invoice goes back through deterministic validation
+        and policy routing, so a corrected total gets the approval tier and
+        review rules of the new amount. AI signals are not re-run on
+        human-entered values.
+      tags: [invoices]
+      x-phase: 2
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceCorrection'
+      responses:
+        '200':
+          description: The corrected invoice in the state validation routed it to
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
           $ref: '#/components/responses/Problem'
   /v1/invoices/{invoiceId}/document:
     get:
@@ -317,7 +452,7 @@ paths:
       operationId: requestVendorBankChange
       summary: Record a vendor bank-detail change (starts quarantine)
       tags: [vendors]
-      x-phase: 2
+      x-phase: 3
       parameters:
         - name: vendorId
           in: path
@@ -363,6 +498,54 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    Search:
+      name: q
+      in: query
+      required: false
+      description: Case-insensitive substring of the vendor name, invoice number or file name.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 100
+    CurrencyFilter:
+      name: currency
+      in: query
+      required: false
+      schema:
+        type: string
+        pattern: '^[A-Z]{3}$'
+    DateFrom:
+      name: dateFrom
+      in: query
+      required: false
+      description: Invoice date on or after this day.
+      schema:
+        type: string
+        format: date
+    DateTo:
+      name: dateTo
+      in: query
+      required: false
+      description: Invoice date on or before this day.
+      schema:
+        type: string
+        format: date
+    MinTotalMinor:
+      name: minTotalMinor
+      in: query
+      required: false
+      description: Total at least this many minor units.
+      schema:
+        type: string
+        pattern: '^-?[0-9]{1,18}$'
+    MaxTotalMinor:
+      name: maxTotalMinor
+      in: query
+      required: false
+      description: Total at most this many minor units.
+      schema:
+        type: string
+        pattern: '^-?[0-9]{1,18}$'
     InvoiceId:
       name: invoiceId
       in: path
@@ -643,6 +826,141 @@ components:
               $ref: '#/components/schemas/ExtractedField'
             totalMinor:
               $ref: '#/components/schemas/ExtractedField'
+            subtotalMinor:
+              $ref: '#/components/schemas/ExtractedField'
+            taxMinor:
+              $ref: '#/components/schemas/ExtractedField'
+            dueDate:
+              $ref: '#/components/schemas/ExtractedField'
+        lineItems:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/ExtractedLineItem'
+    ExtractedLineItem:
+      type: object
+      additionalProperties: false
+      required: [description, quantity, unitPriceMinor, amountMinor, confidence]
+      properties:
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        quantity:
+          type:
+            - string
+            - 'null'
+        unitPriceMinor:
+          type:
+            - string
+            - 'null'
+        amountMinor:
+          type:
+            - string
+            - 'null'
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+    LineItem:
+      type: object
+      additionalProperties: false
+      required: [position, description]
+      description: A line of the invoice as stored (extracted, or entered by a reviewer). Amounts are in the invoice currency.
+      properties:
+        position:
+          type: integer
+          minimum: 1
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        quantity:
+          type: string
+          pattern: '^[0-9]{1,12}(\.[0-9]{1,4})?$'
+        unitPriceMinor:
+          type: string
+          pattern: '^-?[0-9]{1,18}$'
+        amountMinor:
+          type: string
+          pattern: '^-?[0-9]{1,18}$'
+    LineItemInput:
+      type: object
+      additionalProperties: false
+      required: [description]
+      properties:
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        quantity:
+          type: string
+          pattern: '^[0-9]{1,12}(\.[0-9]{1,4})?$'
+        unitPriceMinor:
+          type: string
+          pattern: '^-?[0-9]{1,18}$'
+        amountMinor:
+          type: string
+          pattern: '^-?[0-9]{1,18}$'
+    CorrectableField:
+      type: string
+      enum: [vendorName, invoiceNumber, invoiceDate, dueDate, currency, total, subtotal, tax, lineItems]
+    FieldChange:
+      type: object
+      additionalProperties: false
+      required: [from, to]
+      properties:
+        from: {}
+        to: {}
+    InvoiceCorrection:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      minProperties: 2
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
+        vendorName:
+          type: string
+          minLength: 1
+          maxLength: 256
+        invoiceNumber:
+          type: string
+          minLength: 1
+          maxLength: 64
+        invoiceDate:
+          type: string
+          format: date
+        dueDate:
+          type:
+            - string
+            - 'null'
+          format: date
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        totalMinor:
+          type: string
+          pattern: '^-?[0-9]{1,18}$'
+        subtotalMinor:
+          type:
+            - string
+            - 'null'
+          pattern: '^-?[0-9]{1,18}$'
+        taxMinor:
+          type:
+            - string
+            - 'null'
+          pattern: '^-?[0-9]{1,18}$'
+        lineItems:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/LineItemInput'
+        comment:
+          type: string
+          maxLength: 2000
     InvoiceEvent:
       type: object
       additionalProperties: false
@@ -665,6 +983,13 @@ components:
             $ref: '#/components/schemas/ReasonCode'
         comment:
           type: string
+        changes:
+          type: object
+          description: For invoice.corrected, each corrected field with its value before and after.
+          propertyNames:
+            $ref: '#/components/schemas/CorrectableField'
+          additionalProperties:
+            $ref: '#/components/schemas/FieldChange'
         occurredAt:
           type: string
           format: date-time
@@ -691,8 +1016,25 @@ components:
         invoiceDate:
           type: string
           format: date
+        dueDate:
+          type: string
+          format: date
         total:
           $ref: '#/components/schemas/Money'
+        subtotal:
+          $ref: '#/components/schemas/Money'
+        tax:
+          $ref: '#/components/schemas/Money'
+        lineItems:
+          type: array
+          description: Stored lines, in position order. Present on getInvoice and exportInvoices (JSON) only.
+          items:
+            $ref: '#/components/schemas/LineItem'
+        corrections:
+          type: array
+          description: Fields a human has corrected since extraction.
+          items:
+            $ref: '#/components/schemas/CorrectableField'
         state:
           $ref: '#/components/schemas/InvoiceState'
         reasons:
@@ -703,7 +1045,7 @@ components:
         version:
           type: integer
           minimum: 1
-          description: Incremented on every state change.
+          description: Incremented on every state change and every correction.
         document:
           $ref: '#/components/schemas/InvoiceDocument'
         extraction:
@@ -730,6 +1072,65 @@ components:
             $ref: '#/components/schemas/Invoice'
         nextCursor:
           type: string
+    StateCount:
+      type: object
+      additionalProperties: false
+      required: [state, count]
+      properties:
+        state:
+          $ref: '#/components/schemas/InvoiceState'
+        count:
+          type: integer
+          minimum: 0
+    CurrencyTotal:
+      type: object
+      additionalProperties: false
+      required: [currency, count, amountMinor]
+      properties:
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        count:
+          type: integer
+          minimum: 0
+        amountMinor:
+          type: string
+          pattern: '^-?[0-9]{1,24}$'
+    InvoiceSummary:
+      type: object
+      additionalProperties: false
+      required: [count, byState, byCurrency]
+      properties:
+        count:
+          type: integer
+          minimum: 0
+        byState:
+          type: array
+          description: Every lifecycle state in lifecycle order, including zero counts.
+          items:
+            $ref: '#/components/schemas/StateCount'
+        byCurrency:
+          type: array
+          description: Totals of invoices that have an extracted total, per currency, alphabetical.
+          items:
+            $ref: '#/components/schemas/CurrencyTotal'
+    InvoiceExport:
+      type: object
+      additionalProperties: false
+      required: [exportedAt, count, truncated, items]
+      properties:
+        exportedAt:
+          type: string
+          format: date-time
+        count:
+          type: integer
+          minimum: 0
+        truncated:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invoice'
     InvoiceTransition:
       type: object
       additionalProperties: false

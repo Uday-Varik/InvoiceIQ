@@ -1,6 +1,8 @@
 /** The README's phase tables are the honest record of what was verified. */
 import { describe, expect, it } from 'vitest';
-import { read, tableAfter } from './helpers.js';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { read, ROOT, tableAfter } from './helpers.js';
 
 const readme = read('README.md');
 const rows = tableAfter(readme, '## Phase 0 deliverables');
@@ -22,6 +24,23 @@ describe('README Phase 0 table', () => {
   it('links the docs it promises', () => {
     for (const link of ['docs/adr/README.md', 'docs/threat-model/README.md', 'CONTRIBUTING.md', 'SECURITY.md']) {
       expect(readme).toContain(link);
+    }
+  });
+});
+
+describe('README Phase 2 table', () => {
+  const phase2 = tableAfter(readme, '## Phase 2 deliverables');
+
+  it('lists 8 numbered deliverables, all run in the sandbox', () => {
+    expect(phase2.map((r) => r[0])).toEqual(Array.from({ length: 8 }, (_, i) => String(i + 1)));
+    for (const row of phase2) expect(row[2], row[1]).toBe('Verified-in-sandbox');
+  });
+
+  it('points every row at a path that exists', () => {
+    for (const row of phase2) {
+      const path = /`([^`]+)`/.exec(row[3] ?? '')?.[1];
+      expect(path, row[1]).toBeDefined();
+      expect(existsSync(join(ROOT, path!)), path).toBe(true);
     }
   });
 });

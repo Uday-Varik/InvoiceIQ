@@ -12,10 +12,13 @@ export type DocumentExtractionRequest = z.infer<typeof DocumentExtractionRequest
 export const ExtractedField = z.object({ "value": z.union([z.string(), z.null()]), "confidence": z.number().gte(0).lte(1) }).strict();
 export type ExtractedField = z.infer<typeof ExtractedField>;
 
+export const ExtractedLineItem = z.object({ "description": z.string().min(1).max(500), "quantity": z.union([z.string().regex(new RegExp("^[0-9]{1,12}(\\.[0-9]{1,4})?$")).describe("Decimal quantity as a string (never a float)."), z.null().describe("Decimal quantity as a string (never a float).")]).describe("Decimal quantity as a string (never a float)."), "unitPriceMinor": z.union([z.string().regex(new RegExp("^-?[0-9]{1,19}$")), z.null()]), "amountMinor": z.union([z.string().regex(new RegExp("^-?[0-9]{1,19}$")), z.null()]), "confidence": z.number().gte(0).lte(1) }).strict();
+export type ExtractedLineItem = z.infer<typeof ExtractedLineItem>;
+
 export const ExtractionRequest = z.object({ "tenantId": z.string().uuid(), "documentSha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")), "text": z.string().min(1).max(200000) }).strict();
 export type ExtractionRequest = z.infer<typeof ExtractionRequest>;
 
-export const ExtractionResult = z.object({ "documentSha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")), "provider": z.string(), "fields": z.object({ "vendorName": ExtractedField, "invoiceNumber": ExtractedField, "invoiceDate": ExtractedField, "currency": ExtractedField, "totalMinor": ExtractedField }).strict() }).strict();
+export const ExtractionResult = z.object({ "documentSha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")), "provider": z.string(), "fields": z.object({ "vendorName": ExtractedField, "invoiceNumber": ExtractedField, "invoiceDate": ExtractedField, "currency": ExtractedField, "totalMinor": ExtractedField, "subtotalMinor": ExtractedField, "taxMinor": ExtractedField, "dueDate": ExtractedField }).strict(), "lineItems": z.array(ExtractedLineItem).max(200).describe("Lines of the invoice body in document order. Empty when none were recognised.") }).strict();
 export type ExtractionResult = z.infer<typeof ExtractionResult>;
 
 export const Health = z.object({ "status": z.literal("ok"), "service": z.string() }).strict();

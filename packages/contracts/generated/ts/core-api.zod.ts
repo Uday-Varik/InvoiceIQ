@@ -18,8 +18,20 @@ export type BankChangeRequest = z.infer<typeof BankChangeRequest>;
 export const BankChangeStatus = z.object({ "vendorId": z.string().uuid(), "quarantined": z.boolean(), "releasesAt": z.union([z.string().datetime({ offset: true }), z.null()]).optional(), "why": z.enum(["WINDOW_OPEN","UNVERIFIED","SELF_VERIFIED"]).optional() }).strict();
 export type BankChangeStatus = z.infer<typeof BankChangeStatus>;
 
+export const CorrectableField = z.enum(["vendorName","invoiceNumber","invoiceDate","dueDate","currency","total","subtotal","tax","lineItems"]);
+export type CorrectableField = z.infer<typeof CorrectableField>;
+
+export const CurrencyTotal = z.object({ "currency": z.string().regex(new RegExp("^[A-Z]{3}$")), "count": z.number().int().gte(0), "amountMinor": z.string().regex(new RegExp("^-?[0-9]{1,24}$")) }).strict();
+export type CurrencyTotal = z.infer<typeof CurrencyTotal>;
+
 export const ExtractedField = z.object({ "value": z.union([z.string(), z.null()]), "confidence": z.number().gte(0).lte(1) }).strict();
 export type ExtractedField = z.infer<typeof ExtractedField>;
+
+export const ExtractedLineItem = z.object({ "description": z.string().min(1).max(500), "quantity": z.union([z.string(), z.null()]), "unitPriceMinor": z.union([z.string(), z.null()]), "amountMinor": z.union([z.string(), z.null()]), "confidence": z.number().gte(0).lte(1) }).strict();
+export type ExtractedLineItem = z.infer<typeof ExtractedLineItem>;
+
+export const FieldChange = z.object({ "from": z.any(), "to": z.any() }).strict();
+export type FieldChange = z.infer<typeof FieldChange>;
 
 export const Health = z.object({ "status": z.literal("ok"), "service": z.string() }).strict();
 export type Health = z.infer<typeof Health>;
@@ -33,26 +45,44 @@ export type InvoiceState = z.infer<typeof InvoiceState>;
 export const ReasonCode = z.enum(["MATCH_PRICE_VARIANCE","MATCH_QUANTITY_VARIANCE","MATCH_PO_NOT_FOUND","MATCH_RECEIPT_MISSING","DUPLICATE_EXACT","DUPLICATE_NEAR","VENDOR_BANK_CHANGE_QUARANTINE","VENDOR_UNKNOWN","VENDOR_INACTIVE","VALIDATION_MISSING_FIELD","VALIDATION_TOTALS_MISMATCH","VALIDATION_CURRENCY_UNSUPPORTED","APPROVAL_LIMIT_EXCEEDED","POLICY_MANUAL_REVIEW_REQUIRED","AI_EXTRACTION_LOW_CONFIDENCE","AI_ANOMALY_SUSPECTED","AI_DOCUMENT_TAMPERING_SUSPECTED","AI_SEMANTIC_DUPLICATE_SUSPECTED"]).describe("The 18-code reason catalog. Codes prefixed AI_ are AI-derived and HOLD-only.");
 export type ReasonCode = z.infer<typeof ReasonCode>;
 
-export const InvoiceEvent = z.object({ "seq": z.number().int().gte(0), "type": z.string(), "from": InvoiceState.optional(), "to": InvoiceState.optional(), "actor": Actor, "reasons": z.array(ReasonCode).optional(), "comment": z.string().optional(), "occurredAt": z.string().datetime({ offset: true }) }).strict();
+export const InvoiceEvent = z.object({ "seq": z.number().int().gte(0), "type": z.string(), "from": InvoiceState.optional(), "to": InvoiceState.optional(), "actor": Actor, "reasons": z.array(ReasonCode).optional(), "comment": z.string().optional(), "changes": z.record(z.string(), FieldChange).describe("For invoice.corrected, each corrected field with its value before and after.").optional(), "occurredAt": z.string().datetime({ offset: true }) }).strict();
 export type InvoiceEvent = z.infer<typeof InvoiceEvent>;
 
-export const InvoiceExtraction = z.object({ "provider": z.string(), "extractedAt": z.string().datetime({ offset: true }), "fields": z.object({ "vendorName": ExtractedField, "invoiceNumber": ExtractedField, "invoiceDate": ExtractedField, "currency": ExtractedField, "totalMinor": ExtractedField }).strict() }).strict();
+export const InvoiceExtraction = z.object({ "provider": z.string(), "extractedAt": z.string().datetime({ offset: true }), "fields": z.object({ "vendorName": ExtractedField, "invoiceNumber": ExtractedField, "invoiceDate": ExtractedField, "currency": ExtractedField, "totalMinor": ExtractedField, "subtotalMinor": ExtractedField.optional(), "taxMinor": ExtractedField.optional(), "dueDate": ExtractedField.optional() }).strict(), "lineItems": z.array(ExtractedLineItem).max(200).optional() }).strict();
 export type InvoiceExtraction = z.infer<typeof InvoiceExtraction>;
+
+export const LineItem = z.object({ "position": z.number().int().gte(1), "description": z.string().min(1).max(500), "quantity": z.string().regex(new RegExp("^[0-9]{1,12}(\\.[0-9]{1,4})?$")).optional(), "unitPriceMinor": z.string().regex(new RegExp("^-?[0-9]{1,18}$")).optional(), "amountMinor": z.string().regex(new RegExp("^-?[0-9]{1,18}$")).optional() }).strict().describe("A line of the invoice as stored (extracted, or entered by a reviewer). Amounts are in the invoice currency.");
+export type LineItem = z.infer<typeof LineItem>;
 
 export const Money = z.object({ "amountMinor": z.string().regex(new RegExp("^-?[0-9]{1,19}$")), "currency": z.string().regex(new RegExp("^[A-Z]{3}$")) }).strict().describe("Integer minor units as a decimal string (never a float) plus ISO 4217 currency.");
 export type Money = z.infer<typeof Money>;
 
-export const Invoice = z.object({ "id": z.string().uuid(), "tenantId": z.string().uuid(), "vendorId": z.string().uuid().optional(), "vendorName": z.string().max(256).optional(), "invoiceNumber": z.string().max(64).optional(), "invoiceDate": z.string().date().optional(), "total": Money.optional(), "state": InvoiceState, "reasons": z.array(ReasonCode).describe("Reasons for the transition into the current state. Empty unless the state is HOLD, EXCEPTION or REJECTED."), "version": z.number().int().gte(1).describe("Incremented on every state change."), "document": InvoiceDocument.optional(), "extraction": InvoiceExtraction.optional(), "history": z.array(InvoiceEvent).describe("Audit entries for this invoice, oldest first. Present on getInvoice only.").optional(), "createdAt": z.string().datetime({ offset: true }), "updatedAt": z.string().datetime({ offset: true }) }).strict();
+export const Invoice = z.object({ "id": z.string().uuid(), "tenantId": z.string().uuid(), "vendorId": z.string().uuid().optional(), "vendorName": z.string().max(256).optional(), "invoiceNumber": z.string().max(64).optional(), "invoiceDate": z.string().date().optional(), "dueDate": z.string().date().optional(), "total": Money.optional(), "subtotal": Money.optional(), "tax": Money.optional(), "lineItems": z.array(LineItem).describe("Stored lines, in position order. Present on getInvoice and exportInvoices (JSON) only.").optional(), "corrections": z.array(CorrectableField).describe("Fields a human has corrected since extraction.").optional(), "state": InvoiceState, "reasons": z.array(ReasonCode).describe("Reasons for the transition into the current state. Empty unless the state is HOLD, EXCEPTION or REJECTED."), "version": z.number().int().gte(1).describe("Incremented on every state change and every correction."), "document": InvoiceDocument.optional(), "extraction": InvoiceExtraction.optional(), "history": z.array(InvoiceEvent).describe("Audit entries for this invoice, oldest first. Present on getInvoice only.").optional(), "createdAt": z.string().datetime({ offset: true }), "updatedAt": z.string().datetime({ offset: true }) }).strict();
 export type Invoice = z.infer<typeof Invoice>;
 
 export const InvoiceApproval = z.object({ "comment": z.string().max(2000).optional() }).strict();
 export type InvoiceApproval = z.infer<typeof InvoiceApproval>;
+
+export const LineItemInput = z.object({ "description": z.string().min(1).max(500), "quantity": z.string().regex(new RegExp("^[0-9]{1,12}(\\.[0-9]{1,4})?$")).optional(), "unitPriceMinor": z.string().regex(new RegExp("^-?[0-9]{1,18}$")).optional(), "amountMinor": z.string().regex(new RegExp("^-?[0-9]{1,18}$")).optional() }).strict();
+export type LineItemInput = z.infer<typeof LineItemInput>;
+
+export const InvoiceCorrection = z.object({ "expectedVersion": z.number().int().gte(1), "vendorName": z.string().min(1).max(256).optional(), "invoiceNumber": z.string().min(1).max(64).optional(), "invoiceDate": z.string().date().optional(), "dueDate": z.union([z.string().date(), z.null()]).optional(), "currency": z.string().regex(new RegExp("^[A-Z]{3}$")).optional(), "totalMinor": z.string().regex(new RegExp("^-?[0-9]{1,18}$")).optional(), "subtotalMinor": z.union([z.string().regex(new RegExp("^-?[0-9]{1,18}$")), z.null()]).optional(), "taxMinor": z.union([z.string().regex(new RegExp("^-?[0-9]{1,18}$")), z.null()]).optional(), "lineItems": z.array(LineItemInput).max(200).optional(), "comment": z.string().max(2000).optional() }).strict();
+export type InvoiceCorrection = z.infer<typeof InvoiceCorrection>;
+
+export const InvoiceExport = z.object({ "exportedAt": z.string().datetime({ offset: true }), "count": z.number().int().gte(0), "truncated": z.boolean(), "items": z.array(Invoice) }).strict();
+export type InvoiceExport = z.infer<typeof InvoiceExport>;
 
 export const InvoicePage = z.object({ "items": z.array(Invoice), "nextCursor": z.string().optional() }).strict();
 export type InvoicePage = z.infer<typeof InvoicePage>;
 
 export const InvoiceRejection = z.object({ "reasons": z.array(ReasonCode).min(1).max(18), "comment": z.string().max(2000).optional() }).strict();
 export type InvoiceRejection = z.infer<typeof InvoiceRejection>;
+
+export const StateCount = z.object({ "state": InvoiceState, "count": z.number().int().gte(0) }).strict();
+export type StateCount = z.infer<typeof StateCount>;
+
+export const InvoiceSummary = z.object({ "count": z.number().int().gte(0), "byState": z.array(StateCount).describe("Every lifecycle state in lifecycle order, including zero counts."), "byCurrency": z.array(CurrencyTotal).describe("Totals of invoices that have an extracted total, per currency, alphabetical.") }).strict();
+export type InvoiceSummary = z.infer<typeof InvoiceSummary>;
 
 export const InvoiceTransition = z.object({ "to": InvoiceState, "reasons": z.array(ReasonCode).max(18).optional(), "comment": z.string().max(2000).optional() }).strict();
 export type InvoiceTransition = z.infer<typeof InvoiceTransition>;

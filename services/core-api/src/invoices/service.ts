@@ -7,8 +7,20 @@ import { idempotent, requestHash, type StoredResponse } from '../http/idempotenc
 import { enqueue } from '../outbox/enqueue.js';
 import { appendAudit, invoiceHistory } from './audit.js';
 import { transition, TransitionRefusedError } from './lifecycle.js';
-import { loadPolicy } from './pipeline.js';
-import { findByDocument, getInvoice, insertDocument, insertInvoice, type DocumentContentType, type InvoiceRow, type SourceChannel } from './store.js';
+import { planCorrection, type CorrectionInput } from './corrections.js';
+import { continueFromValidating, loadPolicy } from './pipeline.js';
+import {
+  applyCorrection,
+  findByDocument,
+  getInvoice,
+  getLineItems,
+  insertDocument,
+  insertInvoice,
+  replaceLineItems,
+  type DocumentContentType,
+  type InvoiceRow,
+  type SourceChannel,
+} from './store.js';
 import { toInvoice } from './view.js';
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -123,12 +135,14 @@ export async function humanTransition(db: Db, principal: Principal, input: Human
         checkApprovalAuthority(principal, inv, await loadPolicy(tx));
       }
       try {
-        const updated = await transition(tx, inv, {
+        let updated = await transition(tx, inv, {
           to: input.to,
           actor: { kind: 'human', id: principal.userId },
           reasons: reasons as ReasonCode[],
           ...(input.comment ? { comment: input.comment } : {}),
         });
+        // A human sending an invoice back to VALIDATING wants it validated now, not parked there.
+        updated = await continueFromValidating(tx, updated);
         return { status: 200, body: toInvoice(updated) };
       } catch (err) {
         if (err instanceof TransitionRefusedError) throw refused(err);
@@ -142,6 +156,61 @@ export async function readInvoice(db: Db, principal: Principal, id: string) {
   return withTenant(db, principal.tenantId, async (tx) => {
     const inv = await getInvoice(tx, id);
     if (!inv) throw new HttpProblem(404, 'Not found', `no invoice ${id}`);
-    return toInvoice(inv, await invoiceHistory(tx, principal.tenantId, id));
+    return toInvoice(inv, { history: await invoiceHistory(tx, principal.tenantId, id), lineItems: await getLineItems(tx, id) });
   });
+}
+
+const CORRECTED_BEFORE_APPROVAL = 'corrected before approval; re-validating';
+
+/**
+ * Edit-before-approve. In one transaction: apply the correction (compare-and-set
+ * on version), audit the before and after of every changed field, then send the
+ * invoice back through deterministic validation and policy routing. From
+ * PENDING_APPROVAL that goes via HOLD, because the gate only lets a human leave
+ * HOLD or EXCEPTION for VALIDATING. The response is the invoice where routing
+ * left it: usually PENDING_APPROVAL again, or EXCEPTION if the corrected numbers
+ * do not add up.
+ */
+export async function correctInvoice(
+  db: Db,
+  principal: Principal,
+  invoiceId: string,
+  input: CorrectionInput,
+  idempotencyKey: string,
+): Promise<StoredResponse & { replayed: boolean }> {
+  const hash = requestHash(['correctInvoice', invoiceId, JSON.stringify(input)]);
+  const actor = { kind: 'human', id: principal.userId } as const;
+
+  return withTenant(db, principal.tenantId, (tx) =>
+    idempotent(tx, principal.tenantId, idempotencyKey, hash, async () => {
+      const inv = await mustGet(tx, invoiceId);
+      const plan = planCorrection(inv, await getLineItems(tx, invoiceId), input);
+      const fields = Object.keys(plan.changes);
+      if (!(await applyCorrection(tx, invoiceId, inv.version, plan.update, fields))) {
+        throw new HttpProblem(409, 'Version conflict', 'the invoice changed while this request was in flight; reload and retry', 'VERSION_CONFLICT');
+      }
+      if (plan.lines) await replaceLineItems(tx, principal.tenantId, invoiceId, plan.lines);
+      await appendAudit(tx, {
+        tenantId: principal.tenantId,
+        invoiceId,
+        type: 'invoice.corrected',
+        actor,
+        payload: { changes: plan.changes, ...(input.comment ? { comment: input.comment } : {}) },
+      });
+      await enqueue(tx, principal.tenantId, 'invoice.corrected', { invoiceId, fields });
+
+      let cur = await mustGet(tx, invoiceId);
+      try {
+        if (cur.state === 'PENDING_APPROVAL') {
+          cur = await transition(tx, cur, { to: 'HOLD', actor, reasons: ['POLICY_MANUAL_REVIEW_REQUIRED'], comment: CORRECTED_BEFORE_APPROVAL });
+        }
+        cur = await transition(tx, cur, { to: 'VALIDATING', actor, ...(input.comment ? { comment: input.comment } : {}) });
+      } catch (err) {
+        if (err instanceof TransitionRefusedError) throw refused(err);
+        throw err;
+      }
+      cur = await continueFromValidating(tx, cur);
+      return { status: 200, body: toInvoice(cur, { lineItems: await getLineItems(tx, invoiceId) }) };
+    }),
+  );
 }

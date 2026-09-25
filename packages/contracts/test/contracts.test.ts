@@ -30,7 +30,11 @@ const extraction = {
     invoiceDate: field('2026-01-01'),
     currency: field('USD'),
     totalMinor: field('1000'),
+    subtotalMinor: field('900'),
+    taxMinor: field('100'),
+    dueDate: field(null),
   },
+  lineItems: [{ description: 'Widgets', quantity: '2', unitPriceMinor: '450', amountMinor: '900', confidence: 0.85 }],
 };
 
 describe.each(['core-api', 'ai-service'])('%s spec conventions', (name) => {

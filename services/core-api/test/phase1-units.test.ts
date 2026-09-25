@@ -67,12 +67,25 @@ describe('extraction header normalisation', () => {
       invoiceDate: field('2026-03-14'),
       currency: field('USD'),
       totalMinor: field('100'),
+      subtotalMinor: field(null),
+      taxMinor: field(null),
+      dueDate: field(null),
       ...Object.fromEntries(Object.entries(over).map(([k, v]) => [k, field(v)])),
     },
+    lineItems: [],
   });
 
   it('keeps well-formed values', () => {
-    expect(headerFrom(ex({}))).toEqual({ vendorName: 'ACME', invoiceNumber: 'INV-1', invoiceDate: '2026-03-14', currency: 'USD', totalMinor: 100n });
+    expect(headerFrom(ex({}))).toEqual({
+      vendorName: 'ACME',
+      invoiceNumber: 'INV-1',
+      invoiceDate: '2026-03-14',
+      currency: 'USD',
+      totalMinor: 100n,
+      subtotalMinor: null,
+      taxMinor: null,
+      dueDate: null,
+    });
   });
 
   it.each([
