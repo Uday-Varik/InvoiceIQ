@@ -1,0 +1,22 @@
+{
+  "name": "@invoiceiq/core-api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "catalog": "tsx scripts/export-catalog.ts",
+    "catalog:check": "tsx scripts/export-catalog.ts --check"
+  },
+  "dependencies": {
+    "fastify": "5.12.5",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@invoiceiq/contracts": "workspace:*",
+    "tsx": "4.23.15"
+  }
+}

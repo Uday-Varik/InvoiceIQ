@@ -1,0 +1,228 @@
+openapi: 3.1.0
+info:
+  title: InvoiceIQ ai-service
+  version: 0.1.0
+  summary: Extraction and risk signals. Advisory only; holds no payment authority.
+  description: |
+    ai-service turns documents into structured fields and emits risk signals.
+    It has no database credentials for money tables and cannot change invoice
+    state. Every signal it emits is an AI reason code whose only permitted
+    outcome is HOLD (ADR-0007). core-api decides what to do with it.
+  license:
+    name: MIT
+    identifier: MIT
+  contact:
+    name: InvoiceIQ maintainers
+    url: https://github.com/Uday-Varik/InvoiceIQ
+servers:
+  - url: /
+    description: Same origin as the caller (local ports are in docker-compose.yml)
+tags:
+  - name: health
+    description: Liveness and readiness
+  - name: extraction
+    description: Document field extraction
+  - name: signals
+    description: Advisory risk signals
+security:
+  - serviceToken: []
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Liveness probe
+      tags: [health]
+      security: []
+      x-phase: 0
+      responses:
+        '200':
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '503':
+          $ref: '#/components/responses/Problem'
+  /v1/extract:
+    post:
+      operationId: extractInvoice
+      summary: Extract header fields from invoice text
+      tags: [extraction]
+      x-phase: 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtractionRequest'
+      responses:
+        '200':
+          description: Extracted fields with per-field confidence
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtractionResult'
+        '422':
+          $ref: '#/components/responses/Problem'
+        '503':
+          $ref: '#/components/responses/Problem'
+  /v1/signals:
+    post:
+      operationId: computeSignals
+      summary: Compute advisory risk signals for an extraction
+      tags: [signals]
+      x-phase: 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalRequest'
+      responses:
+        '200':
+          description: Zero or more HOLD-only signals
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalResponse'
+        '422':
+          $ref: '#/components/responses/Problem'
+components:
+  securitySchemes:
+    serviceToken:
+      type: http
+      scheme: bearer
+      description: Short-lived service token minted by core-api.
+  responses:
+    Problem:
+      description: RFC 9457 problem details
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status, service]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        service:
+          type: string
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        detail:
+          type: string
+    AiReasonCode:
+      type: string
+      description: AI-derived reason codes. Must equal the AI_ subset of core-api ReasonCode.
+      enum:
+        - AI_EXTRACTION_LOW_CONFIDENCE
+        - AI_ANOMALY_SUSPECTED
+        - AI_DOCUMENT_TAMPERING_SUSPECTED
+        - AI_SEMANTIC_DUPLICATE_SUSPECTED
+    ExtractionRequest:
+      type: object
+      additionalProperties: false
+      required: [tenantId, documentSha256, text]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        documentSha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        text:
+          type: string
+          minLength: 1
+          maxLength: 200000
+    ExtractedField:
+      type: object
+      additionalProperties: false
+      required: [value, confidence]
+      properties:
+        value:
+          type:
+            - string
+            - 'null'
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+    ExtractionResult:
+      type: object
+      additionalProperties: false
+      required: [documentSha256, provider, fields]
+      properties:
+        documentSha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        provider:
+          type: string
+        fields:
+          type: object
+          additionalProperties: false
+          required: [vendorName, invoiceNumber, invoiceDate, currency, totalMinor]
+          properties:
+            vendorName:
+              $ref: '#/components/schemas/ExtractedField'
+            invoiceNumber:
+              $ref: '#/components/schemas/ExtractedField'
+            invoiceDate:
+              $ref: '#/components/schemas/ExtractedField'
+            currency:
+              $ref: '#/components/schemas/ExtractedField'
+            totalMinor:
+              $ref: '#/components/schemas/ExtractedField'
+    SignalRequest:
+      type: object
+      additionalProperties: false
+      required: [extraction, extractionConfidenceHoldBelow]
+      properties:
+        extraction:
+          $ref: '#/components/schemas/ExtractionResult'
+        extractionConfidenceHoldBelow:
+          type: number
+          minimum: 0.5
+          maximum: 1
+    Signal:
+      type: object
+      additionalProperties: false
+      required: [reasonCode, outcome, score, evidence]
+      properties:
+        reasonCode:
+          $ref: '#/components/schemas/AiReasonCode'
+        outcome:
+          type: string
+          const: HOLD
+          description: The only outcome an AI signal can recommend.
+        score:
+          type: number
+          minimum: 0
+          maximum: 1
+        evidence:
+          type: string
+          maxLength: 2000
+    SignalResponse:
+      type: object
+      additionalProperties: false
+      required: [signals]
+      properties:
+        signals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Signal'

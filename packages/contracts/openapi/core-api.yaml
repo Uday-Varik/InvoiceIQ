@@ -1,0 +1,583 @@
+openapi: 3.1.0
+info:
+  title: InvoiceIQ core-api
+  version: 0.1.0
+  summary: System of record for invoices, approvals and the payment-safety control layer.
+  description: |
+    core-api owns every money-bearing table. It is the only service allowed to
+    change invoice state, and every state change goes through the lifecycle gate
+    (`evaluateTransition`). Operations tagged `x-phase: 0` are implemented today;
+    later phases are specified here first so contracts lead code.
+  license:
+    name: MIT
+    identifier: MIT
+  contact:
+    name: InvoiceIQ maintainers
+    url: https://github.com/Uday-Varik/InvoiceIQ
+servers:
+  - url: /
+    description: Same origin as the caller (local ports are in docker-compose.yml)
+tags:
+  - name: health
+    description: Liveness and readiness
+  - name: lifecycle
+    description: Invoice lifecycle and reason catalog
+  - name: invoices
+    description: Invoice intake and review
+  - name: vendors
+    description: Vendor master and bank-detail changes
+  - name: audit
+    description: Hash-chained audit ledger
+security:
+  - bearerAuth: []
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Liveness probe
+      tags: [health]
+      security: []
+      x-phase: 0
+      responses:
+        '200':
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '503':
+          $ref: '#/components/responses/Problem'
+  /v1/lifecycle/states:
+    get:
+      operationId: listLifecycleStates
+      summary: List lifecycle states and their allowed next states
+      tags: [lifecycle]
+      x-phase: 0
+      responses:
+        '200':
+          description: The lifecycle graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LifecycleStates'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/reason-codes:
+    get:
+      operationId: listReasonCodes
+      summary: List the reason catalog
+      tags: [lifecycle]
+      x-phase: 0
+      responses:
+        '200':
+          description: All reason codes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReasonCodeList'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/lifecycle/evaluate:
+    post:
+      operationId: evaluateTransition
+      summary: Dry-run a lifecycle transition against the safety gate
+      tags: [lifecycle]
+      x-phase: 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionRequest'
+      responses:
+        '200':
+          description: Whether the transition would be allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransitionEvaluation'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+  /v1/invoices:
+    get:
+      operationId: listInvoices
+      summary: List invoices for the caller's tenant
+      tags: [invoices]
+      x-phase: 1
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/InvoiceState'
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 256
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: A page of invoices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePage'
+        '401':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createInvoice
+      summary: Register an uploaded invoice document
+      tags: [invoices]
+      x-phase: 1
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceCreate'
+      responses:
+        '201':
+          description: Invoice created in RECEIVED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/invoices/{invoiceId}:
+    get:
+      operationId: getInvoice
+      summary: Get one invoice
+      tags: [invoices]
+      x-phase: 1
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200':
+          description: The invoice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/invoices/{invoiceId}/transitions:
+    post:
+      operationId: transitionInvoice
+      summary: Move an invoice to a new state through the safety gate
+      tags: [invoices]
+      x-phase: 1
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceTransition'
+      responses:
+        '200':
+          description: Transition applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+  /v1/vendors/{vendorId}/bank-changes:
+    post:
+      operationId: requestVendorBankChange
+      summary: Record a vendor bank-detail change (starts quarantine)
+      tags: [vendors]
+      x-phase: 1
+      parameters:
+        - name: vendorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankChangeRequest'
+      responses:
+        '202':
+          description: Change recorded and quarantined
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankChangeStatus'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/audit/verify:
+    get:
+      operationId: verifyAuditChain
+      summary: Verify the tenant's audit hash chain
+      tags: [audit]
+      x-phase: 1
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditVerification'
+        '401':
+          $ref: '#/components/responses/Problem'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    InvoiceId:
+      name: invoiceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+  responses:
+    Problem:
+      description: RFC 9457 problem details
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status, service]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        service:
+          type: string
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        detail:
+          type: string
+    InvoiceState:
+      type: string
+      description: The 14-state invoice lifecycle.
+      enum:
+        - RECEIVED
+        - EXTRACTING
+        - EXTRACTED
+        - VALIDATING
+        - VALIDATED
+        - MATCHING
+        - MATCHED
+        - PENDING_APPROVAL
+        - APPROVED
+        - REJECTED
+        - HOLD
+        - EXCEPTION
+        - PAYMENT_QUEUED
+        - PAID
+    ReasonCode:
+      type: string
+      description: The 18-code reason catalog. Codes prefixed AI_ are AI-derived and HOLD-only.
+      enum:
+        - MATCH_PRICE_VARIANCE
+        - MATCH_QUANTITY_VARIANCE
+        - MATCH_PO_NOT_FOUND
+        - MATCH_RECEIPT_MISSING
+        - DUPLICATE_EXACT
+        - DUPLICATE_NEAR
+        - VENDOR_BANK_CHANGE_QUARANTINE
+        - VENDOR_UNKNOWN
+        - VENDOR_INACTIVE
+        - VALIDATION_MISSING_FIELD
+        - VALIDATION_TOTALS_MISMATCH
+        - VALIDATION_CURRENCY_UNSUPPORTED
+        - APPROVAL_LIMIT_EXCEEDED
+        - POLICY_MANUAL_REVIEW_REQUIRED
+        - AI_EXTRACTION_LOW_CONFIDENCE
+        - AI_ANOMALY_SUSPECTED
+        - AI_DOCUMENT_TAMPERING_SUSPECTED
+        - AI_SEMANTIC_DUPLICATE_SUSPECTED
+    ReasonSource:
+      type: string
+      enum: [deterministic, ai]
+    ReasonOutcome:
+      type: string
+      enum: [HOLD, EXCEPTION, REJECTED]
+    Severity:
+      type: string
+      enum: [low, medium, high, critical]
+    ActorKind:
+      type: string
+      enum: [system, human, ai]
+    Actor:
+      type: object
+      additionalProperties: false
+      required: [kind, id]
+      properties:
+        kind:
+          $ref: '#/components/schemas/ActorKind'
+        id:
+          type: string
+          minLength: 1
+    ReasonCodeDefinition:
+      type: object
+      additionalProperties: false
+      required: [code, source, severity, allowedOutcomes, description]
+      properties:
+        code:
+          $ref: '#/components/schemas/ReasonCode'
+        source:
+          $ref: '#/components/schemas/ReasonSource'
+        severity:
+          $ref: '#/components/schemas/Severity'
+        allowedOutcomes:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ReasonOutcome'
+        description:
+          type: string
+    ReasonCodeList:
+      type: object
+      additionalProperties: false
+      required: [reasonCodes]
+      properties:
+        reasonCodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReasonCodeDefinition'
+    LifecycleState:
+      type: object
+      additionalProperties: false
+      required: [state, next]
+      properties:
+        state:
+          $ref: '#/components/schemas/InvoiceState'
+        next:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceState'
+    LifecycleStates:
+      type: object
+      additionalProperties: false
+      required: [states]
+      properties:
+        states:
+          type: array
+          items:
+            $ref: '#/components/schemas/LifecycleState'
+    TransitionRequest:
+      type: object
+      additionalProperties: false
+      required: [from, to, actor]
+      properties:
+        from:
+          $ref: '#/components/schemas/InvoiceState'
+        to:
+          $ref: '#/components/schemas/InvoiceState'
+        actor:
+          $ref: '#/components/schemas/Actor'
+        reasons:
+          type: array
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/ReasonCode'
+    TransitionError:
+      type: string
+      enum:
+        - TERMINAL_STATE
+        - EDGE_NOT_ALLOWED
+        - AI_MAY_ONLY_HOLD
+        - AI_REASON_OUTSIDE_HOLD
+        - HUMAN_REQUIRED
+        - REASON_REQUIRED
+        - REASON_OUTCOME_MISMATCH
+    TransitionEvaluation:
+      type: object
+      additionalProperties: false
+      required: [allowed, from, to]
+      properties:
+        allowed:
+          type: boolean
+        from:
+          $ref: '#/components/schemas/InvoiceState'
+        to:
+          $ref: '#/components/schemas/InvoiceState'
+        error:
+          $ref: '#/components/schemas/TransitionError'
+        message:
+          type: string
+    Money:
+      type: object
+      description: Integer minor units as a decimal string (never a float) plus ISO 4217 currency.
+      additionalProperties: false
+      required: [amountMinor, currency]
+      properties:
+        amountMinor:
+          type: string
+          pattern: '^-?[0-9]{1,19}$'
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+    InvoiceCreate:
+      type: object
+      additionalProperties: false
+      required: [documentSha256, documentContentType, sourceChannel]
+      properties:
+        documentSha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        documentContentType:
+          type: string
+          enum: [application/pdf, image/png, image/jpeg, image/tiff]
+        sourceChannel:
+          type: string
+          enum: [upload, email, api]
+    Invoice:
+      type: object
+      additionalProperties: false
+      required: [id, tenantId, state, reasons, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        vendorId:
+          type: string
+          format: uuid
+        invoiceNumber:
+          type: string
+          maxLength: 64
+        total:
+          $ref: '#/components/schemas/Money'
+        state:
+          $ref: '#/components/schemas/InvoiceState'
+        reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReasonCode'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    InvoicePage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invoice'
+        nextCursor:
+          type: string
+    InvoiceTransition:
+      type: object
+      additionalProperties: false
+      required: [to]
+      properties:
+        to:
+          $ref: '#/components/schemas/InvoiceState'
+        reasons:
+          type: array
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/ReasonCode'
+        comment:
+          type: string
+          maxLength: 2000
+    BankChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [ibanOrAccountLast4, evidenceDocumentSha256]
+      properties:
+        ibanOrAccountLast4:
+          type: string
+          pattern: '^[0-9A-Z]{4}$'
+        evidenceDocumentSha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+    BankChangeStatus:
+      type: object
+      additionalProperties: false
+      required: [vendorId, quarantined]
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+        quarantined:
+          type: boolean
+        releasesAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        why:
+          type: string
+          enum: [WINDOW_OPEN, UNVERIFIED, SELF_VERIFIED]
+    AuditVerification:
+      type: object
+      additionalProperties: false
+      required: [ok, entries]
+      properties:
+        ok:
+          type: boolean
+        entries:
+          type: integer
+          minimum: 0
+        brokenAt:
+          type: integer
+          minimum: 0
+        reason:
+          type: string

@@ -1,0 +1,10 @@
+# Default owner
+* @Uday-Varik
+
+# Safety-critical paths: changes here need an explicit review.
+/services/core-api/src/domain/ @Uday-Varik
+/packages/contracts/ @Uday-Varik
+/docs/adr/ @Uday-Varik
+/docs/threat-model/ @Uday-Varik
+/data/frozen/ @Uday-Varik
+/.github/ @Uday-Varik

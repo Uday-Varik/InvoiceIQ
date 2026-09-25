@@ -1,0 +1,69 @@
+# Local development stack.
+#
+# `db` is the only service needed for Phase 0 and is the one we expect to work.
+# The app services are PLACEHOLDERS labelled W-UNV (Written-unverified): Docker
+# was not available in the environment that produced Phase 0, so they have not
+# been built or run. Their Dockerfiles land in Phase 1.
+
+name: invoiceiq
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: invoiceiq
+      POSTGRES_PASSWORD: invoiceiq-local-only
+      POSTGRES_DB: invoiceiq
+    ports:
+      - '5432:5432'
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./infra/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U invoiceiq -d invoiceiq']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # W-UNV: placeholder, not built or run yet.
+  core-api:
+    profiles: [apps]
+    build:
+      context: .
+      dockerfile: services/core-api/Dockerfile
+    environment:
+      PORT: '3001'
+      DATABASE_URL: postgres://invoiceiq_app:invoiceiq-local-only@db:5432/invoiceiq
+      AI_SERVICE_URL: http://ai-service:8001
+    ports:
+      - '3001:3001'
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # W-UNV: placeholder, not built or run yet. Note: no DATABASE_URL (ADR-0007).
+  ai-service:
+    profiles: [apps]
+    build:
+      context: .
+      dockerfile: services/ai-service/Dockerfile
+    environment:
+      AI_REPLAY_DIR: /app/replay
+    ports:
+      - '8001:8001'
+
+  # W-UNV: placeholder, not built or run yet.
+  web:
+    profiles: [apps]
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      CORE_API_URL: http://core-api:3001
+    ports:
+      - '3000:3000'
+    depends_on:
+      - core-api
+
+volumes:
+  db-data:

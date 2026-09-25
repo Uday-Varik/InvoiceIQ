@@ -1,0 +1,31 @@
+{
+  "name": "invoiceiq",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Multi-tenant AP automation with a payment-safety control layer",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "lint": "eslint --max-warnings 0 .",
+    "typecheck": "pnpm -r --parallel run typecheck && tsc -p tests/guardrails/tsconfig.json",
+    "test": "pnpm -r run test && vitest run --config tests/guardrails/vitest.config.ts",
+    "test:guardrails": "vitest run --config tests/guardrails/vitest.config.ts",
+    "openapi:lint": "redocly lint packages/contracts/openapi/core-api.yaml packages/contracts/openapi/ai-service.yaml",
+    "contracts:generate": "pnpm --filter @invoiceiq/contracts run generate",
+    "contracts:verify": "pnpm --filter @invoiceiq/contracts run verify"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@redocly/cli": "2.54.3",
+    "@types/node": "22.20.4",
+    "eslint": "10.11.0",
+    "globals": "17.12.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.1",
+    "vitest": "5.0.2",
+    "yaml": "2.9.1"
+  }
+}

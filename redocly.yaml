@@ -1,0 +1,7 @@
+extends:
+  - recommended
+rules:
+  operation-4xx-response: error
+  no-unused-components: error
+  info-license-strict: error
+  security-defined: error
