@@ -74,7 +74,19 @@ export type paths = {
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
-        readonly patch?: never;
+        /**
+         * Correct extracted fields before approval
+         * @description Human-only. Allowed while the invoice is PENDING_APPROVAL, HOLD or
+         *     EXCEPTION. `expectedVersion` must equal the invoice's current version,
+         *     so a reviewer never overwrites a change they have not seen. Only the
+         *     fields present in the body change; `null` clears an optional field.
+         *     The correction is recorded in the audit ledger with before and after
+         *     values, then the invoice goes back through deterministic validation
+         *     and policy routing, so a corrected total gets the approval tier and
+         *     review rules of the new amount. AI signals are not re-run on
+         *     human-entered values.
+         */
+        readonly patch: operations["correctInvoice"];
         readonly trace?: never;
     };
     readonly "/v1/invoices/{invoiceId}/approve": {
@@ -143,6 +155,50 @@ export type paths = {
         readonly put?: never;
         /** Move an invoice to a new state through the safety gate */
         readonly post: operations["transitionInvoice"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/invoices/export": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Export invoices as CSV or JSON
+         * @description Takes the same filters as listInvoices and returns every match, newest
+         *     first, up to `limit` rows. `X-Export-Truncated: true` says more rows
+         *     matched than were returned. CSV cells that a spreadsheet would read as
+         *     a formula are prefixed with a single quote.
+         */
+        readonly get: operations["exportInvoices"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/invoices/summary": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Counts per state and totals per currency for the dashboard
+         * @description Takes the same filters as listInvoices. Totals are summed per currency
+         *     and never converted.
+         */
+        readonly get: operations["getInvoiceSummary"];
+        readonly put?: never;
+        readonly post?: never;
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -246,9 +302,27 @@ export type components = {
             /** @enum {string} */
             readonly why?: "WINDOW_OPEN" | "UNVERIFIED" | "SELF_VERIFIED";
         };
+        /** @enum {string} */
+        readonly CorrectableField: "vendorName" | "invoiceNumber" | "invoiceDate" | "dueDate" | "currency" | "total" | "subtotal" | "tax" | "lineItems";
+        readonly CurrencyTotal: {
+            readonly amountMinor: string;
+            readonly count: number;
+            readonly currency: string;
+        };
         readonly ExtractedField: {
             readonly confidence: number;
             readonly value: string | null;
+        };
+        readonly ExtractedLineItem: {
+            readonly amountMinor: string | null;
+            readonly confidence: number;
+            readonly description: string;
+            readonly quantity: string | null;
+            readonly unitPriceMinor: string | null;
+        };
+        readonly FieldChange: {
+            readonly from: unknown;
+            readonly to: unknown;
         };
         readonly Health: {
             readonly service: string;
@@ -256,9 +330,13 @@ export type components = {
             readonly status: "ok";
         };
         readonly Invoice: {
+            /** @description Fields a human has corrected since extraction. */
+            readonly corrections?: readonly components["schemas"]["CorrectableField"][];
             /** Format: date-time */
             readonly createdAt: string;
             readonly document?: components["schemas"]["InvoiceDocument"];
+            /** Format: date */
+            readonly dueDate?: string;
             readonly extraction?: components["schemas"]["InvoiceExtraction"];
             /** @description Audit entries for this invoice, oldest first. Present on getInvoice only. */
             readonly history?: readonly components["schemas"]["InvoiceEvent"][];
@@ -267,9 +345,13 @@ export type components = {
             /** Format: date */
             readonly invoiceDate?: string;
             readonly invoiceNumber?: string;
+            /** @description Stored lines, in position order. Present on getInvoice and exportInvoices (JSON) only. */
+            readonly lineItems?: readonly components["schemas"]["LineItem"][];
             /** @description Reasons for the transition into the current state. Empty unless the state is HOLD, EXCEPTION or REJECTED. */
             readonly reasons: readonly components["schemas"]["ReasonCode"][];
             readonly state: components["schemas"]["InvoiceState"];
+            readonly subtotal?: components["schemas"]["Money"];
+            readonly tax?: components["schemas"]["Money"];
             /** Format: uuid */
             readonly tenantId: string;
             readonly total?: components["schemas"]["Money"];
@@ -278,11 +360,26 @@ export type components = {
             /** Format: uuid */
             readonly vendorId?: string;
             readonly vendorName?: string;
-            /** @description Incremented on every state change. */
+            /** @description Incremented on every state change and every correction. */
             readonly version: number;
         };
         readonly InvoiceApproval: {
             readonly comment?: string;
+        };
+        readonly InvoiceCorrection: {
+            readonly comment?: string;
+            readonly currency?: string;
+            /** Format: date */
+            readonly dueDate?: string | null;
+            readonly expectedVersion: number;
+            /** Format: date */
+            readonly invoiceDate?: string;
+            readonly invoiceNumber?: string;
+            readonly lineItems?: readonly components["schemas"]["LineItemInput"][];
+            readonly subtotalMinor?: string | null;
+            readonly taxMinor?: string | null;
+            readonly totalMinor?: string;
+            readonly vendorName?: string;
         };
         readonly InvoiceDocument: {
             /** @enum {string} */
@@ -293,6 +390,10 @@ export type components = {
         };
         readonly InvoiceEvent: {
             readonly actor: components["schemas"]["Actor"];
+            /** @description For invoice.corrected, each corrected field with its value before and after. */
+            readonly changes?: {
+                readonly [key: string]: components["schemas"]["FieldChange"];
+            };
             readonly comment?: string;
             readonly from?: components["schemas"]["InvoiceState"];
             /** Format: date-time */
@@ -302,16 +403,27 @@ export type components = {
             readonly to?: components["schemas"]["InvoiceState"];
             readonly type: string;
         };
+        readonly InvoiceExport: {
+            readonly count: number;
+            /** Format: date-time */
+            readonly exportedAt: string;
+            readonly items: readonly components["schemas"]["Invoice"][];
+            readonly truncated: boolean;
+        };
         readonly InvoiceExtraction: {
             /** Format: date-time */
             readonly extractedAt: string;
             readonly fields: {
                 readonly currency: components["schemas"]["ExtractedField"];
+                readonly dueDate?: components["schemas"]["ExtractedField"];
                 readonly invoiceDate: components["schemas"]["ExtractedField"];
                 readonly invoiceNumber: components["schemas"]["ExtractedField"];
+                readonly subtotalMinor?: components["schemas"]["ExtractedField"];
+                readonly taxMinor?: components["schemas"]["ExtractedField"];
                 readonly totalMinor: components["schemas"]["ExtractedField"];
                 readonly vendorName: components["schemas"]["ExtractedField"];
             };
+            readonly lineItems?: readonly components["schemas"]["ExtractedLineItem"][];
             readonly provider: string;
         };
         readonly InvoicePage: {
@@ -327,6 +439,13 @@ export type components = {
          * @enum {string}
          */
         readonly InvoiceState: "RECEIVED" | "EXTRACTING" | "EXTRACTED" | "VALIDATING" | "VALIDATED" | "MATCHING" | "MATCHED" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "HOLD" | "EXCEPTION" | "PAYMENT_QUEUED" | "PAID";
+        readonly InvoiceSummary: {
+            /** @description Totals of invoices that have an extracted total, per currency, alphabetical. */
+            readonly byCurrency: readonly components["schemas"]["CurrencyTotal"][];
+            /** @description Every lifecycle state in lifecycle order, including zero counts. */
+            readonly byState: readonly components["schemas"]["StateCount"][];
+            readonly count: number;
+        };
         readonly InvoiceTransition: {
             readonly comment?: string;
             readonly reasons?: readonly components["schemas"]["ReasonCode"][];
@@ -347,6 +466,20 @@ export type components = {
         };
         readonly LifecycleStates: {
             readonly states: readonly components["schemas"]["LifecycleState"][];
+        };
+        /** @description A line of the invoice as stored (extracted, or entered by a reviewer). Amounts are in the invoice currency. */
+        readonly LineItem: {
+            readonly amountMinor?: string;
+            readonly description: string;
+            readonly position: number;
+            readonly quantity?: string;
+            readonly unitPriceMinor?: string;
+        };
+        readonly LineItemInput: {
+            readonly amountMinor?: string;
+            readonly description: string;
+            readonly quantity?: string;
+            readonly unitPriceMinor?: string;
         };
         /** @description Integer minor units as a decimal string (never a float) plus ISO 4217 currency. */
         readonly Money: {
@@ -382,6 +515,10 @@ export type components = {
         readonly ReasonSource: "deterministic" | "ai";
         /** @enum {string} */
         readonly Severity: "low" | "medium" | "high" | "critical";
+        readonly StateCount: {
+            readonly count: number;
+            readonly state: components["schemas"]["InvoiceState"];
+        };
         /** @enum {string} */
         readonly TransitionError: "TERMINAL_STATE" | "EDGE_NOT_ALLOWED" | "AI_MAY_ONLY_HOLD" | "AI_REASON_OUTSIDE_HOLD" | "HUMAN_REQUIRED" | "REASON_REQUIRED" | "REASON_OUTCOME_MISMATCH";
         readonly TransitionEvaluation: {
@@ -410,8 +547,19 @@ export type components = {
         };
     };
     parameters: {
+        readonly CurrencyFilter: string;
+        /** @description Invoice date on or after this day. */
+        readonly DateFrom: string;
+        /** @description Invoice date on or before this day. */
+        readonly DateTo: string;
         readonly IdempotencyKey: string;
         readonly InvoiceId: string;
+        /** @description Total at most this many minor units. */
+        readonly MaxTotalMinor: string;
+        /** @description Total at least this many minor units. */
+        readonly MinTotalMinor: string;
+        /** @description Case-insensitive substring of the vendor name, invoice number or file name. */
+        readonly Search: string;
     };
     requestBodies: never;
     headers: never;
@@ -465,8 +613,19 @@ export interface operations {
     readonly listInvoices: {
         readonly parameters: {
             readonly query?: {
+                readonly currency?: components["parameters"]["CurrencyFilter"];
                 readonly cursor?: string;
+                /** @description Invoice date on or after this day. */
+                readonly dateFrom?: components["parameters"]["DateFrom"];
+                /** @description Invoice date on or before this day. */
+                readonly dateTo?: components["parameters"]["DateTo"];
                 readonly limit?: number;
+                /** @description Total at most this many minor units. */
+                readonly maxTotalMinor?: components["parameters"]["MaxTotalMinor"];
+                /** @description Total at least this many minor units. */
+                readonly minTotalMinor?: components["parameters"]["MinTotalMinor"];
+                /** @description Case-insensitive substring of the vendor name, invoice number or file name. */
+                readonly q?: components["parameters"]["Search"];
                 readonly state?: components["schemas"]["InvoiceState"];
             };
             readonly header?: never;
@@ -475,7 +634,7 @@ export interface operations {
         };
         readonly requestBody?: never;
         readonly responses: {
-            /** @description A page of invoices */
+            /** @description A page of invoices, newest first */
             readonly 200: {
                 headers: {
                     readonly [name: string]: unknown;
@@ -540,6 +699,38 @@ export interface operations {
             };
             readonly 401: components["responses"]["Problem"];
             readonly 404: components["responses"]["Problem"];
+        };
+    };
+    readonly correctInvoice: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                readonly "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            readonly path: {
+                readonly invoiceId: components["parameters"]["InvoiceId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["InvoiceCorrection"];
+            };
+        };
+        readonly responses: {
+            /** @description The corrected invoice in the state validation routed it to */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Invoice"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 404: components["responses"]["Problem"];
+            readonly 409: components["responses"]["Problem"];
+            readonly 422: components["responses"]["Problem"];
         };
     };
     readonly approveInvoice: {
@@ -662,6 +853,80 @@ export interface operations {
             readonly 404: components["responses"]["Problem"];
             readonly 409: components["responses"]["Problem"];
             readonly 422: components["responses"]["Problem"];
+        };
+    };
+    readonly exportInvoices: {
+        readonly parameters: {
+            readonly query?: {
+                readonly currency?: components["parameters"]["CurrencyFilter"];
+                /** @description Invoice date on or after this day. */
+                readonly dateFrom?: components["parameters"]["DateFrom"];
+                /** @description Invoice date on or before this day. */
+                readonly dateTo?: components["parameters"]["DateTo"];
+                readonly format?: "csv" | "json";
+                readonly limit?: number;
+                /** @description Total at most this many minor units. */
+                readonly maxTotalMinor?: components["parameters"]["MaxTotalMinor"];
+                /** @description Total at least this many minor units. */
+                readonly minTotalMinor?: components["parameters"]["MinTotalMinor"];
+                /** @description Case-insensitive substring of the vendor name, invoice number or file name. */
+                readonly q?: components["parameters"]["Search"];
+                readonly state?: components["schemas"]["InvoiceState"];
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The matching invoices */
+            readonly 200: {
+                headers: {
+                    readonly "X-Export-Truncated"?: "true" | "false";
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["InvoiceExport"];
+                    readonly "text/csv": string;
+                };
+            };
+            readonly 400: components["responses"]["Problem"];
+            readonly 401: components["responses"]["Problem"];
+        };
+    };
+    readonly getInvoiceSummary: {
+        readonly parameters: {
+            readonly query?: {
+                readonly currency?: components["parameters"]["CurrencyFilter"];
+                /** @description Invoice date on or after this day. */
+                readonly dateFrom?: components["parameters"]["DateFrom"];
+                /** @description Invoice date on or before this day. */
+                readonly dateTo?: components["parameters"]["DateTo"];
+                /** @description Total at most this many minor units. */
+                readonly maxTotalMinor?: components["parameters"]["MaxTotalMinor"];
+                /** @description Total at least this many minor units. */
+                readonly minTotalMinor?: components["parameters"]["MinTotalMinor"];
+                /** @description Case-insensitive substring of the vendor name, invoice number or file name. */
+                readonly q?: components["parameters"]["Search"];
+                readonly state?: components["schemas"]["InvoiceState"];
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The summary */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["InvoiceSummary"];
+                };
+            };
+            readonly 400: components["responses"]["Problem"];
+            readonly 401: components["responses"]["Problem"];
         };
     };
     readonly evaluateTransition: {

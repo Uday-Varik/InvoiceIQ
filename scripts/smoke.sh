@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end smoke test against a running stack (docker compose up, or a deploy).
-# Uploads the sample invoice, waits for the pipeline, approves it and verifies
-# the audit chain. Needs curl and jq. Usage: scripts/smoke.sh [base-url]
+# Uploads the sample invoice, waits for the pipeline, checks its line items,
+# corrects a field, finds it with a filter and in the CSV export, approves it
+# and verifies the audit chain. Needs curl and jq. Usage: scripts/smoke.sh [base-url]
 set -euo pipefail
 
 BASE="${1:-http://localhost:3001}"
@@ -41,6 +42,23 @@ for i in $(seq 1 60); do
 done
 [[ "$STATE" == PENDING_APPROVAL ]] || fail "still ${STATE} after two minutes"
 curl -fsS "${AUTH[@]}" "${BASE}/v1/invoices/${ID}" | jq '{state, vendorName, invoiceNumber, invoiceDate, total}'
+
+say "checking the extracted line items"
+LINES="$(curl -fsS "${AUTH[@]}" "${BASE}/v1/invoices/${ID}" | jq '.lineItems | length')"
+[[ "$LINES" == 2 ]] || fail "expected 2 line items, got ${LINES}"
+
+say "correcting a field before approval"
+VERSION="$(curl -fsS "${AUTH[@]}" "${BASE}/v1/invoices/${ID}" | jq -r .version)"
+CORRECTED="$(curl -fsS "${AUTH[@]}" -X PATCH -H 'content-type: application/json' -H "idempotency-key: smoke-correct-${ID}" \
+  -d "{\"expectedVersion\":${VERSION},\"invoiceNumber\":\"SMOKE-${ID:0:8}\",\"comment\":\"smoke test\"}" "${BASE}/v1/invoices/${ID}")"
+[[ "$(jq -r .state <<<"$CORRECTED")" == PENDING_APPROVAL ]] || fail "correction left the invoice in $(jq -r .state <<<"$CORRECTED")"
+[[ "$(jq -r '.corrections | join(",")' <<<"$CORRECTED")" == invoiceNumber ]] || fail "correction was not recorded"
+
+say "finding it with a dashboard filter and exporting it"
+FOUND="$(curl -fsS "${AUTH[@]}" "${BASE}/v1/invoices?q=SMOKE-${ID:0:8}" | jq -r '.items[0].id')"
+[[ "$FOUND" == "$ID" ]] || fail "search did not find the corrected invoice"
+curl -fsS "${AUTH[@]}" "${BASE}/v1/invoices/export?q=SMOKE-${ID:0:8}" | grep -q "SMOKE-${ID:0:8}" || fail "CSV export is missing the invoice"
+curl -fsS "${AUTH[@]}" "${BASE}/v1/invoices/summary" | jq -c '{count, byCurrency}'
 
 say "approving"
 APPROVED="$(curl -fsS "${AUTH[@]}" -H 'content-type: application/json' -H "idempotency-key: smoke-approve-${ID}" \

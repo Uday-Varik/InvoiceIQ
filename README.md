@@ -10,10 +10,10 @@ bank-detail-change quarantine and a hash-chained audit ledger. Models help with
 extraction and risk signals, but every AI output is structurally limited to
 putting an invoice on HOLD.
 
-> Status: **Phase 1 (walking skeleton).** An invoice can be uploaded,
-> extracted (baseline, no LLM), validated, reviewed and approved end to end,
-> on Postgres with row-level security, a transactional outbox and a
-> hash-chained audit log. Live model calls start in Phase 2.
+> Status: **Phase 2 (core features).** Invoices are extracted with subtotal,
+> tax, due date and line items, stored in Postgres with row-level security,
+> listed with filters and totals, corrected before approval (re-validated and
+> audited), and exported to CSV or JSON. Live model calls come later.
 
 ## The problem
 
@@ -95,6 +95,21 @@ contain it); CI builds them unmodified.
 | 11 | Render blueprint and Vercel config for the free-tier deploy (W-UNV) | Written-unverified | `render.yaml`, `apps/web/vercel.json` |
 | 12 | Neon, Render and Vercel deploy runbook (W-UNV) | Written-unverified | [docs/runbooks/deploy-free-tier.md](docs/runbooks/deploy-free-tier.md) |
 
+## Phase 2 deliverables
+
+Same labels as above.
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | Extraction of subtotal, tax, due date and line items, with cross-checked confidence | Verified-in-sandbox | `services/ai-service/src/ai_service/providers/heuristic.py` |
+| 2 | Line items and invoice details in Postgres, RLS forced | Verified-in-sandbox | `services/core-api/migrations/0002_invoice_details.sql` |
+| 3 | Deterministic totals check (subtotal + tax, lines + tax) routing to EXCEPTION | Verified-in-sandbox | `services/core-api/src/invoices/pipeline.ts` |
+| 4 | Paginated list with search, state, currency, date and amount filters, plus summary | Verified-in-sandbox | `services/core-api/src/invoices/filters.ts` |
+| 5 | Edit-before-approve: versioned, idempotent, audited, re-validated | Verified-in-sandbox | `services/core-api/src/invoices/corrections.ts` |
+| 6 | CSV and JSON export of the filtered list, formula-injection safe | Verified-in-sandbox | `services/core-api/src/invoices/export.ts` |
+| 7 | Web dashboard, correction form and change history | Verified-in-sandbox | `apps/web/components/` |
+| 8 | Smoke script covers line items, correction, search, export and summary | Verified-in-sandbox | `scripts/smoke.sh` |
+
 ## Getting started
 
 ```bash
@@ -116,7 +131,7 @@ More in [docs/runbooks/local-development.md](docs/runbooks/local-development.md)
 ## Repository map
 
 ```
-apps/web                 Next.js upload and review UI
+apps/web                 Next.js upload, review, dashboard and correction UI
 services/core-api        Fastify API + pure domain model
 services/ai-service      FastAPI extraction and signals
 packages/contracts       OpenAPI specs, generated TS/Zod/Pydantic, reason catalog

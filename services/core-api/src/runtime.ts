@@ -26,6 +26,7 @@ export function createWorker(db: Db, ai: AiClient, opts: { pollMs?: number; maxA
       'invoice.received': (e) => processReceived({ db, ai }, e.tenantId, String(e.payload['invoiceId'])),
       // No external subscriber yet; consuming marks the event delivered.
       'invoice.state_changed': () => Promise.resolve(),
+      'invoice.corrected': () => Promise.resolve(),
     },
     onDead: async (e) => {
       if (e.topic === 'invoice.received') {

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from enum import StrEnum
-from uuid import UUID
 from datetime import date
+from uuid import UUID
 
 
 class Health(BaseModel):
@@ -232,15 +232,82 @@ class Fields(BaseModel):
     invoiceDate: ExtractedField
     currency: ExtractedField
     totalMinor: ExtractedField
+    subtotalMinor: ExtractedField | None = None
+    taxMinor: ExtractedField | None = None
+    dueDate: ExtractedField | None = None
 
 
-class InvoiceExtraction(BaseModel):
+class ExtractedLineItem(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    provider: str
-    extractedAt: AwareDatetime
-    fields: Fields
+    description: str = Field(..., max_length=500, min_length=1)
+    quantity: str | None
+    unitPriceMinor: str | None
+    amountMinor: str | None
+    confidence: float = Field(..., ge=0.0, le=1.0)
+
+
+class LineItem(BaseModel):
+    """
+    A line of the invoice as stored (extracted, or entered by a reviewer). Amounts are in the invoice currency.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    position: int = Field(..., ge=1)
+    description: str = Field(..., max_length=500, min_length=1)
+    quantity: str | None = Field(None, pattern="^[0-9]{1,12}(\\.[0-9]{1,4})?$")
+    unitPriceMinor: str | None = Field(None, pattern="^-?[0-9]{1,18}$")
+    amountMinor: str | None = Field(None, pattern="^-?[0-9]{1,18}$")
+
+
+class LineItemInput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    description: str = Field(..., max_length=500, min_length=1)
+    quantity: str | None = Field(None, pattern="^[0-9]{1,12}(\\.[0-9]{1,4})?$")
+    unitPriceMinor: str | None = Field(None, pattern="^-?[0-9]{1,18}$")
+    amountMinor: str | None = Field(None, pattern="^-?[0-9]{1,18}$")
+
+
+class CorrectableField(StrEnum):
+    vendorName = "vendorName"
+    invoiceNumber = "invoiceNumber"
+    invoiceDate = "invoiceDate"
+    dueDate = "dueDate"
+    currency = "currency"
+    total = "total"
+    subtotal = "subtotal"
+    tax = "tax"
+    lineItems = "lineItems"
+
+
+class FieldChange(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    from_: Any = Field(..., alias="from")
+    to: Any
+
+
+class InvoiceCorrection(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    expectedVersion: int = Field(..., ge=1)
+    vendorName: str | None = Field(None, max_length=256, min_length=1)
+    invoiceNumber: str | None = Field(None, max_length=64, min_length=1)
+    invoiceDate: date | None = None
+    dueDate: date | None = None
+    currency: str | None = Field(None, pattern="^[A-Z]{3}$")
+    totalMinor: str | None = Field(None, pattern="^-?[0-9]{1,18}$")
+    subtotalMinor: str | None = Field(None, pattern="^-?[0-9]{1,18}$")
+    taxMinor: str | None = Field(None, pattern="^-?[0-9]{1,18}$")
+    lineItems: list[LineItemInput] | None = Field(None, max_length=200)
+    comment: str | None = Field(None, max_length=2000)
 
 
 class InvoiceEvent(BaseModel):
@@ -254,41 +321,40 @@ class InvoiceEvent(BaseModel):
     actor: Actor
     reasons: list[ReasonCode] | None = None
     comment: str | None = None
+    changes: dict[CorrectableField, FieldChange] | None = Field(
+        None, description="For invoice.corrected, each corrected field with its value before and after."
+    )
     occurredAt: AwareDatetime
 
 
-class Invoice(BaseModel):
+class StateCount(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    id: UUID
-    tenantId: UUID
-    vendorId: UUID | None = None
-    vendorName: str | None = Field(None, max_length=256)
-    invoiceNumber: str | None = Field(None, max_length=64)
-    invoiceDate: date | None = None
-    total: Money | None = None
     state: InvoiceState
-    reasons: list[ReasonCode] = Field(
-        ...,
-        description="Reasons for the transition into the current state. Empty unless the state is HOLD, EXCEPTION or REJECTED.",
-    )
-    version: int = Field(..., description="Incremented on every state change.", ge=1)
-    document: InvoiceDocument | None = None
-    extraction: InvoiceExtraction | None = None
-    history: list[InvoiceEvent] | None = Field(
-        None, description="Audit entries for this invoice, oldest first. Present on getInvoice only."
-    )
-    createdAt: AwareDatetime
-    updatedAt: AwareDatetime
+    count: int = Field(..., ge=0)
 
 
-class InvoicePage(BaseModel):
+class CurrencyTotal(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    items: list[Invoice]
-    nextCursor: str | None = None
+    currency: str = Field(..., pattern="^[A-Z]{3}$")
+    count: int = Field(..., ge=0)
+    amountMinor: str = Field(..., pattern="^-?[0-9]{1,24}$")
+
+
+class InvoiceSummary(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    count: int = Field(..., ge=0)
+    byState: list[StateCount] = Field(
+        ..., description="Every lifecycle state in lifecycle order, including zero counts."
+    )
+    byCurrency: list[CurrencyTotal] = Field(
+        ..., description="Totals of invoices that have an extracted total, per currency, alphabetical."
+    )
 
 
 class InvoiceTransition(BaseModel):
@@ -347,3 +413,67 @@ class AuditVerification(BaseModel):
     entries: int = Field(..., ge=0)
     brokenAt: int | None = Field(None, ge=0)
     reason: str | None = None
+
+
+class InvoiceExtraction(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    provider: str
+    extractedAt: AwareDatetime
+    fields: Fields
+    lineItems: list[ExtractedLineItem] | None = Field(None, max_length=200)
+
+
+class Invoice(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: UUID
+    tenantId: UUID
+    vendorId: UUID | None = None
+    vendorName: str | None = Field(None, max_length=256)
+    invoiceNumber: str | None = Field(None, max_length=64)
+    invoiceDate: date | None = None
+    dueDate: date | None = None
+    total: Money | None = None
+    subtotal: Money | None = None
+    tax: Money | None = None
+    lineItems: list[LineItem] | None = Field(
+        None,
+        description="Stored lines, in position order. Present on getInvoice and exportInvoices (JSON) only.",
+    )
+    corrections: list[CorrectableField] | None = Field(
+        None, description="Fields a human has corrected since extraction."
+    )
+    state: InvoiceState
+    reasons: list[ReasonCode] = Field(
+        ...,
+        description="Reasons for the transition into the current state. Empty unless the state is HOLD, EXCEPTION or REJECTED.",
+    )
+    version: int = Field(..., description="Incremented on every state change and every correction.", ge=1)
+    document: InvoiceDocument | None = None
+    extraction: InvoiceExtraction | None = None
+    history: list[InvoiceEvent] | None = Field(
+        None, description="Audit entries for this invoice, oldest first. Present on getInvoice only."
+    )
+    createdAt: AwareDatetime
+    updatedAt: AwareDatetime
+
+
+class InvoicePage(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    items: list[Invoice]
+    nextCursor: str | None = None
+
+
+class InvoiceExport(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    exportedAt: AwareDatetime
+    count: int = Field(..., ge=0)
+    truncated: bool
+    items: list[Invoice]

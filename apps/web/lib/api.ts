@@ -6,6 +6,10 @@ export type InvoiceState = components['schemas']['InvoiceState'];
 export type ReasonCode = components['schemas']['ReasonCode'];
 export type Problem = components['schemas']['Problem'];
 export type ExtractedField = components['schemas']['ExtractedField'];
+export type InvoiceSummary = components['schemas']['InvoiceSummary'];
+export type InvoiceCorrection = components['schemas']['InvoiceCorrection'];
+export type LineItem = components['schemas']['LineItem'];
+export type CorrectableField = components['schemas']['CorrectableField'];
 
 /** Browser calls go to same-origin /api/core, which next.config.ts rewrites to core-api. */
 export const API_BASE = '/api/core';
@@ -39,8 +43,31 @@ export function idempotencyKey(): string {
   return `web-${crypto.randomUUID()}`;
 }
 
-export function listInvoices(fetchFn?: Fetch): Promise<InvoicePage> {
-  return call('/v1/invoices?limit=20', {}, fetchFn);
+/** `query` is a filtersToQuery() string; `cursor` continues a previous page. */
+export function listInvoices(query = '', opts: { limit?: number; cursor?: string } = {}, fetchFn?: Fetch): Promise<InvoicePage> {
+  const p = new URLSearchParams(query);
+  p.set('limit', String(opts.limit ?? 20));
+  if (opts.cursor) p.set('cursor', opts.cursor);
+  return call(`/v1/invoices?${p.toString()}`, {}, fetchFn);
+}
+
+export function getSummary(query = '', fetchFn?: Fetch): Promise<InvoiceSummary> {
+  return call(`/v1/invoices/summary${query ? `?${query}` : ''}`, {}, fetchFn);
+}
+
+/** A plain link: the browser downloads through the same-origin proxy with the server's filename. */
+export function exportUrl(format: 'csv' | 'json', query = ''): string {
+  const p = new URLSearchParams(query);
+  p.set('format', format);
+  return `${API_BASE}/v1/invoices/export?${p.toString()}`;
+}
+
+export function correctInvoice(id: string, body: InvoiceCorrection, key = idempotencyKey(), fetchFn?: Fetch): Promise<Invoice> {
+  return call(
+    `/v1/invoices/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(body), headers: { 'content-type': 'application/json', 'idempotency-key': key } },
+    fetchFn,
+  );
 }
 
 export function getInvoice(id: string, fetchFn?: Fetch): Promise<Invoice> {

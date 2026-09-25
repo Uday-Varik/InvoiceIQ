@@ -19,9 +19,18 @@ from .conftest import SHA
 def _extraction(**overrides: float) -> ExtractionResult:
     fields = {
         name: ExtractedField(value="x", confidence=overrides.get(name, 0.99))
-        for name in ("vendorName", "invoiceNumber", "invoiceDate", "currency", "totalMinor")
+        for name in (
+            "vendorName",
+            "invoiceNumber",
+            "invoiceDate",
+            "currency",
+            "totalMinor",
+            "subtotalMinor",
+            "taxMinor",
+            "dueDate",
+        )
     }
-    return ExtractionResult(documentSha256=SHA, provider="test", fields=Fields(**fields))
+    return ExtractionResult(documentSha256=SHA, provider="test", fields=Fields(**fields), lineItems=[])
 
 
 def test_confident_extraction_emits_nothing() -> None:

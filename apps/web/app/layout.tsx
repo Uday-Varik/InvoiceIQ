@@ -17,6 +17,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <Link href="/" className="brand">
             InvoiceIQ
           </Link>
+          <Link href="/invoices" className="small">
+            Invoices
+          </Link>
           <Link href="/lifecycle" className="small">
             Lifecycle and reason codes
           </Link>

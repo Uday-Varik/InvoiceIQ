@@ -73,7 +73,7 @@ paths:
   /v1/extract/document:
     post:
       operationId: extractDocument
-      summary: Extract header fields from an invoice document (baseline, no LLM)
+      summary: Extract header fields, tax and line items from an invoice document (baseline, no LLM)
       description: |
         Reads the text layer of a PDF and runs the same field extraction as
         /v1/extract. Images have no text layer in the baseline, so every field
@@ -219,10 +219,39 @@ components:
           type: number
           minimum: 0
           maximum: 1
+    ExtractedLineItem:
+      type: object
+      additionalProperties: false
+      required: [description, quantity, unitPriceMinor, amountMinor, confidence]
+      properties:
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        quantity:
+          type:
+            - string
+            - 'null'
+          pattern: '^[0-9]{1,12}(\.[0-9]{1,4})?$'
+          description: Decimal quantity as a string (never a float).
+        unitPriceMinor:
+          type:
+            - string
+            - 'null'
+          pattern: '^-?[0-9]{1,19}$'
+        amountMinor:
+          type:
+            - string
+            - 'null'
+          pattern: '^-?[0-9]{1,19}$'
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
     ExtractionResult:
       type: object
       additionalProperties: false
-      required: [documentSha256, provider, fields]
+      required: [documentSha256, provider, fields, lineItems]
       properties:
         documentSha256:
           type: string
@@ -232,7 +261,7 @@ components:
         fields:
           type: object
           additionalProperties: false
-          required: [vendorName, invoiceNumber, invoiceDate, currency, totalMinor]
+          required: [vendorName, invoiceNumber, invoiceDate, currency, totalMinor, subtotalMinor, taxMinor, dueDate]
           properties:
             vendorName:
               $ref: '#/components/schemas/ExtractedField'
@@ -244,6 +273,18 @@ components:
               $ref: '#/components/schemas/ExtractedField'
             totalMinor:
               $ref: '#/components/schemas/ExtractedField'
+            subtotalMinor:
+              $ref: '#/components/schemas/ExtractedField'
+            taxMinor:
+              $ref: '#/components/schemas/ExtractedField'
+            dueDate:
+              $ref: '#/components/schemas/ExtractedField'
+        lineItems:
+          type: array
+          maxItems: 200
+          description: Lines of the invoice body in document order. Empty when none were recognised.
+          items:
+            $ref: '#/components/schemas/ExtractedLineItem'
     SignalRequest:
       type: object
       additionalProperties: false

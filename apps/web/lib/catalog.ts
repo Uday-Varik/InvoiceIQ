@@ -39,3 +39,6 @@ export function groupReasons(views: readonly ReasonView[]): Record<string, Reaso
   }
   return groups;
 }
+
+/** The 14 lifecycle states in lifecycle order, from the exported catalog. */
+export const INVOICE_STATES: readonly string[] = catalog.states;

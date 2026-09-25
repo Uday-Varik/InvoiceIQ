@@ -13,10 +13,19 @@ export const GOOD_FIELDS: StubFields = {
   invoiceDate: { value: '2026-03-14', confidence: 0.95 },
   currency: { value: 'USD', confidence: 0.95 },
   totalMinor: { value: '123450', confidence: 0.95 },
+  subtotalMinor: { value: null, confidence: 0 },
+  taxMinor: { value: null, confidence: 0 },
+  dueDate: { value: null, confidence: 0 },
 };
 
+/** The two body lines of the sample invoice; they add up to GOOD_FIELDS.totalMinor. */
+export const GOOD_LINES: ExtractionResult['lineItems'] = [
+  { description: 'Hex bolts M8 x 200', quantity: null, unitPriceMinor: null, amountMinor: '41200', confidence: 0.6 },
+  { description: 'Safety gloves x 40', quantity: null, unitPriceMinor: null, amountMinor: '82250', confidence: 0.6 },
+];
+
 export type StubMode =
-  | { kind: 'fields'; fields: StubFields }
+  | { kind: 'fields'; fields: StubFields; lineItems?: ExtractionResult['lineItems'] }
   | { kind: 'status'; status: number };
 
 /**
@@ -49,7 +58,7 @@ export class AiStub {
         const json = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
         if (path === '/v1/extract/document') {
           if (this.mode.kind === 'status') return send(this.mode.status, { type: 'about:blank', title: 'stub', status: this.mode.status });
-          return send(200, { documentSha256: json['documentSha256'], provider: 'stub', fields: this.mode.fields });
+          return send(200, { documentSha256: json['documentSha256'], provider: 'stub', fields: this.mode.fields, lineItems: this.mode.lineItems ?? [] });
         }
         if (path === '/v1/signals') {
           const extraction = json['extraction'] as ExtractionResult;

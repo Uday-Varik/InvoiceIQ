@@ -8,14 +8,36 @@ import { z } from 'zod';
  */
 
 const Field = z.object({ value: z.string().nullable(), confidence: z.number().min(0).max(1) }).strict();
+/** Fields added in Phase 2. An older ai-service omits them; they then read as unknown, never as guessed. */
+const LaterField = Field.default({ value: null, confidence: 0 });
+
+const LineItem = z
+  .object({
+    description: z.string().min(1).max(500),
+    quantity: z.string().regex(/^[0-9]{1,12}(\.[0-9]{1,4})?$/).nullable(),
+    unitPriceMinor: z.string().regex(/^-?[0-9]{1,19}$/).nullable(),
+    amountMinor: z.string().regex(/^-?[0-9]{1,19}$/).nullable(),
+    confidence: z.number().min(0).max(1),
+  })
+  .strict();
 
 export const ExtractionResultSchema = z
   .object({
     documentSha256: z.string().regex(/^[0-9a-f]{64}$/),
     provider: z.string(),
     fields: z
-      .object({ vendorName: Field, invoiceNumber: Field, invoiceDate: Field, currency: Field, totalMinor: Field })
+      .object({
+        vendorName: Field,
+        invoiceNumber: Field,
+        invoiceDate: Field,
+        currency: Field,
+        totalMinor: Field,
+        subtotalMinor: LaterField,
+        taxMinor: LaterField,
+        dueDate: LaterField,
+      })
       .strict(),
+    lineItems: z.array(LineItem).max(200).default([]),
   })
   .strict();
 
@@ -35,6 +57,7 @@ export const SignalResponseSchema = z
   .strict();
 
 export type ExtractionResult = z.infer<typeof ExtractionResultSchema>;
+export type ExtractedLineItem = ExtractionResult['lineItems'][number];
 export type SignalResponse = z.infer<typeof SignalResponseSchema>;
 export type ExtractableContentType = 'application/pdf' | 'image/png' | 'image/jpeg';
 

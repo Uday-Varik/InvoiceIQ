@@ -16,16 +16,19 @@ import { AuthError, demoAuthenticator, type Authenticator, type Principal } from
 import { withTenant, type Db } from '../db/pool.js';
 import { DEMO_TENANT_ID } from '../db/bootstrap.js';
 import { verifyTenantChain } from '../invoices/audit.js';
-import { MAX_UPLOAD_BYTES, humanTransition, readInvoice, uploadInvoice } from '../invoices/service.js';
-import { getDocument, getInvoice, listInvoices, type SourceChannel } from '../invoices/store.js';
+import { CORRECTION_BODY_SCHEMA, type CorrectionInput } from '../invoices/corrections.js';
+import { exportFilename, toCsv } from '../invoices/export.js';
+import { FILTER_QUERY_PROPERTIES, parseFilter, type RawFilterQuery } from '../invoices/filters.js';
+import { MAX_UPLOAD_BYTES, correctInvoice, humanTransition, readInvoice, uploadInvoice } from '../invoices/service.js';
+import { getDocument, getInvoice, getLineItemsFor, listInvoices, summarizeInvoices, type SourceChannel } from '../invoices/store.js';
 import { decodeCursor, encodeCursor, toInvoice } from '../invoices/view.js';
 import { idempotencyKeyOf } from './idempotency.js';
 import { HttpProblem, problemBody } from './problem.js';
 
 /**
  * HTTP surface. Every route here must exist in
- * packages/contracts/openapi/core-api.yaml, and every x-phase 0 and 1 operation
- * there must be listed here (enforced by tests/guardrails).
+ * packages/contracts/openapi/core-api.yaml, and every x-phase 0, 1 and 2
+ * operation there must be listed here (enforced by tests/guardrails).
  */
 export const IMPLEMENTED_ROUTES = [
   'GET /healthz',
@@ -34,7 +37,10 @@ export const IMPLEMENTED_ROUTES = [
   'POST /v1/lifecycle/evaluate',
   'GET /v1/invoices',
   'POST /v1/invoices',
+  'GET /v1/invoices/summary',
+  'GET /v1/invoices/export',
   'GET /v1/invoices/{invoiceId}',
+  'PATCH /v1/invoices/{invoiceId}',
   'GET /v1/invoices/{invoiceId}/document',
   'POST /v1/invoices/{invoiceId}/approve',
   'POST /v1/invoices/{invoiceId}/reject',
@@ -74,6 +80,9 @@ const REASONS_SCHEMA = { type: 'array', items: { type: 'string' }, maxItems: 18 
 const COMMENT_SCHEMA = { type: 'string', maxLength: 2000 } as const;
 
 const ACTOR_KINDS: readonly ActorKind[] = ['system', 'human', 'ai'];
+
+export const DEFAULT_EXPORT_ROWS = 5000;
+export const MAX_EXPORT_ROWS = 10_000;
 
 interface EvaluateBody {
   from: string;
@@ -193,7 +202,9 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
 }
 
 function registerInvoiceRoutes(app: FastifyInstance, needDeps: () => AppDeps): void {
-  app.get<{ Querystring: { state?: string; cursor?: string; limit?: number } }>(
+  const filterQuery = { state: { type: 'string', enum: [...INVOICE_STATES] }, ...FILTER_QUERY_PROPERTIES } as const;
+
+  app.get<{ Querystring: RawFilterQuery & { cursor?: string; limit?: number } }>(
     '/v1/invoices',
     {
       schema: {
@@ -201,7 +212,7 @@ function registerInvoiceRoutes(app: FastifyInstance, needDeps: () => AppDeps): v
           type: 'object',
           additionalProperties: false,
           properties: {
-            state: { type: 'string', enum: [...INVOICE_STATES] },
+            ...filterQuery,
             cursor: { type: 'string', maxLength: 256 },
             limit: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
           },
@@ -211,15 +222,74 @@ function registerInvoiceRoutes(app: FastifyInstance, needDeps: () => AppDeps): v
     async (req) => {
       const { db } = needDeps();
       const p = principalOf(req);
-      const cursor = req.query.cursor === undefined ? undefined : decodeCursor(req.query.cursor);
-      if (req.query.cursor !== undefined && !cursor) throw new HttpProblem(400, 'Invalid cursor', 'cursor is not one this API issued');
-      const limit = req.query.limit ?? 50;
-      const rows = await withTenant(db, p.tenantId, (tx) =>
-        listInvoices(tx, { limit: limit + 1, ...(req.query.state ? { state: req.query.state as InvoiceState } : {}), ...(cursor ? { cursor } : {}) }),
-      );
+      const { cursor: rawCursor, limit: rawLimit, ...rawFilter } = req.query;
+      const filter = parseFilter(rawFilter);
+      const cursor = rawCursor === undefined ? undefined : decodeCursor(rawCursor);
+      if (rawCursor !== undefined && !cursor) throw new HttpProblem(400, 'Invalid cursor', 'cursor is not one this API issued');
+      const limit = rawLimit ?? 50;
+      const rows = await withTenant(db, p.tenantId, (tx) => listInvoices(tx, { limit: limit + 1, filter, ...(cursor ? { cursor } : {}) }));
       const page = rows.slice(0, limit);
       const last = page.at(-1);
       return { items: page.map((r) => toInvoice(r)), ...(rows.length > limit && last ? { nextCursor: encodeCursor(last) } : {}) };
+    },
+  );
+
+  app.get<{ Querystring: RawFilterQuery }>(
+    '/v1/invoices/summary',
+    { schema: { querystring: { type: 'object', additionalProperties: false, properties: filterQuery } } },
+    async (req) => {
+      const p = principalOf(req);
+      const filter = parseFilter(req.query);
+      const s = await withTenant(needDeps().db, p.tenantId, (tx) => summarizeInvoices(tx, filter));
+      const counts = new Map(s.byState.map((r) => [r.state, r.count]));
+      return {
+        count: s.byState.reduce((n, r) => n + r.count, 0),
+        byState: INVOICE_STATES.map((state) => ({ state, count: counts.get(state) ?? 0 })),
+        byCurrency: s.byCurrency,
+      };
+    },
+  );
+
+  app.get<{ Querystring: RawFilterQuery & { format?: 'csv' | 'json'; limit?: number } }>(
+    '/v1/invoices/export',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            ...filterQuery,
+            format: { type: 'string', enum: ['csv', 'json'], default: 'csv' },
+            limit: { type: 'integer', minimum: 1, maximum: MAX_EXPORT_ROWS, default: DEFAULT_EXPORT_ROWS },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const p = principalOf(req);
+      const { format = 'csv', limit = DEFAULT_EXPORT_ROWS, ...rawFilter } = req.query;
+      const filter = parseFilter(rawFilter);
+      const { rows, lines } = await withTenant(needDeps().db, p.tenantId, async (tx) => {
+        const found = await listInvoices(tx, { limit: limit + 1, filter });
+        const page = found.slice(0, limit);
+        return { rows: found, lines: await getLineItemsFor(tx, page.map((r) => r.id)) };
+      });
+      const truncated = rows.length > limit;
+      const page = rows.slice(0, limit);
+      void reply
+        .header('x-export-truncated', String(truncated))
+        .header('cache-control', 'no-store')
+        .header('content-disposition', `attachment; filename="${exportFilename(format)}"`);
+      if (format === 'json') {
+        return reply.type('application/json').send({
+          exportedAt: new Date().toISOString(),
+          count: page.length,
+          truncated,
+          items: page.map((r) => toInvoice(r, { lineItems: lines.get(r.id) ?? [] })),
+        });
+      }
+      const counts = new Map([...lines].map(([id, l]) => [id, l.length]));
+      return reply.type('text/csv; charset=utf-8').send(toCsv(page, counts));
     },
   );
 
@@ -278,6 +348,17 @@ function registerInvoiceRoutes(app: FastifyInstance, needDeps: () => AppDeps): v
   );
 
   const idParams = { type: 'object', required: ['invoiceId'], properties: { invoiceId: UUID_PARAM } } as const;
+
+  app.patch<{ Params: { invoiceId: string }; Body: CorrectionInput }>(
+    '/v1/invoices/:invoiceId',
+    { schema: { params: idParams, body: CORRECTION_BODY_SCHEMA } },
+    async (req, reply) => {
+      const deps = needDeps();
+      const out = await correctInvoice(deps.db, principalOf(req), req.params.invoiceId, req.body, idempotencyKeyOf(req.headers['idempotency-key']));
+      if (!out.replayed) deps.worker?.kick();
+      return reply.code(out.status).header('idempotent-replayed', String(out.replayed)).send(out.body);
+    },
+  );
 
   app.post<{ Params: { invoiceId: string }; Body: { comment?: string } | undefined }>(
     '/v1/invoices/:invoiceId/approve',

@@ -1,5 +1,5 @@
 import type { AuditEntry, InvoiceState, ReasonCode } from '../domain/index.js';
-import type { InvoiceRow } from './store.js';
+import type { InvoiceRow, LineItemRow } from './store.js';
 
 /** Contract shapes (packages/contracts/openapi/core-api.yaml#/components/schemas/Invoice). */
 export interface InvoiceEventView {
@@ -11,10 +11,17 @@ export interface InvoiceEventView {
   to?: InvoiceState;
   reasons?: ReasonCode[];
   comment?: string;
+  changes?: Record<string, { from: unknown; to: unknown }>;
 }
 
 export function toEvent(e: AuditEntry): InvoiceEventView {
-  const p = e.payload as { from?: InvoiceState; to?: InvoiceState; reasons?: ReasonCode[]; comment?: string };
+  const p = e.payload as {
+    from?: InvoiceState;
+    to?: InvoiceState;
+    reasons?: ReasonCode[];
+    comment?: string;
+    changes?: Record<string, { from: unknown; to: unknown }>;
+  };
   return {
     seq: e.seq,
     type: e.type,
@@ -24,10 +31,42 @@ export function toEvent(e: AuditEntry): InvoiceEventView {
     ...(p.to ? { to: p.to } : {}),
     ...(p.reasons ? { reasons: p.reasons } : {}),
     ...(p.comment ? { comment: p.comment } : {}),
+    ...(p.changes ? { changes: p.changes } : {}),
   };
 }
 
-export function toInvoice(row: InvoiceRow, history?: readonly AuditEntry[]) {
+export interface LineItemView {
+  position: number;
+  description: string;
+  quantity?: string;
+  unitPriceMinor?: string;
+  amountMinor?: string;
+}
+
+export function toLineItem(r: LineItemRow): LineItemView {
+  return {
+    position: r.position,
+    description: r.description,
+    ...(r.quantity !== null ? { quantity: r.quantity } : {}),
+    ...(r.unit_price_minor !== null ? { unitPriceMinor: r.unit_price_minor } : {}),
+    ...(r.amount_minor !== null ? { amountMinor: r.amount_minor } : {}),
+  };
+}
+
+export interface InvoiceViewExtras {
+  readonly history?: readonly AuditEntry[];
+  readonly lineItems?: readonly LineItemRow[];
+}
+
+function money(amountMinor: string | null, currency: string | null) {
+  return amountMinor !== null && currency !== null ? { amountMinor, currency } : undefined;
+}
+
+export function toInvoice(row: InvoiceRow, extras: InvoiceViewExtras = {}) {
+  const total = money(row.total_minor, row.currency);
+  const subtotal = money(row.subtotal_minor, row.currency);
+  const tax = money(row.tax_minor, row.currency);
+  const ex = row.extraction;
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -37,21 +76,36 @@ export function toInvoice(row: InvoiceRow, history?: readonly AuditEntry[]) {
     ...(row.vendor_name !== null ? { vendorName: row.vendor_name } : {}),
     ...(row.invoice_number !== null ? { invoiceNumber: row.invoice_number } : {}),
     ...(row.invoice_date !== null ? { invoiceDate: row.invoice_date } : {}),
-    ...(row.total_minor !== null && row.currency !== null ? { total: { amountMinor: row.total_minor, currency: row.currency } } : {}),
+    ...(row.due_date !== null ? { dueDate: row.due_date } : {}),
+    ...(total ? { total } : {}),
+    ...(subtotal ? { subtotal } : {}),
+    ...(tax ? { tax } : {}),
+    ...(extras.lineItems ? { lineItems: extras.lineItems.map(toLineItem) } : {}),
+    ...(row.corrected_fields.length > 0 ? { corrections: row.corrected_fields } : {}),
     document: {
       sha256: row.document_sha256,
       contentType: row.document_content_type,
       filename: row.document_filename,
       sizeBytes: row.document_size_bytes,
     },
-    ...(row.extraction
-      ? { extraction: { provider: row.extraction.provider, extractedAt: row.extraction.extractedAt, fields: row.extraction.fields } }
+    ...(ex
+      ? {
+          extraction: {
+            provider: ex.provider,
+            extractedAt: ex.extractedAt,
+            fields: ex.fields,
+            // Phase 1 rows were stored before line items were extracted.
+            ...(ex.lineItems ? { lineItems: ex.lineItems } : {}),
+          },
+        }
       : {}),
-    ...(history ? { history: history.map(toEvent) } : {}),
+    ...(extras.history ? { history: extras.history.map(toEvent) } : {}),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
 }
+
+export type InvoiceView = ReturnType<typeof toInvoice>;
 
 export function encodeCursor(row: InvoiceRow): string {
   return Buffer.from(`${row.cursor_ts}|${row.id}`, 'utf8').toString('base64url');
