@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { httpAiClient, type AiClient } from './clients/ai-service.js';
 import { demoAuthenticator, oidcAuthenticator, remoteKeys, type Authenticator } from './auth/auth.js';
-import type { Config } from './config.js';
+import { parseCheckpointKey, type Config } from './config.js';
+import { checkpointSigner } from './audit/checkpoints.js';
 import { bootstrapTenant, DEMO_TENANT_ID } from './db/bootstrap.js';
 import { migrate } from './db/migrate.js';
 import { createPool, type Db } from './db/pool.js';
@@ -27,6 +28,9 @@ export function createWorker(db: Db, ai: AiClient, opts: { pollMs?: number; maxA
       // No external subscriber yet; consuming marks the event delivered.
       'invoice.state_changed': () => Promise.resolve(),
       'invoice.corrected': () => Promise.resolve(),
+      'vendor.bank_change_requested': () => Promise.resolve(),
+      'payment_run.created': () => Promise.resolve(),
+      'payment_run.closed': () => Promise.resolve(),
     },
     onDead: async (e) => {
       if (e.topic === 'invoice.received') {
@@ -58,7 +62,16 @@ export async function startRuntime(config: Config): Promise<Runtime> {
   }
 
   const db = createPool(config.DATABASE_URL);
-  const app = buildApp({ logger: true, auth: authenticatorFor(config), maxUploadBytes: config.MAX_UPLOAD_BYTES, deps: { db, worker: { kick: () => worker.kick() } } });
+  const key = config.AUDIT_CHECKPOINT_KEY ? parseCheckpointKey(config.AUDIT_CHECKPOINT_KEY) : undefined;
+  const signer = checkpointSigner(key);
+  const app = buildApp({
+    logger: true,
+    auth: authenticatorFor(config),
+    maxUploadBytes: config.MAX_UPLOAD_BYTES,
+    checkpointSigner: signer,
+    deps: { db, worker: { kick: () => worker.kick() } },
+  });
+  if (signer.ephemeral) app.log.warn({ keyId: signer.keyId }, 'AUDIT_CHECKPOINT_KEY is not set; audit checkpoints are signed with a key that changes on every restart');
   const worker = createWorker(db, ai, { pollMs: config.OUTBOX_POLL_MS, maxAttempts: config.OUTBOX_MAX_ATTEMPTS, log: app.log });
   worker.start();
 

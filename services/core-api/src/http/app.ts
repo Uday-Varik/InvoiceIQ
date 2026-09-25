@@ -15,7 +15,10 @@ import {
 import { AuthError, demoAuthenticator, type Authenticator, type Principal } from '../auth/auth.js';
 import { withTenant, type Db } from '../db/pool.js';
 import { DEMO_TENANT_ID } from '../db/bootstrap.js';
-import { verifyTenantChain } from '../invoices/audit.js';
+import { tenantChain } from '../invoices/audit.js';
+import { checkpointFindings, checkpointSigner, type CheckpointSigner } from '../audit/checkpoints.js';
+import { verifyChain } from '../domain/index.js';
+import { registerControlsRoutes } from './controls-routes.js';
 import { CORRECTION_BODY_SCHEMA, type CorrectionInput } from '../invoices/corrections.js';
 import { exportFilename, toCsv } from '../invoices/export.js';
 import { FILTER_QUERY_PROPERTIES, parseFilter, type RawFilterQuery } from '../invoices/filters.js';
@@ -27,7 +30,7 @@ import { HttpProblem, problemBody } from './problem.js';
 
 /**
  * HTTP surface. Every route here must exist in
- * packages/contracts/openapi/core-api.yaml, and every x-phase 0, 1 and 2
+ * packages/contracts/openapi/core-api.yaml, and every x-phase 0 to 3
  * operation there must be listed here (enforced by tests/guardrails).
  */
 export const IMPLEMENTED_ROUTES = [
@@ -46,6 +49,22 @@ export const IMPLEMENTED_ROUTES = [
   'POST /v1/invoices/{invoiceId}/reject',
   'POST /v1/invoices/{invoiceId}/transitions',
   'GET /v1/audit/verify',
+  'GET /v1/me',
+  'GET /v1/vendors',
+  'POST /v1/vendors',
+  'GET /v1/vendors/{vendorId}',
+  'PATCH /v1/vendors/{vendorId}',
+  'POST /v1/vendors/{vendorId}/bank-changes',
+  'POST /v1/vendors/{vendorId}/bank-changes/{changeId}/verify',
+  'GET /v1/payment-runs',
+  'POST /v1/payment-runs',
+  'GET /v1/payment-runs/{runId}',
+  'GET /v1/payment-runs/{runId}/file',
+  'POST /v1/payment-runs/{runId}/confirm',
+  'POST /v1/payment-runs/{runId}/cancel',
+  'GET /v1/audit/checkpoints',
+  'POST /v1/audit/checkpoints',
+  'POST /v1/audit/checkpoints/verify',
 ] as const;
 
 export interface AppDeps {
@@ -60,6 +79,8 @@ export interface AppOptions {
   readonly auth?: Authenticator;
   readonly deps?: AppDeps;
   readonly maxUploadBytes?: number;
+  /** Signs audit checkpoints. Defaults to a key generated for this process. */
+  readonly checkpointSigner?: CheckpointSigner;
 }
 
 export const DEMO_PRINCIPAL: Principal = { tenantId: DEMO_TENANT_ID, userId: 'demo-user', roles: ['cfo'] };
@@ -100,6 +121,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   const auth = opts.auth ?? demoAuthenticator(DEMO_PRINCIPAL);
   const deps = opts.deps;
   const maxUploadBytes = opts.maxUploadBytes ?? MAX_UPLOAD_BYTES;
+  const signer = opts.checkpointSigner ?? checkpointSigner();
 
   app.decorateRequest('principal', null);
   void app.register(multipart, { limits: { fileSize: maxUploadBytes, files: 1, fields: 4, fieldSize: 1024, parts: 5 } });
@@ -107,7 +129,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   app.addHook('onRequest', async (req) => {
     if (!req.url.startsWith('/v1/')) return;
     try {
-      req.principal = await auth.authenticate(req.headers.authorization);
+      req.principal = await auth.authenticate(req.headers.authorization, req.headers.cookie);
     } catch (err) {
       if (err instanceof AuthError) throw new HttpProblem(401, 'Unauthorized', err.message);
       throw err;
@@ -198,6 +220,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   );
 
   registerInvoiceRoutes(app, needDeps);
+  registerControlsRoutes(app, { db: needDeps, principalOf, signer, auth });
   return app;
 }
 
@@ -435,7 +458,17 @@ function registerInvoiceRoutes(app: FastifyInstance, needDeps: () => AppDeps): v
 
   app.get('/v1/audit/verify', async (req) => {
     const p = principalOf(req);
-    const { entries, result } = await withTenant(needDeps().db, p.tenantId, (tx) => verifyTenantChain(tx, p.tenantId));
-    return result.ok ? { ok: true, entries } : { ok: false, entries, brokenAt: result.brokenAt, reason: result.reason };
+    return withTenant(needDeps().db, p.tenantId, async (tx) => {
+      const chain = await tenantChain(tx, p.tenantId);
+      const result = verifyChain(chain);
+      const entries = chain.length;
+      if (!result.ok) return { ok: false, entries, brokenAt: result.brokenAt, reason: result.reason };
+      // A chain that verifies on its own can still have been rewritten wholesale;
+      // the signed checkpoints are what catch that (ADR-0016).
+      const cps = await checkpointFindings(tx, chain);
+      if (cps.failure) return { ok: false, entries, checkpointsChecked: cps.checked, brokenAt: cps.failure.seq, reason: `checkpoint mismatch: ${cps.failure.reason}` };
+      return { ok: true, entries, checkpointsChecked: cps.checked };
+    });
   });
+
 }

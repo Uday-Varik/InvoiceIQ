@@ -65,3 +65,9 @@ export async function verifyTenantChain(tx: Tx, tenantId: string): Promise<{ ent
   const { rows } = await tx.query<AuditRow>('SELECT * FROM audit_log WHERE tenant_id = $1 ORDER BY seq', [tenantId]);
   return { entries: rows.length, result: verifyChain(rows.map(toEntry)) };
 }
+
+/** The tenant's whole chain, in order. */
+export async function tenantChain(tx: Tx, tenantId: string): Promise<AuditEntry[]> {
+  const { rows } = await tx.query<AuditRow>('SELECT * FROM audit_log WHERE tenant_id = $1 ORDER BY seq', [tenantId]);
+  return rows.map(toEntry);
+}

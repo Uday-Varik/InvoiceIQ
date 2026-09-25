@@ -18,7 +18,10 @@ import { reasonViews } from '../lib/catalog';
 import { canCorrect } from '../lib/corrections';
 import { minorToInput } from '../lib/money';
 import { actionsFor, confidenceLevel, formatMoney, IN_FLIGHT, STATE_LABEL } from '../lib/format';
+import { approvalProgress, approveBlocker } from '../lib/controls';
+import { personaLabel } from '../lib/personas';
 import { useBackend } from './backend';
+import { useMe } from './me';
 import { CorrectionFormPanel } from './correction-form';
 
 const FIELD_LABELS: Array<[keyof NonNullable<Invoice['extraction']>['fields'], string]> = [
@@ -275,6 +278,9 @@ function FieldRow({ label, field }: { label: string; field: ExtractedField | und
 
 function Actions({ invoice, onChange }: { invoice: Invoice; onChange: (inv: Invoice) => void }) {
   const actions = actionsFor(invoice.state);
+  const me = useMe();
+  const progress = approvalProgress(invoice);
+  const blocker = approveBlocker(me, invoice);
   const [comment, setComment] = useState('');
   const [reasons, setReasons] = useState<ReasonCode[]>([]);
   const [rejecting, setRejecting] = useState(false);
@@ -304,6 +310,17 @@ function Actions({ invoice, onChange }: { invoice: Invoice; onChange: (inv: Invo
   return (
     <div className="actions">
       <h2>Decision</h2>
+      {progress && (
+        <p className="small">
+          <strong>{progress.text}</strong> for the {invoice.approvalTier?.name} tier
+          {(invoice.approvals ?? []).filter((a) => a.current).length > 0 &&
+            `: approved so far by ${(invoice.approvals ?? [])
+              .filter((a) => a.current)
+              .map((a) => personaLabel(a.approverId))
+              .join(', ')}`}
+        </p>
+      )}
+      {actions.includes('approve') && blocker && <p className="warn small">{blocker}</p>}
       <textarea placeholder="Comment (optional, kept in the audit log)" value={comment} maxLength={2000} onChange={(e) => setComment(e.target.value)} />
       {rejecting && (
         <fieldset className="reject-reasons">
@@ -322,7 +339,17 @@ function Actions({ invoice, onChange }: { invoice: Invoice; onChange: (inv: Invo
       )}
       <div className="buttons">
         {actions.includes('approve') && (
-          <button className="btn btn-primary" disabled={busy} onClick={() => void run(() => approveInvoice(invoice.id, note, key.current))}>
+          <button
+            className="btn btn-primary"
+            disabled={busy || blocker !== undefined}
+            onClick={() =>
+              void run(async () => {
+                await approveInvoice(invoice.id, note, key.current);
+                // Reload for the full history: a partial approval leaves the invoice pending.
+                return getInvoice(invoice.id);
+              })
+            }
+          >
             Approve
           </button>
         )}

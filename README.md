@@ -10,10 +10,11 @@ bank-detail-change quarantine and a hash-chained audit ledger. Models help with
 extraction and risk signals, but every AI output is structurally limited to
 putting an invoice on HOLD.
 
-> Status: **Phase 2 (core features).** Invoices are extracted with subtotal,
-> tax, due date and line items, stored in Postgres with row-level security,
-> listed with filters and totals, corrected before approval (re-validated and
-> audited), and exported to CSV or JSON. Live model calls come later.
+> Status: **Phase 3 (controls).** On top of Phase 2's extraction, review,
+> correction and export: tiered approvals with separation of duties, vendor
+> bank-change quarantine with four-eyes verification, payment runs confirmed
+> by a second person with a generated payment file, and Ed25519-signed audit
+> checkpoints. Live model calls and hosting come later.
 
 ## The problem
 
@@ -110,6 +111,21 @@ Same labels as above.
 | 7 | Web dashboard, correction form and change history | Verified-in-sandbox | `apps/web/components/` |
 | 8 | Smoke script covers line items, correction, search, export and summary | Verified-in-sandbox | `scripts/smoke.sh` |
 
+## Phase 3 deliverables
+
+Same labels as above. Decisions in [ADR-0016](docs/adr/0016-phase-3-approvals-bank-changes-payment-runs-checkpoints.md).
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | Vendors, bank changes, payment runs, approvals and checkpoints in Postgres, RLS forced | Verified-in-sandbox | `services/core-api/migrations/0003_approvals_vendors_payments.sql` |
+| 2 | Tiered approvals: role limits, N distinct approvers, no self or corrector approval | Verified-in-sandbox | `services/core-api/src/domain/approvals.ts` |
+| 3 | Bank-change quarantine with four-eyes callback verification | Verified-in-sandbox | `services/core-api/src/vendors/service.ts` |
+| 4 | Payment runs: assemble, second-person confirm, cancel, payment file | Verified-in-sandbox | `services/core-api/src/payments/service.ts` |
+| 5 | Ed25519-signed audit checkpoints, verified against the chain and external copies | Verified-in-sandbox | `services/core-api/src/audit/checkpoints.ts` |
+| 6 | Demo personas for exercising separation of duties without an identity provider | Verified-in-sandbox | `services/core-api/src/auth/auth.ts` |
+| 7 | Web pages for vendors, payment runs, audit checkpoints and approval progress | Verified-in-sandbox | `apps/web/components/payments.tsx` |
+| 8 | Smoke script covers two-person approval, a payment run and a checkpoint | Verified-in-sandbox | `scripts/smoke.sh` |
+
 ## Getting started
 
 ```bash
@@ -131,7 +147,7 @@ More in [docs/runbooks/local-development.md](docs/runbooks/local-development.md)
 ## Repository map
 
 ```
-apps/web                 Next.js upload, review, dashboard and correction UI
+apps/web                 Next.js upload, review, dashboard, vendors, payments and audit UI
 services/core-api        Fastify API + pure domain model
 services/ai-service      FastAPI extraction and signals
 packages/contracts       OpenAPI specs, generated TS/Zod/Pydantic, reason catalog
@@ -150,7 +166,7 @@ tests/guardrails         Cross-cutting drift and architecture tests
 | 0 | Foundations: domain model, contracts, guardrails, data tooling, docs |
 | 1 | Persistence with RLS, queue and outbox, invoice intake, review queue UI |
 | 2 | Real extraction behind record/replay, evaluation harness on the frozen set |
-| 3 | Approvals workflow, payment runs, external anchoring of the audit chain |
+| 3 | Approvals workflow, payment runs, external anchoring of the audit chain (done) |
 | 4 | Hosting on serverless free tiers, Terraform, observability |
 
 ## License

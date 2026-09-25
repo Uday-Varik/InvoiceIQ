@@ -54,7 +54,22 @@ describeDb('row-level security (real Postgres, app role)', () => {
           JOIN pg_namespace n ON n.oid = c.relnamespace
          WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname <> 'schema_migrations' ORDER BY c.relname`,
       );
-      expect(rows.map((r) => r.relname)).toEqual(['audit_log', 'documents', 'idempotency_keys', 'invoice_line_items', 'invoices', 'outbox', 'tenant_policies', 'tenants']);
+      expect(rows.map((r) => r.relname)).toEqual([
+        'audit_checkpoints',
+        'audit_log',
+        'documents',
+        'idempotency_keys',
+        'invoice_approvals',
+        'invoice_line_items',
+        'invoices',
+        'outbox',
+        'payment_run_items',
+        'payment_runs',
+        'tenant_policies',
+        'tenants',
+        'vendor_bank_changes',
+        'vendors',
+      ]);
       for (const r of rows) expect([r.relname, r.relrowsecurity, r.relforcerowsecurity]).toEqual([r.relname, true, true]);
     } finally {
       await owner.end();
@@ -72,7 +87,22 @@ describeDb('row-level security (real Postgres, app role)', () => {
 
   it('with no tenant set, every table reads as empty (fail closed)', async () => {
     await withoutTenant(db, async (tx) => {
-      for (const table of ['tenants', 'tenant_policies', 'documents', 'invoices', 'invoice_line_items', 'audit_log', 'idempotency_keys', 'outbox']) {
+      for (const table of [
+        'tenants',
+        'tenant_policies',
+        'documents',
+        'invoices',
+        'invoice_line_items',
+        'audit_log',
+        'idempotency_keys',
+        'outbox',
+        'vendors',
+        'vendor_bank_changes',
+        'payment_runs',
+        'payment_run_items',
+        'invoice_approvals',
+        'audit_checkpoints',
+      ]) {
         const { rows } = await tx.query(`SELECT count(*)::int AS n FROM ${table}`);
         expect(rows[0], table).toEqual({ n: 0 });
       }

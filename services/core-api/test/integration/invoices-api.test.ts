@@ -36,8 +36,14 @@ describeDb('invoice API (real Postgres, stubbed ai-service over signed HTTP)', (
     return h.app.inject({ method: 'POST', url: '/v1/invoices', payload: mp.payload, headers: { ...mp.headers, 'idempotency-key': idem } });
   };
   const get = async (id: string) => (await h.app.inject({ method: 'GET', url: `/v1/invoices/${id}` })).json();
+  // The uploader (demo-user) may not approve their own invoice, so a manager approves.
   const act = (id: string, action: string, body: object, idem = key()) =>
-    h.app.inject({ method: 'POST', url: `/v1/invoices/${id}/${action}`, payload: body, headers: { 'idempotency-key': idem } });
+    h.app.inject({
+      method: 'POST',
+      url: `/v1/invoices/${id}/${action}`,
+      payload: body,
+      headers: { 'idempotency-key': idem, ...(action === 'approve' ? { authorization: 'Demo demo-manager' } : {}) },
+    });
 
   it('happy path: upload lands in RECEIVED, the drain walks it to PENDING_APPROVAL, a human approves', async () => {
     const res = await upload();
@@ -70,7 +76,7 @@ describeDb('invoice API (real Postgres, stubbed ai-service over signed HTTP)', (
     const body = contract.Invoice.parse(approved.json());
     expect(body.state).toBe('APPROVED');
     const last = (await get(created.id)).history.at(-1);
-    expect(last).toMatchObject({ from: 'PENDING_APPROVAL', to: 'APPROVED', actor: { kind: 'human', id: 'demo-user' }, comment: 'looks right' });
+    expect(last).toMatchObject({ from: 'PENDING_APPROVAL', to: 'APPROVED', actor: { kind: 'human', id: 'demo-manager' }, comment: 'looks right' });
   });
 
   it('the audit chain verifies after a full run', async () => {

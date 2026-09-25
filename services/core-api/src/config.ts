@@ -1,4 +1,18 @@
+import { createPrivateKey, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
+
+/** An Ed25519 private key from PEM or base64 DER, or undefined if it is neither. */
+export function parseCheckpointKey(raw: string): KeyObject | undefined {
+  try {
+    const text = raw.trim();
+    const key = text.startsWith('-----BEGIN')
+      ? createPrivateKey(text)
+      : createPrivateKey({ key: Buffer.from(text, 'base64'), format: 'der', type: 'pkcs8' });
+    return key.asymmetricKeyType === 'ed25519' ? key : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Environment for the core-api process. Parsed once at boot; a bad value fails fast. */
 const EnvSchema = z
@@ -27,6 +41,16 @@ const EnvSchema = z
 
     OUTBOX_POLL_MS: z.coerce.number().int().min(250).max(600_000).default(5_000),
     OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(8),
+    /**
+     * Ed25519 private key that signs audit checkpoints: PKCS#8 PEM, or its DER
+     * as base64. Unset means a fresh key per boot (checkpoints still verify
+     * with the public key they carry, but the key id changes on restart).
+     */
+    AUDIT_CHECKPOINT_KEY: z
+      .string()
+      .min(1)
+      .optional()
+      .refine((v) => v === undefined || parseCheckpointKey(v) !== undefined, 'AUDIT_CHECKPOINT_KEY must be an Ed25519 PKCS#8 key (PEM or base64 DER)'),
     MAX_UPLOAD_BYTES: z.coerce.number().int().min(1024).max(10 * 1024 * 1024).default(10 * 1024 * 1024),
   })
   .superRefine((env, ctx) => {

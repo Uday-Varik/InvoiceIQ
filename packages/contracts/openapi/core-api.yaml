@@ -6,9 +6,9 @@ info:
   description: |
     core-api owns every money-bearing table. It is the only service allowed to
     change invoice state, and every state change goes through the lifecycle gate
-    (`evaluateTransition`). Operations tagged `x-phase: 0`, `x-phase: 1` and
-    `x-phase: 2` are implemented; later phases are specified here first so
-    contracts lead code.
+    (`evaluateTransition`). Operations tagged `x-phase: 0` to `x-phase: 3`
+    are implemented; later phases are specified here first so contracts lead
+    code.
   license:
     name: MIT
     identifier: MIT
@@ -27,8 +27,10 @@ tags:
     description: Invoice intake and review
   - name: vendors
     description: Vendor master and bank-detail changes
+  - name: payments
+    description: Payment runs
   - name: audit
-    description: Hash-chained audit ledger
+    description: Hash-chained audit ledger and signed checkpoints
 security:
   - bearerAuth: []
 paths:
@@ -360,7 +362,11 @@ paths:
       summary: Approve an invoice that is PENDING_APPROVAL
       description: |
         Human-only (enforced by the lifecycle gate). The caller's role must cover
-        the approval tier for the invoice total in the tenant policy.
+        the approval tier for the invoice total in the tenant policy, and the
+        caller must not have uploaded or corrected the invoice. A tier that needs
+        N approvals needs N different people: until the last one, the approval
+        is recorded and the invoice stays PENDING_APPROVAL (see `approvals` and
+        `approvalTier`). Any state change or correction resets the count.
       tags: [invoices]
       x-phase: 1
       parameters:
@@ -374,7 +380,7 @@ paths:
               $ref: '#/components/schemas/InvoiceApproval'
       responses:
         '200':
-          description: Invoice is APPROVED
+          description: Approval recorded; the invoice is APPROVED once the tier has all it needs
           content:
             application/json:
               schema:
@@ -447,19 +453,121 @@ paths:
           $ref: '#/components/responses/Problem'
         '422':
           $ref: '#/components/responses/Problem'
+  /v1/vendors:
+    get:
+      operationId: listVendors
+      summary: List vendors by name, with whether each can be paid now
+      tags: [vendors]
+      x-phase: 3
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive substring of the vendor name.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Vendors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorList'
+        '401':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createVendor
+      summary: Register a vendor (invoices also register theirs on first sight)
+      tags: [vendors]
+      x-phase: 3
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorCreate'
+      responses:
+        '201':
+          description: Vendor registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorDetail'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+  /v1/vendors/{vendorId}:
+    get:
+      operationId: getVendor
+      summary: A vendor with its bank-change history
+      tags: [vendors]
+      x-phase: 3
+      parameters:
+        - $ref: '#/components/parameters/VendorId'
+      responses:
+        '200':
+          description: The vendor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorDetail'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: updateVendor
+      summary: Activate or deactivate a vendor (ap_manager or above)
+      tags: [vendors]
+      x-phase: 3
+      parameters:
+        - $ref: '#/components/parameters/VendorId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorUpdate'
+      responses:
+        '200':
+          description: Vendor updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorDetail'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
   /v1/vendors/{vendorId}/bank-changes:
     post:
       operationId: requestVendorBankChange
       summary: Record a vendor bank-detail change (starts quarantine)
+      description: |
+        Needs role ap_clerk or above. Payments to the vendor stop at once and
+        stay stopped until a different person verifies the change by callback
+        AND the policy's quarantine window has passed.
       tags: [vendors]
       x-phase: 3
       parameters:
-        - name: vendorId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/VendorId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -474,7 +582,219 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BankChangeStatus'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
         '404':
+          $ref: '#/components/responses/Problem'
+  /v1/vendors/{vendorId}/bank-changes/{changeId}/verify:
+    post:
+      operationId: verifyVendorBankChange
+      summary: Record the out-of-band callback that verifies a bank change
+      description: |
+        Needs role ap_manager or above, and a different person than the one who
+        recorded the change. Only the vendor's latest change can be verified.
+        Payments stay blocked until the quarantine window has also passed.
+      tags: [vendors]
+      x-phase: 3
+      parameters:
+        - $ref: '#/components/parameters/VendorId'
+        - name: changeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankChangeVerification'
+      responses:
+        '200':
+          description: Change verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankChangeStatus'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/payment-runs:
+    get:
+      operationId: listPaymentRuns
+      summary: List payment runs, newest first
+      tags: [payments]
+      x-phase: 3
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/PaymentRunStatus'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Payment runs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRunList'
+        '401':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createPaymentRun
+      summary: Assemble a payment run from APPROVED invoices in one currency
+      description: |
+        Needs role ap_manager or above. Queues every APPROVED invoice in the
+        currency (or only `invoiceIds`), oldest due first, up to 500. Invoices
+        whose vendor is inactive or in bank-change quarantine are moved to HOLD
+        instead. Returns 201 with the run, or 200 with `run: null` when nothing
+        could be queued.
+      tags: [payments]
+      x-phase: 3
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRunRequest'
+      responses:
+        '200':
+          description: Nothing was payable; any holds are listed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRunResult'
+        '201':
+          description: Run assembled; invoices are PAYMENT_QUEUED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRunResult'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/payment-runs/{runId}:
+    get:
+      operationId: getPaymentRun
+      summary: A payment run with the invoices it pays
+      tags: [payments]
+      x-phase: 3
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRun'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/payment-runs/{runId}/file:
+    get:
+      operationId: getPaymentFile
+      summary: The run's payment file (CSV), from the snapshot taken at assembly
+      tags: [payments]
+      x-phase: 3
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: CSV with a UTF-8 BOM and CRLF line ends
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/payment-runs/{runId}/confirm:
+    post:
+      operationId: confirmPaymentRun
+      summary: Record that the run was paid; its invoices become PAID
+      description: |
+        Needs role controller or above, and a different person than the one who
+        assembled the run. Refused if an invoice left the run, a vendor became
+        blocked, or a vendor's bank details changed since assembly.
+      tags: [payments]
+      x-phase: 3
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRunClose'
+      responses:
+        '200':
+          description: Run is paid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRun'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/payment-runs/{runId}/cancel:
+    post:
+      operationId: cancelPaymentRun
+      summary: Cancel a queued run; its invoices go to HOLD and need a fresh approval
+      tags: [payments]
+      x-phase: 3
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRunCancel'
+      responses:
+        '200':
+          description: Run is cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRun'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
           $ref: '#/components/responses/Problem'
   /v1/audit/verify:
     get:
@@ -489,6 +809,90 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuditVerification'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/audit/checkpoints:
+    get:
+      operationId: listAuditCheckpoints
+      summary: Signed checkpoints of the audit chain, newest first, plus the current signing key
+      tags: [audit]
+      x-phase: 3
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Checkpoints
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditCheckpointList'
+        '401':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createAuditCheckpoint
+      summary: Sign the current chain head (idempotent per head)
+      description: |
+        Needs role ap_manager or above. Refused when the chain is empty or does
+        not verify. Returns the existing checkpoint (200) when the head is
+        already signed. Publish the result somewhere the database owner cannot
+        edit; that copy is what detects a later rewrite.
+      tags: [audit]
+      x-phase: 3
+      responses:
+        '200':
+          description: The head was already signed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditCheckpoint'
+        '201':
+          description: New checkpoint
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditCheckpoint'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/audit/checkpoints/verify:
+    post:
+      operationId: verifyAuditCheckpoint
+      summary: Check a checkpoint kept outside the system against the current chain
+      tags: [audit]
+      x-phase: 3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditCheckpoint'
+      responses:
+        '200':
+          description: Result; ok is false when the signature fails or the chain no longer matches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditCheckpointVerification'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /v1/me:
+    get:
+      operationId: getMe
+      summary: The caller as core-api sees them (and, in demo mode, the personas to act as)
+      tags: [health]
+      x-phase: 3
+      responses:
+        '200':
+          description: The caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
         '401':
           $ref: '#/components/responses/Problem'
 components:
@@ -553,6 +957,29 @@ components:
       schema:
         type: string
         format: uuid
+    VendorId:
+      name: vendorId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -1050,6 +1477,17 @@ components:
           $ref: '#/components/schemas/InvoiceDocument'
         extraction:
           $ref: '#/components/schemas/InvoiceExtraction'
+        paymentRunId:
+          type: string
+          format: uuid
+          description: The payment run currently paying this invoice.
+        approvals:
+          type: array
+          description: Every approval given, oldest first. Present on getInvoice and approveInvoice.
+          items:
+            $ref: '#/components/schemas/InvoiceApprovalRecord'
+        approvalTier:
+          $ref: '#/components/schemas/ApprovalTierStatus'
         history:
           type: array
           description: Audit entries for this invoice, oldest first. Present on getInvoice only.
@@ -1181,11 +1619,17 @@ components:
     BankChangeStatus:
       type: object
       additionalProperties: false
-      required: [vendorId, quarantined]
+      required: [vendorId, changeId, accountLast4, quarantined, requestedBy, requestedAt, verifiedBy, verifiedAt]
       properties:
         vendorId:
           type: string
           format: uuid
+        changeId:
+          type: string
+          format: uuid
+        accountLast4:
+          type: string
+          pattern: '^[0-9A-Z]{4}$'
         quarantined:
           type: boolean
         releasesAt:
@@ -1196,6 +1640,20 @@ components:
         why:
           type: string
           enum: [WINDOW_OPEN, UNVERIFIED, SELF_VERIFIED]
+        requestedBy:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+        verifiedBy:
+          type:
+            - string
+            - 'null'
+        verifiedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
     AuditVerification:
       type: object
       additionalProperties: false
@@ -1207,6 +1665,469 @@ components:
           type: integer
           minimum: 0
         brokenAt:
+          type: integer
+          minimum: 0
+        reason:
+          type: string
+        checkpointsChecked:
+          type: integer
+          minimum: 0
+          description: Stored checkpoints compared with the chain. A mismatch makes ok false.
+    ApproverRole:
+      type: string
+      description: Junior to senior; a role covers every role before it.
+      enum: [ap_clerk, ap_manager, controller, cfo]
+    InvoiceApprovalRecord:
+      type: object
+      additionalProperties: false
+      required: [approverId, role, approvedAt, current]
+      properties:
+        approverId:
+          type: string
+        role:
+          $ref: '#/components/schemas/ApproverRole'
+        approvedAt:
+          type: string
+          format: date-time
+        current:
+          type: boolean
+          description: Given at the invoice's current version, so it counts toward approval now.
+        comment:
+          type: string
+          maxLength: 2000
+    ApprovalTierStatus:
+      type: object
+      additionalProperties: false
+      required: [name, role, required]
+      properties:
+        name:
+          type: string
+        role:
+          $ref: '#/components/schemas/ApproverRole'
+        required:
+          type: integer
+          minimum: 1
+          maximum: 3
+    Me:
+      type: object
+      additionalProperties: false
+      required: [userId, tenantId, roles, authMode]
+      properties:
+        userId:
+          type: string
+        tenantId:
+          type: string
+          format: uuid
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApproverRole'
+        authMode:
+          type: string
+          enum: [demo, oidc]
+        personas:
+          type: array
+          description: 'Demo mode only. Send `Authorization: Demo <id>` or the iq_demo_persona cookie to act as one.'
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, roles]
+            properties:
+              id:
+                type: string
+              roles:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApproverRole'
+    VendorPayment:
+      type: object
+      additionalProperties: false
+      required: [blocked]
+      properties:
+        blocked:
+          type: boolean
+        reason:
+          type: string
+          enum: [VENDOR_INACTIVE, VENDOR_BANK_CHANGE_QUARANTINE]
+        why:
+          type: string
+          enum: [WINDOW_OPEN, UNVERIFIED, SELF_VERIFIED]
+        releasesAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    Vendor:
+      type: object
+      additionalProperties: false
+      required: [id, name, status, version, bankAccountLast4, openInvoices, payment, createdBy, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 256
+        status:
+          type: string
+          enum: [active, inactive]
+        version:
+          type: integer
+          minimum: 1
+        bankAccountLast4:
+          type:
+            - string
+            - 'null'
+          pattern: '^[0-9A-Z]{4}$'
+        openInvoices:
+          type: integer
+          minimum: 0
+        payment:
+          $ref: '#/components/schemas/VendorPayment'
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    BankChange:
+      type: object
+      additionalProperties: false
+      required: [id, accountLast4, evidenceSha256, requestedBy, requestedAt, verifiedBy, verifiedAt, callbackNote]
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountLast4:
+          type: string
+          pattern: '^[0-9A-Z]{4}$'
+        evidenceSha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        requestedBy:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+        verifiedBy:
+          type:
+            - string
+            - 'null'
+        verifiedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        callbackNote:
+          type:
+            - string
+            - 'null'
+    VendorDetail:
+      type: object
+      additionalProperties: false
+      required: [id, name, status, version, bankAccountLast4, openInvoices, payment, createdBy, createdAt, updatedAt, bankChanges]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 256
+        status:
+          type: string
+          enum: [active, inactive]
+        version:
+          type: integer
+          minimum: 1
+        bankAccountLast4:
+          type:
+            - string
+            - 'null'
+          pattern: '^[0-9A-Z]{4}$'
+        openInvoices:
+          type: integer
+          minimum: 0
+        payment:
+          $ref: '#/components/schemas/VendorPayment'
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        bankChanges:
+          type: array
+          description: Newest first.
+          items:
+            $ref: '#/components/schemas/BankChange'
+    VendorList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vendor'
+    VendorCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+    VendorUpdate:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, status]
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [active, inactive]
+        comment:
+          type: string
+          maxLength: 2000
+    BankChangeVerification:
+      type: object
+      additionalProperties: false
+      required: [callbackNote]
+      properties:
+        callbackNote:
+          type: string
+          minLength: 10
+          maxLength: 2000
+          description: Who was called, on which number from the existing vendor file, and what they confirmed.
+    PaymentRunStatus:
+      type: string
+      enum: [queued, paid, cancelled]
+    PaymentRunItem:
+      type: object
+      additionalProperties: false
+      required: [invoiceId, vendorId, vendorName, accountLast4, amount, invoiceNumber, dueDate, state]
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+        vendorId:
+          type: string
+          format: uuid
+        vendorName:
+          type: string
+        accountLast4:
+          type:
+            - string
+            - 'null'
+        amount:
+          $ref: '#/components/schemas/Money'
+        invoiceNumber:
+          type:
+            - string
+            - 'null'
+        dueDate:
+          type:
+            - string
+            - 'null'
+          format: date
+        state:
+          $ref: '#/components/schemas/InvoiceState'
+    PaymentRun:
+      type: object
+      additionalProperties: false
+      required: [id, currency, status, invoiceCount, total, version, createdBy, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        status:
+          $ref: '#/components/schemas/PaymentRunStatus'
+        invoiceCount:
+          type: integer
+          minimum: 1
+        total:
+          $ref: '#/components/schemas/Money'
+        version:
+          type: integer
+          minimum: 1
+        comment:
+          type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        closedBy:
+          type: string
+        closedAt:
+          type: string
+          format: date-time
+        closeComment:
+          type: string
+        items:
+          type: array
+          description: Present on getPaymentRun and on create, confirm and cancel responses.
+          items:
+            $ref: '#/components/schemas/PaymentRunItem'
+    PaymentRunList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentRun'
+    PaymentRunRequest:
+      type: object
+      additionalProperties: false
+      required: [currency]
+      properties:
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        invoiceIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: string
+            format: uuid
+        comment:
+          type: string
+          maxLength: 2000
+    PaymentRunResult:
+      type: object
+      additionalProperties: false
+      required: [run, held, skipped]
+      properties:
+        run:
+          oneOf:
+            - $ref: '#/components/schemas/PaymentRun'
+            - type: 'null'
+        held:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [invoiceId, reason]
+            properties:
+              invoiceId:
+                type: string
+                format: uuid
+              reason:
+                $ref: '#/components/schemas/ReasonCode'
+        skipped:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [invoiceId, why]
+            properties:
+              invoiceId:
+                type: string
+                format: uuid
+              why:
+                type: string
+                enum: [CURRENCY_MISMATCH, TOTAL_UNKNOWN, VENDOR_UNKNOWN]
+    PaymentRunClose:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
+        comment:
+          type: string
+          maxLength: 2000
+    PaymentRunCancel:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, comment]
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
+        comment:
+          type: string
+          minLength: 1
+          maxLength: 2000
+    AuditCheckpoint:
+      type: object
+      description: |
+        An Ed25519-signed statement that entry `seq` of the tenant's chain has
+        hash `hash`. `statement` is the canonical JSON of v, tenantId, seq,
+        hash, createdAt and keyId: exactly the signed bytes.
+      required: [v, tenantId, seq, hash, createdAt, keyId, statement, signature, publicKey]
+      properties:
+        v:
+          type: integer
+          const: 1
+        tenantId:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+          minimum: 0
+        hash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        createdAt:
+          type: string
+          format: date-time
+        keyId:
+          type: string
+          pattern: '^[0-9a-f]{16}$'
+          description: First 16 hex digits of SHA-256 over the DER public key.
+        statement:
+          type: string
+          maxLength: 1000
+        signature:
+          type: string
+          maxLength: 200
+          description: Base64 Ed25519 signature over `statement` (UTF-8).
+        publicKey:
+          type: string
+          maxLength: 200
+          description: Base64 DER (SPKI) Ed25519 public key.
+        createdBy:
+          type: string
+    AuditCheckpointList:
+      type: object
+      additionalProperties: false
+      required: [currentKeyId, currentPublicKey, items]
+      properties:
+        currentKeyId:
+          type: string
+          pattern: '^[0-9a-f]{16}$'
+        currentPublicKey:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditCheckpoint'
+    AuditCheckpointVerification:
+      type: object
+      additionalProperties: false
+      required: [ok, trustedKey]
+      properties:
+        ok:
+          type: boolean
+        trustedKey:
+          type: boolean
+          description: Signed by this deployment's key, or a key this tenant has used before. Compare keyId with the one you pinned.
+        seq:
           type: integer
           minimum: 0
         reason:

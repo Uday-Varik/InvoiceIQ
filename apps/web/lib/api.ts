@@ -100,3 +100,105 @@ export function rejectInvoice(id: string, reasons: ReasonCode[], comment: string
 export function sendToApproval(id: string, comment: string | undefined, key = idempotencyKey(), fetchFn?: Fetch): Promise<Invoice> {
   return postJson(`/v1/invoices/${encodeURIComponent(id)}/transitions`, { to: 'PENDING_APPROVAL', ...(comment ? { comment } : {}) }, key, fetchFn);
 }
+
+// Phase 3: who am I, vendors, payment runs, audit checkpoints ------------------
+
+export type Me = components['schemas']['Me'];
+export type ApproverRole = components['schemas']['ApproverRole'];
+export type Vendor = components['schemas']['Vendor'];
+export type VendorDetail = components['schemas']['VendorDetail'];
+export type VendorList = components['schemas']['VendorList'];
+export type BankChange = components['schemas']['BankChange'];
+export type BankChangeStatus = components['schemas']['BankChangeStatus'];
+export type PaymentRun = components['schemas']['PaymentRun'];
+export type PaymentRunList = components['schemas']['PaymentRunList'];
+export type PaymentRunResult = components['schemas']['PaymentRunResult'];
+export type PaymentRunStatus = components['schemas']['PaymentRunStatus'];
+export type AuditCheckpoint = components['schemas']['AuditCheckpoint'];
+export type AuditCheckpointList = components['schemas']['AuditCheckpointList'];
+export type AuditCheckpointVerification = components['schemas']['AuditCheckpointVerification'];
+export type AuditVerification = components['schemas']['AuditVerification'];
+
+function sendJson<T>(method: 'POST' | 'PATCH', path: string, body: unknown, key: string | null, fetchFn?: Fetch): Promise<T> {
+  return call(
+    path,
+    { method, body: JSON.stringify(body), headers: { 'content-type': 'application/json', ...(key ? { 'idempotency-key': key } : {}) } },
+    fetchFn,
+  );
+}
+
+export function getMe(fetchFn?: Fetch): Promise<Me> {
+  return call('/v1/me', {}, fetchFn);
+}
+
+export function listVendors(q = '', fetchFn?: Fetch): Promise<VendorList> {
+  const p = new URLSearchParams({ limit: '200' });
+  if (q.trim()) p.set('q', q.trim());
+  return call(`/v1/vendors?${p.toString()}`, {}, fetchFn);
+}
+
+export function getVendor(id: string, fetchFn?: Fetch): Promise<VendorDetail> {
+  return call(`/v1/vendors/${encodeURIComponent(id)}`, {}, fetchFn);
+}
+
+export function createVendor(name: string, key = idempotencyKey(), fetchFn?: Fetch): Promise<VendorDetail> {
+  return sendJson('POST', '/v1/vendors', { name }, key, fetchFn);
+}
+
+export function setVendorStatus(id: string, expectedVersion: number, status: Vendor['status'], comment?: string, key = idempotencyKey(), fetchFn?: Fetch): Promise<VendorDetail> {
+  return sendJson('PATCH', `/v1/vendors/${encodeURIComponent(id)}`, { expectedVersion, status, ...(comment ? { comment } : {}) }, key, fetchFn);
+}
+
+export function requestBankChange(vendorId: string, last4: string, evidenceSha256: string, key = idempotencyKey(), fetchFn?: Fetch): Promise<BankChangeStatus> {
+  return sendJson('POST', `/v1/vendors/${encodeURIComponent(vendorId)}/bank-changes`, { ibanOrAccountLast4: last4, evidenceDocumentSha256: evidenceSha256 }, key, fetchFn);
+}
+
+export function verifyBankChange(vendorId: string, changeId: string, callbackNote: string, key = idempotencyKey(), fetchFn?: Fetch): Promise<BankChangeStatus> {
+  return sendJson(
+    'POST',
+    `/v1/vendors/${encodeURIComponent(vendorId)}/bank-changes/${encodeURIComponent(changeId)}/verify`,
+    { callbackNote },
+    key,
+    fetchFn,
+  );
+}
+
+export function listPaymentRuns(status?: PaymentRunStatus, fetchFn?: Fetch): Promise<PaymentRunList> {
+  return call(`/v1/payment-runs${status ? `?status=${status}` : ''}`, {}, fetchFn);
+}
+
+export function getPaymentRun(id: string, fetchFn?: Fetch): Promise<PaymentRun> {
+  return call(`/v1/payment-runs/${encodeURIComponent(id)}`, {}, fetchFn);
+}
+
+export function createPaymentRun(currency: string, comment?: string, key = idempotencyKey(), fetchFn?: Fetch): Promise<PaymentRunResult> {
+  return sendJson('POST', '/v1/payment-runs', { currency, ...(comment ? { comment } : {}) }, key, fetchFn);
+}
+
+export function confirmPaymentRun(id: string, expectedVersion: number, comment?: string, key = idempotencyKey(), fetchFn?: Fetch): Promise<PaymentRun> {
+  return sendJson('POST', `/v1/payment-runs/${encodeURIComponent(id)}/confirm`, { expectedVersion, ...(comment ? { comment } : {}) }, key, fetchFn);
+}
+
+export function cancelPaymentRun(id: string, expectedVersion: number, comment: string, key = idempotencyKey(), fetchFn?: Fetch): Promise<PaymentRun> {
+  return sendJson('POST', `/v1/payment-runs/${encodeURIComponent(id)}/cancel`, { expectedVersion, comment }, key, fetchFn);
+}
+
+export function paymentFileUrl(id: string): string {
+  return `${API_BASE}/v1/payment-runs/${encodeURIComponent(id)}/file`;
+}
+
+export function verifyAudit(fetchFn?: Fetch): Promise<AuditVerification> {
+  return call('/v1/audit/verify', {}, fetchFn);
+}
+
+export function listCheckpoints(fetchFn?: Fetch): Promise<AuditCheckpointList> {
+  return call('/v1/audit/checkpoints', {}, fetchFn);
+}
+
+export function createCheckpoint(fetchFn?: Fetch): Promise<AuditCheckpoint> {
+  return sendJson('POST', '/v1/audit/checkpoints', {}, null, fetchFn);
+}
+
+export function verifyCheckpoint(cp: AuditCheckpoint, fetchFn?: Fetch): Promise<AuditCheckpointVerification> {
+  return sendJson('POST', '/v1/audit/checkpoints/verify', cp, null, fetchFn);
+}

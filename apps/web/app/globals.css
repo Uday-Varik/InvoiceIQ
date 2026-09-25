@@ -526,3 +526,27 @@ a.btn {
   border-radius: 6px;
   padding: 6px 8px;
 }
+
+/* Phase 3: persona bar, vendors, payment runs, audit */
+.persona-bar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  border: 1px dashed var(--border, #ccc);
+  border-radius: 6px;
+}
+.pill-run-queued {
+  background: #fff4d6;
+}
+.pill-run-paid {
+  background: #dff5e1;
+}
+.pill-run-cancelled {
+  background: #eee;
+}
+.vendor h3,
+.correction h3 {
+  margin-top: 1.25rem;
+}

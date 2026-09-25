@@ -32,19 +32,19 @@ every ADR, reason code and red-team variant it cites exists.
 | ID | STRIDE | Threat | Component | Mitigation | Control reference | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | T-01 | Spoofing | Attacker impersonates a known vendor to get a fake invoice paid | core-api | Vendor master lookup; unknown vendors raise an exception | VENDOR_UNKNOWN | Phase 0 domain |
-| T-02 | Spoofing | Lookalike email domain requests a vendor bank change | core-api | Bank changes quarantine with out-of-band callback by a second person | VENDOR_BANK_CHANGE_QUARANTINE, ADR-0009 | Phase 0 domain |
-| T-03 | Spoofing | Stolen reviewer session approves invoices | apps/web, core-api | Short-lived JWT, MFA, approval tiers by amount | APPROVAL_LIMIT_EXCEEDED | Planned Phase 1 |
+| T-02 | Spoofing | Lookalike email domain requests a vendor bank change | core-api | Bank changes quarantine with out-of-band callback by a second person; payment runs hold quarantined vendors and refuse to confirm after an account change | VENDOR_BANK_CHANGE_QUARANTINE, ADR-0016 | Phase 3 enforced |
+| T-03 | Spoofing | Stolen reviewer session approves invoices | apps/web, core-api | Short-lived JWT, MFA, approval tiers by amount; two people for the top tier, and a different person confirms each payment run | APPROVAL_LIMIT_EXCEEDED, ADR-0016 | Phase 3 enforced |
 | T-04 | Spoofing | Forged service token lets a caller pose as ai-service | core-api | Service tokens are scoped to signal submission only; AI actors can only HOLD | ADR-0007 | Phase 0 domain |
 | T-05 | Tampering | Same invoice submitted twice or reformatted to be paid twice | core-api | Normalized-number exact and near duplicate detection | DUPLICATE_EXACT, DUPLICATE_NEAR | Phase 0 domain |
 | T-06 | Tampering | Invoice amount edited in the PDF before submission | ai-service | Tampering signal holds the invoice; totals are cross-checked | AI_DOCUMENT_TAMPERING_SUSPECTED, VALIDATION_TOTALS_MISMATCH | Phase 0 contract |
 | T-07 | Tampering | Unit prices inflated relative to the PO | core-api | Three-way match with basis-point tolerance capped at 10% by policy | MATCH_PRICE_VARIANCE | Phase 0 domain |
 | T-08 | Tampering | Billing for goods never received | core-api | Receipt required in three-way mode; quantity checked against receipts | MATCH_RECEIPT_MISSING, MATCH_QUANTITY_VARIANCE | Phase 0 domain |
-| T-09 | Tampering | Audit ledger rows edited or deleted to hide a fraudulent approval | Postgres | Hash chain, append-only grants, verification endpoint | ADR-0009 | Phase 0 domain |
+| T-09 | Tampering | Audit ledger rows edited or deleted to hide a fraudulent approval | Postgres | Hash chain, append-only grants, verification endpoint; Ed25519-signed checkpoints kept outside the database catch a re-hashed rewrite | ADR-0009, ADR-0016 | Phase 3 enforced |
 | T-10 | Tampering | Tenant policy weakened (zero quarantine, huge tolerance) | core-api | Zod policy schema enforces floors and ceilings at write and load | ADR-0012 | Phase 0 domain |
 | T-11 | Tampering | Frozen evaluation set edited to hide a detection regression | data | sha256 manifest with root hash; CI verifies | ADR-0012 | Phase 0 tooling |
 | T-12 | Tampering | Compromised dependency or GitHub Action in CI | CI | Actions pinned by commit SHA, exact dependency pins, lockfiles, Dependabot | ADR-0001 | Phase 0 CI |
 | T-13 | Repudiation | Approver denies approving a payment | core-api | Every decision appended to the audit chain with actor identity | ADR-0009 | Phase 0 domain |
-| T-14 | Repudiation | Bank change entered and "verified" by the same insider | core-api | Four-eyes rule: self-verification keeps the quarantine | VENDOR_BANK_CHANGE_QUARANTINE | Phase 0 domain |
+| T-14 | Repudiation | Bank change entered and "verified" by the same insider | core-api | Four-eyes rule, refused by the API and by a database check constraint | VENDOR_BANK_CHANGE_QUARANTINE, ADR-0016 | Phase 3 enforced |
 | T-15 | Information disclosure | Tenant A reads tenant B's vendors or bank data | Postgres | Forced RLS keyed on a transaction-local tenant id | ADR-0004 | Planned Phase 1 |
 | T-16 | Information disclosure | Invoice contents or bank data sent to a model provider and retained | ai-service | Provider abstraction, no bank fields in prompts, provider retention off | ADR-0006 | Planned Phase 2 |
 | T-17 | Information disclosure | Secrets committed to the repository | CI | Secret scanning, `.env` ignored, no secrets in tests (replay only) | ADR-0006 | Phase 0 CI |
@@ -54,7 +54,7 @@ every ADR, reason code and red-team variant it cites exists.
 | T-21 | Denial of service | Adversarial documents push everything to HOLD | ai-service | Accepted: availability cost only; HOLD rates monitored per vendor | ADR-0007 | Accepted risk |
 | T-22 | Elevation of privilege | Prompt injection makes the model "approve" an invoice | ai-service | AI output can only produce HOLD signals; the gate rejects AI approvals | AI_DOCUMENT_TAMPERING_SUSPECTED, ADR-0007 | Phase 0 domain |
 | T-23 | Elevation of privilege | ai-service reads or writes money tables directly | ai-service | No DB credentials; import-linter forbids drivers; SQL scan test | ADR-0007 | Phase 0 CI |
-| T-24 | Elevation of privilege | Clerk approves above their tier | core-api | Approval tiers with role and approval count; above-tier holds | APPROVAL_LIMIT_EXCEEDED | Phase 0 domain |
+| T-24 | Elevation of privilege | Clerk approves above their tier, or approves their own upload or correction | core-api | Approval tiers with role and approval count; above-tier holds; uploaders and correctors cannot approve | APPROVAL_LIMIT_EXCEEDED, ADR-0016 | Phase 3 enforced |
 | T-25 | Elevation of privilege | Invoice split below approval thresholds | core-api, ai-service | Anomaly signal on split patterns; manual review threshold | AI_ANOMALY_SUSPECTED, POLICY_MANUAL_REVIEW_REQUIRED | Phase 0 contract |
 | T-26 | Elevation of privilege | Held invoice released by automation | core-api | Leaving HOLD or EXCEPTION requires a human actor | ADR-0007 | Phase 0 domain |
 

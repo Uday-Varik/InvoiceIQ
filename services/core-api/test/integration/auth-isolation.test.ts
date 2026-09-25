@@ -74,7 +74,7 @@ describeDb('OIDC auth and tenant isolation over HTTP', () => {
     expect((await h.app.inject({ method: 'GET', url: `/v1/invoices/${invoiceA}/document`, headers: bob })).statusCode).toBe(404);
     const approve = await h.app.inject({ method: 'POST', url: `/v1/invoices/${invoiceA}/approve`, payload: {}, headers: { ...bob, 'idempotency-key': key() } });
     expect(approve.statusCode).toBe(404);
-    expect((await h.app.inject({ method: 'GET', url: '/v1/audit/verify', headers: bob })).json()).toEqual({ ok: true, entries: 0 });
+    expect((await h.app.inject({ method: 'GET', url: '/v1/audit/verify', headers: bob })).json()).toEqual({ ok: true, entries: 0, checkpointsChecked: 0 });
   });
 
   it('approval needs a role that covers the tier: a clerk cannot approve 1,234.50, a manager can', async () => {

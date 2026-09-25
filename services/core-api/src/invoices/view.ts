@@ -56,6 +56,10 @@ export function toLineItem(r: LineItemRow): LineItemView {
 export interface InvoiceViewExtras {
   readonly history?: readonly AuditEntry[];
   readonly lineItems?: readonly LineItemRow[];
+  readonly approval?: {
+    readonly approvals: ReadonlyArray<{ approverId: string; role: string; approvedAt: string; current: boolean; comment?: string }>;
+    readonly approvalTier?: { name: string; role: string; required: number };
+  };
 }
 
 function money(amountMinor: string | null, currency: string | null) {
@@ -73,6 +77,7 @@ export function toInvoice(row: InvoiceRow, extras: InvoiceViewExtras = {}) {
     state: row.state,
     reasons: row.reasons,
     version: row.version,
+    ...(row.vendor_id !== null ? { vendorId: row.vendor_id } : {}),
     ...(row.vendor_name !== null ? { vendorName: row.vendor_name } : {}),
     ...(row.invoice_number !== null ? { invoiceNumber: row.invoice_number } : {}),
     ...(row.invoice_date !== null ? { invoiceDate: row.invoice_date } : {}),
@@ -99,6 +104,9 @@ export function toInvoice(row: InvoiceRow, extras: InvoiceViewExtras = {}) {
           },
         }
       : {}),
+    ...(row.payment_run_id !== null ? { paymentRunId: row.payment_run_id } : {}),
+    ...(extras.approval ? { approvals: extras.approval.approvals } : {}),
+    ...(extras.approval?.approvalTier ? { approvalTier: extras.approval.approvalTier } : {}),
     ...(extras.history ? { history: extras.history.map(toEvent) } : {}),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),

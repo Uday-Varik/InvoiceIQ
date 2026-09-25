@@ -34,6 +34,8 @@ function row(over: Partial<InvoiceRow> = {}): InvoiceRow {
     subtotal_minor: null,
     tax_minor: null,
     corrected_fields: [],
+    vendor_id: null,
+    payment_run_id: null,
     extraction: null,
     created_by: 'u',
     created_at: new Date('2026-03-14T10:00:00.000Z'),
