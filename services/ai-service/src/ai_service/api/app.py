@@ -156,6 +156,14 @@ def create_app(
     def extract_invoice_document(body: DocumentExtractionRequest) -> ExtractionResult | JSONResponse:
         try:
             result = extract_document(body, active)
+            source = (
+                "ocr"
+                if result.provider.endswith("+ocr")
+                else "none"
+                if result.provider.endswith(":no-text-layer")
+                else "text_layer"
+            )
+            stats.document_text.inc({"source": source})
         except DocumentError as exc:
             counted("unreadable_document")
             return _problem(422, "Unreadable document", str(exc))

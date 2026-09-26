@@ -10,11 +10,11 @@ bank-detail-change quarantine and a hash-chained audit ledger. Models help with
 extraction and risk signals, but every AI output is structurally limited to
 putting an invoice on HOLD.
 
-> Status: **Phase 4 (operations).** On top of Phase 3's controls: Prometheus
-> metrics, W3C tracing and JSON logs in both services, a readiness probe,
-> per-address rate limits, alert rules with a dashboard and runbook, and
-> Terraform for the Neon, Render and Vercel free tiers. The Terraform has not
-> been applied yet; live model calls come later.
+> Status: **Phase 5 (follow-ups).** On top of Phase 4's operations work:
+> scanned PDFs and PNG or JPEG photos are read with OCR, and every amount uses
+> its currency's own decimal places (yen with none, dinars with three), from
+> extraction through the forms, exports and payment files. The Terraform has
+> not been applied yet; live model calls come later.
 
 ## The problem
 
@@ -142,6 +142,19 @@ Same labels as above. Decisions in [ADR-0017](docs/adr/0017-phase-4-observabilit
 | 8 | Terraform for Neon, Render and Vercel, validated against provider schemas | Verified-in-sandbox | `infra/terraform/versions.tf` |
 | 9 | Terraform apply and a live Grafana Cloud scrape (W-UNV: no hosting accounts) | Written-unverified | `infra/terraform/README.md` |
 
+## Phase 5 deliverables
+
+Same labels as above. Decisions in [ADR-0018](docs/adr/0018-ocr-and-currency-exponents.md).
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | ISO 4217 exponent table owned by core-api and exported to the catalog | Verified-in-sandbox | `services/core-api/src/domain/currency.ts` |
+| 2 | Exports and payment files in each currency's decimal places | Verified-in-sandbox | `services/core-api/src/invoices/export.ts` |
+| 3 | Web display, correction form and filters use the currency's decimals | Verified-in-sandbox | `apps/web/lib/money.ts` |
+| 4 | Extractor reads yen, won and dinar amounts | Verified-in-sandbox | `services/ai-service/src/ai_service/providers/heuristic.py` |
+| 5 | OCR for PNG, JPEG and scanned PDFs with a pixel cap, timeout and no shell | Verified-in-sandbox | `services/ai-service/src/ai_service/documents.py` |
+| 6 | Smoke script reads a scanned yen invoice through the whole stack | Verified-in-sandbox | `scripts/smoke.sh` |
+
 ## Getting started
 
 ```bash
@@ -184,6 +197,7 @@ tests/guardrails         Cross-cutting drift and architecture tests
 | 2 | Real extraction behind record/replay, evaluation harness on the frozen set |
 | 3 | Approvals workflow, payment runs, external anchoring of the audit chain (done) |
 | 4 | Hosting on serverless free tiers, Terraform, observability (done) |
+| 5 | Follow-ups: OCR for scans, currencies without two decimals (done) |
 
 ## License
 

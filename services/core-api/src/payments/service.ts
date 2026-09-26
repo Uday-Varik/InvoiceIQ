@@ -323,7 +323,7 @@ export function paymentFileCsv(run: PaymentRunRow, items: readonly RunItemRow[])
         it.invoice_date ?? '',
         it.due_date ?? '',
         run.currency,
-        formatMinor(it.amount_minor),
+        formatMinor(it.amount_minor, run.currency),
         it.amount_minor,
       ].join(','),
     );

@@ -6,7 +6,7 @@ import json
 
 from pydantic import ValidationError
 
-from ai_service.documents import DocumentError, decode, document_text
+from ai_service.documents import DocumentError, decode, read_document
 from ai_service.providers import LLMProvider, ProviderError
 from invoiceiq_contracts.ai_service import (
     DocumentExtractionRequest,
@@ -93,10 +93,16 @@ def extract(request: ExtractionRequest, provider: LLMProvider) -> ExtractionResu
     )
 
 
+# OCR misreads digits (5 and 6, 1 and 7), so a field read from a scan never scores
+# higher than this; the arithmetic cross-check and the hold threshold still apply.
+OCR_MAX_CONFIDENCE = 0.85
+
+
 def extract_document(request: DocumentExtractionRequest, provider: LLMProvider) -> ExtractionResult:
-    """Extract from document bytes. No text layer means every field is unknown, not guessed."""
+    """Extract from document bytes. No readable text means every field is unknown, not guessed."""
     data = decode(request.contentBase64, request.documentSha256)
-    text = document_text(data, request.contentType.value)
+    doc = read_document(data, request.contentType.value)
+    text = doc.text
     if not text.strip():
         empty = ExtractedField(value=None, confidence=0.0)
         return ExtractionResult(
@@ -106,7 +112,23 @@ def extract_document(request: DocumentExtractionRequest, provider: LLMProvider) 
             lineItems=[],
         )
     as_text = ExtractionRequest(tenantId=request.tenantId, documentSha256=request.documentSha256, text=text)
-    return extract(as_text, provider)
+    result = extract(as_text, provider)
+    if doc.source != "ocr":
+        return result
+    capped = {
+        name: field.model_copy(update={"confidence": min(field.confidence, OCR_MAX_CONFIDENCE)})
+        for name, field in result.fields
+    }
+    return result.model_copy(
+        update={
+            "provider": f"{result.provider}+ocr",
+            "fields": Fields(**capped),
+            "lineItems": [
+                li.model_copy(update={"confidence": min(li.confidence, OCR_MAX_CONFIDENCE)})
+                for li in result.lineItems
+            ],
+        }
+    )
 
 
 __all__ = ["DocumentError", "ExtractionError", "ProviderError", "extract", "extract_document"]

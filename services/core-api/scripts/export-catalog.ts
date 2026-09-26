@@ -5,7 +5,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { INVOICE_STATES, REASON_CATALOG, REASON_CODES, TRANSITIONS } from '../src/domain/index.js';
+import { CURRENCY_EXPONENTS, DEFAULT_EXPONENT, INVOICE_STATES, REASON_CATALOG, REASON_CODES, TRANSITIONS } from '../src/domain/index.js';
 
 export function renderCatalog(): string {
   const catalog = {
@@ -18,6 +18,7 @@ export function renderCatalog(): string {
         return [code, { source: r.source, severity: r.severity, allowedOutcomes: r.allowedOutcomes, description: r.description }];
       }),
     ),
+    currencyExponents: { default: DEFAULT_EXPONENT, ...CURRENCY_EXPONENTS },
   };
   return `${JSON.stringify(catalog, null, 2)}\n`;
 }

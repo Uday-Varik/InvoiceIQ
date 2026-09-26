@@ -847,7 +847,7 @@ export type components = {
             readonly tenantId: string;
             readonly userId: string;
         };
-        /** @description Integer minor units as a decimal string (never a float) plus ISO 4217 currency. */
+        /** @description Integer minor units of the currency (ISO 4217 exponent, so cents for USD, yen for JPY, fils for BHD) as a decimal string, never a float, plus the ISO 4217 currency. */
         readonly Money: {
             readonly amountMinor: string;
             readonly currency: string;

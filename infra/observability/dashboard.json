@@ -717,6 +717,43 @@
           "legendFormat": "readyz {{result}}"
         }
       ]
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Where document text came from (per hour)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 60
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (source) (increase(invoiceiq_ai_document_text_total[1h]))",
+          "legendFormat": "{{source}}"
+        }
+      ]
     }
   ]
 }

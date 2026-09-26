@@ -3,7 +3,8 @@
 # Uploads the sample invoice, waits for the pipeline, checks its line items,
 # corrects a field, finds it with a filter and in the CSV export, approves it as
 # a second person, pays it in a run confirmed by a third, signs an audit
-# checkpoint and verifies the chain. Needs curl and jq. Usage: scripts/smoke.sh [base-url]
+# checkpoint and verifies the chain. Then it uploads a scanned yen invoice to
+# check OCR and a currency without decimals. Needs curl and jq. Usage: scripts/smoke.sh [base-url]
 #
 # Separation of duties needs distinct people. In demo auth mode the script uses
 # the demo personas; with SMOKE_TOKEN (uploader) also set SMOKE_MANAGER_TOKEN
@@ -37,6 +38,7 @@ READY="$(curl -fsS "${BASE}/readyz")" || fail "/readyz is not ready: $(curl -sS 
 jq -c '{status, migrations: .checks.migrations}' <<<"$READY"
 
 # A unique trailer gives unique bytes, so reruns never hit the duplicate-document check.
+SCAN_PNG="$(dirname "$0")/../services/ai-service/tests/fixtures/documents/scanned-invoice.png"
 TMP="$(mktemp)"; trap 'rm -f "$TMP"' EXIT
 cat "$PDF" > "$TMP"; printf '\n%% smoke %s\n' "$(date +%s%N)" >> "$TMP"
 
@@ -110,6 +112,23 @@ say "verifying the audit chain"
 VERIFY="$(curl -fsS "${AUTH[@]}" "${BASE}/v1/audit/verify")"
 echo "$VERIFY"
 [[ "$(jq -r .ok <<<"$VERIFY")" == true ]] || fail "audit chain does not verify"
+
+say "uploading a scanned yen invoice (OCR, no decimals)"
+SCAN="$(mktemp)"; trap 'rm -f "$TMP" "$HEADERS" "$SCAN"' EXIT
+# Bytes after the PNG's end are ignored by readers but make each run a new document.
+cat "$SCAN_PNG" > "$SCAN"; printf 'smoke %s' "$(date +%s%N)" >> "$SCAN"
+SCAN_ID="$(curl -fsS "${AUTH[@]}" -H "idempotency-key: smoke-scan-$(date +%s%N)" \
+  -F "file=@${SCAN};filename=scanned-invoice.png;type=image/png" "${BASE}/v1/invoices" | jq -r .id)"
+for i in $(seq 1 60); do
+  SCANNED="$(curl -fsS "${AUTH[@]}" "${BASE}/v1/invoices/${SCAN_ID}")"
+  case "$(jq -r .state <<<"$SCANNED")" in
+    RECEIVED|EXTRACTING|EXTRACTED|VALIDATING|VALIDATED|MATCHING|MATCHED) sleep 2 ;;
+    *) break ;;
+  esac
+done
+jq -c '{state, vendorName, total, provider: .extraction.provider}' <<<"$SCANNED"
+[[ "$(jq -r '.extraction.provider' <<<"$SCANNED")" == *+ocr ]] || fail "the scan was not read with OCR"
+[[ "$(jq -r '"\(.total.amountMinor) \(.total.currency)"' <<<"$SCANNED")" == '35200 JPY' ]] || fail "the yen total was not read as 35200 JPY"
 
 if [[ -n "${SMOKE_METRICS_TOKEN:-}" ]]; then
   say "checking /metrics saw the flow"

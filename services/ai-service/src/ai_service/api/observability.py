@@ -264,6 +264,11 @@ class ServiceMetrics:
             "Extraction attempts by provider and outcome.",
             ("provider", "outcome"),
         )
+        self.document_text = Counter(
+            "invoiceiq_ai_document_text_total",
+            "Documents read, by where their text came from (text_layer, ocr, none).",
+            ("source",),
+        )
         self.signals = Counter(
             "invoiceiq_ai_signals_total", "Advisory HOLD signals raised, by reason code.", ("reason",)
         )
@@ -278,6 +283,7 @@ class ServiceMetrics:
             self.requests,
             self.duration,
             self.extractions,
+            self.document_text,
             self.signals,
             self.signature_failures,
             self.start_time,

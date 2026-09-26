@@ -8,7 +8,8 @@ export function defaultPolicy(tenantId: string): PolicyInput {
     version: 1,
     tenantId,
     baseCurrency: 'USD',
-    enabledCurrencies: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'INR'],
+    // JPY and BHD show currencies with 0 and 3 decimals; non-base currencies need the top approval tier.
+    enabledCurrencies: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'INR', 'JPY', 'BHD'],
     matching: { mode: 'three_way', priceToleranceBps: 200, quantityToleranceBps: 0 },
     duplicates: { windowDays: 365, nearMatchMaxEditDistance: 1 },
     vendorBankChange: { quarantineHours: 72, requireCallbackVerification: true },

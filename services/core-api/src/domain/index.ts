@@ -2,6 +2,7 @@ export * from './states.js';
 export * from './reasons.js';
 export * from './transitions.js';
 export * from './money.js';
+export * from './currency.js';
 export * from './policy.js';
 export * from './audit-ledger.js';
 export * from './matching.js';

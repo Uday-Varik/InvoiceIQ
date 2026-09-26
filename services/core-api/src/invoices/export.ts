@@ -1,3 +1,4 @@
+import { minorToDecimal } from '../domain/index.js';
 import type { InvoiceRow } from './store.js';
 
 /**
@@ -46,17 +47,11 @@ export function csvQuote(value: string): string {
 }
 
 /**
- * Integer minor units as a decimal string with two places ("-1234.50"),
- * without going through a float. Matches the rest of the codebase, which
- * assumes two-decimal currencies until FX and currency exponents arrive.
+ * Integer minor units as a decimal string in the currency's own decimal places
+ * ("-1234.50" for USD, "1200" for JPY), without going through a float.
  */
-export function formatMinor(minor: string | null): string {
-  if (minor === null) return '';
-  if (!/^-?\d+$/.test(minor)) throw new RangeError(`not an integer amount: ${minor}`);
-  const neg = minor.startsWith('-');
-  const digits = (neg ? minor.slice(1) : minor).padStart(3, '0');
-  const whole = digits.slice(0, -2).replace(/^0+(?=\d)/, '');
-  return `${neg ? '-' : ''}${whole}.${digits.slice(-2)}`;
+export function formatMinor(minor: string | null, currency: string | null): string {
+  return minor === null ? '' : minorToDecimal(minor, currency);
 }
 
 export function csvRow(row: InvoiceRow, lineCount: number): string {
@@ -69,9 +64,9 @@ export function csvRow(row: InvoiceRow, lineCount: number): string {
     row.invoice_date ?? '',
     row.due_date ?? '',
     row.currency ?? '',
-    formatMinor(row.subtotal_minor),
-    formatMinor(row.tax_minor),
-    formatMinor(row.total_minor),
+    formatMinor(row.subtotal_minor, row.currency),
+    formatMinor(row.tax_minor, row.currency),
+    formatMinor(row.total_minor, row.currency),
     row.total_minor ?? '',
     String(lineCount),
     csvText(row.corrected_fields.join(';')),

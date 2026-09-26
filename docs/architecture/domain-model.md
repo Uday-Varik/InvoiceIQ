@@ -65,4 +65,6 @@ strictly ascending.
 
 ## Money
 
-Integer minor units as `bigint`, decimal strings on the wire (ADR-0013).
+Integer minor units as `bigint`, decimal strings on the wire (ADR-0013). The
+minor unit is the currency's own ISO 4217 unit: cents for USD, yen for JPY,
+fils for BHD (ADR-0018).

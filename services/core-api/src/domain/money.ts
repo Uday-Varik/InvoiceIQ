@@ -1,5 +1,8 @@
+import { minorToDecimal } from './currency.js';
+
 /**
- * Money is always an integer count of minor units (cents) plus an ISO 4217 code.
+ * Money is always an integer count of minor units plus an ISO 4217 code. The
+ * minor unit is the currency's own (cents for USD, yen for JPY, fils for BHD).
  * Floats never touch amounts. See docs/architecture/domain-model.md.
  */
 export interface Money {
@@ -71,10 +74,7 @@ export function withinBasisPoints(actual: Money, expected: Money, bps: number): 
   return diff * 10_000n <= base * BigInt(bps);
 }
 
+/** "1234.50 USD", "1200 JPY", "1.500 BHD": the currency's own decimal places. */
 export function format(m: Money): string {
-  const neg = m.amountMinor < 0n;
-  const v = neg ? -m.amountMinor : m.amountMinor;
-  const whole = v / 100n;
-  const frac = (v % 100n).toString().padStart(2, '0');
-  return `${neg ? '-' : ''}${whole.toString()}.${frac} ${m.currency}`;
+  return `${minorToDecimal(m.amountMinor, m.currency)} ${m.currency}`;
 }
