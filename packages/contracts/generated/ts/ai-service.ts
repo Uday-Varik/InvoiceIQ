@@ -19,6 +19,26 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/metrics": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Prometheus metrics
+         * @description Prometheus text exposition (version 0.0.4). With METRICS_TOKEN set it answers that bearer token; without one it needs a request signature like every other route.
+         */
+        readonly get: operations["getMetrics"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/v1/extract": {
         readonly parameters: {
             readonly query?: never;
@@ -194,6 +214,27 @@ export interface operations {
             };
             readonly 429: components["responses"]["Problem"];
             readonly 503: components["responses"]["Problem"];
+        };
+    };
+    readonly getMetrics: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Current metrics */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "text/plain": string;
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
         };
     };
     readonly extractInvoice: {

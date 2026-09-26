@@ -11,17 +11,21 @@
 | core-api, ai-service | Render (free web services, Docker) | [`render.yaml`](../../render.yaml) |
 | apps/web | Vercel (Hobby) | [`apps/web/vercel.json`](../../apps/web/vercel.json) |
 
+**Terraform instead of clicking.** [`infra/terraform`](../../infra/terraform/README.md)
+creates all three pieces and generates every secret (ADR-0017). It is validated
+in CI but has not been applied either (W-UNV). The manual steps below are the
+same layout by hand.
+
 ## 1. Neon
 
 1. Create a project with Postgres 16. The default role (for example
    `neondb_owner`) owns the schema and runs migrations.
 2. Run the first migration once, or let core-api do it on boot (step 2). It
-   creates `invoiceiq_app` **without login**. Give it a password in the SQL
-   editor:
-
-   ```sql
-   ALTER ROLE invoiceiq_app WITH LOGIN PASSWORD '<generate one>';
-   ```
+   creates `invoiceiq_app` **without login**. Generate a password of at
+   least 24 characters and set it as `APP_DB_PASSWORD` on core-api (step 2):
+   boot gives the role LOGIN with it after migrating. Do not create the role
+   in Neon's console or API; Neon makes such roles members of
+   `neon_superuser`, which can bypass row-level security.
 
 3. Copy two URLs:
    - `MIGRATION_DATABASE_URL`: owner role, **direct** (unpooled) host. The
@@ -39,9 +43,12 @@
    creates both services plus the `invoiceiq-shared` group with a generated
    `AI_SIGNING_SECRET`.
 2. Fill in the `sync: false` values on `invoiceiq-core-api`: the two Neon URLs
-   and `AI_SERVICE_URL` (the ai-service's `https://…onrender.com` URL).
+   `APP_DB_PASSWORD` and `AI_SERVICE_URL` (the ai-service's
+   `https://…onrender.com` URL). `METRICS_TOKEN` is generated in the shared
+   group; Prometheus sends it as a bearer token (see
+   [observability.md](observability.md)).
 3. Deploy. core-api migrates, bootstraps the demo tenant and starts draining
-   the outbox. Check `https://<core-api>/healthz`.
+   the outbox. Check `https://<core-api>/healthz`, then `/readyz`.
 4. Smoke it: `scripts/smoke.sh https://<core-api>.onrender.com`.
 
 ## 3. Vercel

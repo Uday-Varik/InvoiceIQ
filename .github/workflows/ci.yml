@@ -68,6 +68,40 @@ jobs:
       - run: make install-py
       - run: make check-py
 
+  infra:
+    name: Infrastructure (Terraform validate, alert rules and dashboard queries)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TF_VERSION: 1.16.4
+      # SHA256 of terraform_1.16.4_linux_amd64.zip from releases.hashicorp.com.
+      TF_SHA256: dc94af0eef1147718ad7c8daea792ed199e3e0492eec180d0adafa2a65a879df
+      TF_IN_AUTOMATION: '1'
+      PROM_VERSION: 3.7.0
+      # SHA256 of prometheus-3.7.0.linux-amd64.tar.gz from its GitHub release (sha256sums.txt).
+      PROM_SHA256: d54370c807d713fa73bc824ab128bde634ac9a80b37ad3d7768a6a9f63b63089
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install Terraform (checksum-verified)
+        run: |
+          curl -fsSLo terraform.zip "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+          echo "${TF_SHA256}  terraform.zip" | sha256sum --check --strict
+          unzip -q terraform.zip terraform -d "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      # No credentials and no backend: this never touches a real account.
+      - run: terraform -chdir=infra/terraform fmt -check -recursive -diff
+      - run: terraform -chdir=infra/terraform init -backend=false -input=false
+      - run: terraform -chdir=infra/terraform validate
+      - name: Install promtool (checksum-verified)
+        run: |
+          curl -fsSLo prometheus.tgz "https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/prometheus-${PROM_VERSION}.linux-amd64.tar.gz"
+          echo "${PROM_SHA256}  prometheus.tgz" | sha256sum --check --strict
+          tar -xzf prometheus.tgz --strip-components=1 -C "$RUNNER_TEMP/bin" "prometheus-${PROM_VERSION}.linux-amd64/promtool"
+      - name: Check alert rules, their unit tests and dashboard queries
+        run: infra/observability/check.sh
+
   docker:
     name: Docker images and end-to-end smoke test
     runs-on: ubuntu-24.04
@@ -81,8 +115,10 @@ jobs:
         run: docker compose build
       - name: Start db, ai-service and core-api
         run: docker compose up --detach --wait --wait-timeout 180
-      - name: Smoke test (upload, extract, approve, verify audit chain)
+      - name: Smoke test (upload, extract, approve, pay, checkpoint, metrics)
         run: ./scripts/smoke.sh http://localhost:3001
+        env:
+          SMOKE_METRICS_TOKEN: local-only-metrics-token-do-not-deploy
       - name: Service logs
         if: always()
         run: docker compose logs --no-color

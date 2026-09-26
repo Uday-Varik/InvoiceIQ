@@ -1,0 +1,17 @@
+# Copy to terraform.tfvars (ignored by git) and adjust. Credentials are NOT set
+# here: export NEON_API_KEY, RENDER_API_KEY, RENDER_OWNER_ID and VERCEL_API_TOKEN.
+
+name_prefix   = "invoiceiq"
+github_repo   = "Uday-Varik/InvoiceIQ"
+branch        = "main"
+render_region = "oregon"
+render_plan   = "free"
+neon_region   = "aws-us-west-2"
+auth_mode     = "demo"
+
+# auth_mode = "oidc"
+# oidc = {
+#   issuer   = "https://login.example.com/"
+#   audience = "invoiceiq"
+#   jwks_url = "https://login.example.com/.well-known/jwks.json"
+# }

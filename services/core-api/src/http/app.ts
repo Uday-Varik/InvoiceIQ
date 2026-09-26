@@ -1,5 +1,5 @@
 import multipart from '@fastify/multipart';
-import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyServerOptions } from 'fastify';
 import {
   INVOICE_STATES,
   REASON_CATALOG,
@@ -27,14 +27,21 @@ import { getDocument, getInvoice, getLineItemsFor, listInvoices, summarizeInvoic
 import { decodeCursor, encodeCursor, toInvoice } from '../invoices/view.js';
 import { idempotencyKeyOf } from './idempotency.js';
 import { HttpProblem, problemBody } from './problem.js';
+import { loadMigrations } from '../db/migrate.js';
+import { createCoreMetrics, type CoreMetrics } from '../observability/catalog.js';
+import { registerObservability } from '../observability/http.js';
+import type { RateLimiter } from '../observability/rate-limit.js';
+import { checkReadiness } from '../observability/readiness.js';
 
 /**
  * HTTP surface. Every route here must exist in
- * packages/contracts/openapi/core-api.yaml, and every x-phase 0 to 3
+ * packages/contracts/openapi/core-api.yaml, and every x-phase 0 to 4
  * operation there must be listed here (enforced by tests/guardrails).
  */
 export const IMPLEMENTED_ROUTES = [
   'GET /healthz',
+  'GET /readyz',
+  'GET /metrics',
   'GET /v1/lifecycle/states',
   'GET /v1/reason-codes',
   'POST /v1/lifecycle/evaluate',
@@ -75,6 +82,17 @@ export interface AppDeps {
 
 export interface AppOptions {
   readonly logger?: boolean;
+  readonly logLevel?: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
+  /** Proxy hops to trust for the client address (rate limits key on it). Default: trust all, fine for tests. */
+  readonly trustProxy?: boolean | number;
+  /** Defaults to a fresh registry per app. */
+  readonly metrics?: CoreMetrics;
+  readonly metricsToken?: string;
+  /** Production turns on HSTS and hides /metrics unless a token is set. */
+  readonly production?: boolean;
+  readonly rateLimiter?: RateLimiter;
+  /** Health check for /readyz's informational ai-service line. */
+  readonly aiPing?: () => Promise<boolean>;
   /** Defaults to the demo principal, which is what tests and local runs want. */
   readonly auth?: Authenticator;
   readonly deps?: AppDeps;
@@ -117,13 +135,30 @@ function problem(status: number, title: string, detail: string) {
 }
 
 export function buildApp(opts: AppOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: opts.logger ?? false, trustProxy: true });
+  const logger: FastifyServerOptions['logger'] = opts.logger
+    ? { level: opts.logLevel ?? 'info', redact: { paths: ['req.headers.authorization', 'req.headers.cookie'], censor: '[redacted]' } }
+    : false;
+  const hops = opts.trustProxy;
+  // A hop count trusts exactly that many proxies, so X-Forwarded-For entries a client adds itself are ignored.
+  const trustProxy = typeof hops === 'number' ? (_addr: string, i: number) => i < hops : (hops ?? true);
+  const app = Fastify({ logger, trustProxy });
   const auth = opts.auth ?? demoAuthenticator(DEMO_PRINCIPAL);
   const deps = opts.deps;
   const maxUploadBytes = opts.maxUploadBytes ?? MAX_UPLOAD_BYTES;
   const signer = opts.checkpointSigner ?? checkpointSigner();
 
   app.decorateRequest('principal', null);
+  const metrics = opts.metrics ?? createCoreMetrics();
+  const expectedMigrations = loadMigrations().map((m) => m.id);
+  registerObservability(app, {
+    metrics,
+    ...(opts.metricsToken ? { metricsToken: opts.metricsToken } : {}),
+    production: opts.production ?? false,
+    ...(opts.rateLimiter ? { rateLimiter: opts.rateLimiter } : {}),
+    ...(deps
+      ? { readiness: () => checkReadiness({ db: deps.db, expectedMigrations, ...(opts.aiPing ? { aiPing: opts.aiPing } : {}) }) }
+      : {}),
+  });
   void app.register(multipart, { limits: { fileSize: maxUploadBytes, files: 1, fields: 4, fieldSize: 1024, parts: 5 } });
 
   app.addHook('onRequest', async (req) => {
@@ -366,6 +401,9 @@ function registerInvoiceRoutes(app: FastifyInstance, needDeps: () => AppDeps): v
         .header('content-disposition', `inline; filename*=UTF-8''${encodeURIComponent(found.inv.document_filename)}`)
         .header('cache-control', 'private, max-age=300')
         .header('x-content-type-options', 'nosniff')
+        // The review page shows the document in a same-origin iframe (through the web proxy).
+        .header('x-frame-options', 'SAMEORIGIN')
+        .header('content-security-policy', "frame-ancestors 'self'")
         .send(found.doc.content);
     },
   );

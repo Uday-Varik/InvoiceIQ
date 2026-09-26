@@ -66,6 +66,34 @@ describe('README Phase 3 table', () => {
   });
 });
 
+describe('README Phase 4 table', () => {
+  const phase4 = tableAfter(readme, '## Phase 4 deliverables');
+
+  it('lists 9 numbered deliverables with honest labels', () => {
+    expect(phase4.map((r) => r[0])).toEqual(Array.from({ length: 9 }, (_, i) => String(i + 1)));
+    for (const row of phase4) expect(['Verified-in-sandbox', 'Written-unverified'], row[1]).toContain(row[2]);
+  });
+
+  it('only live hosting that could not run here is Written-unverified, and it says W-UNV', () => {
+    for (const row of phase4.filter((r) => r[2] === 'Written-unverified')) {
+      expect(row[1]).toMatch(/terraform apply|grafana|live/i);
+      expect(row[1]).toContain('W-UNV');
+    }
+  });
+
+  it('points every row at a path that exists', () => {
+    for (const row of phase4) {
+      const path = /`([^`]+)`/.exec(row[3] ?? '')?.[1];
+      expect(path, row[1]).toBeDefined();
+      expect(existsSync(join(ROOT, path!)), path).toBe(true);
+    }
+  });
+
+  it('links the ADR that records the Phase 4 decisions', () => {
+    expect(readme).toContain('docs/adr/0017-');
+  });
+});
+
 describe('README Phase 1 table', () => {
   const phase1 = tableAfter(readme, '## Phase 1 deliverables');
 

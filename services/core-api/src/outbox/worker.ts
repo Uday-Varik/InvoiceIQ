@@ -1,4 +1,5 @@
 import { withTenant, withoutTenant, type Db } from '../db/pool.js';
+import { currentTrace, runWithTrace, startSpan } from '../observability/trace.js';
 
 /**
  * Wake-and-drain outbox relay (ADR-0003, ADR-0008).
@@ -18,7 +19,11 @@ export interface OutboxEvent {
   readonly topic: string;
   readonly payload: Record<string, unknown>;
   readonly attempts: number;
+  /** The trace of the request that enqueued it, so its work joins that trace. */
+  readonly traceparent?: string | null;
 }
+
+export type OutboxOutcome = 'processed' | 'retried' | 'dead';
 
 export type OutboxHandler = (event: OutboxEvent) => Promise<void>;
 
@@ -38,6 +43,8 @@ export interface OutboxWorkerOptions {
   readonly pollMs?: number;
   readonly backoff?: (attempts: number) => number;
   readonly log?: WorkerLogger;
+  /** Told about every handled event after its outcome is committed (metrics). */
+  readonly observe?: (event: OutboxEvent, outcome: OutboxOutcome, seconds: number) => void;
 }
 
 const silent: WorkerLogger = { info: () => undefined, warn: () => undefined, error: () => undefined };
@@ -73,23 +80,42 @@ export class OutboxWorker {
   /** Claim and process one batch. Returns how many events were claimed. */
   async drainOnce(): Promise<number> {
     const claimed = await withoutTenant(this.db, async (tx) => {
-      const { rows } = await tx.query<{ id: string; tenant_id: string; event_id: string; topic: string; payload: Record<string, unknown>; attempts: number }>(
-        'SELECT * FROM claim_outbox($1, $2)',
-        [this.batchSize, this.leaseSeconds],
-      );
-      return rows.map((r) => ({ id: r.id, tenantId: r.tenant_id, eventId: r.event_id, topic: r.topic, payload: r.payload, attempts: r.attempts }));
+      const { rows } = await tx.query<{
+        id: string;
+        tenant_id: string;
+        event_id: string;
+        topic: string;
+        payload: Record<string, unknown>;
+        attempts: number;
+        traceparent: string | null;
+      }>('SELECT * FROM claim_outbox($1, $2)', [this.batchSize, this.leaseSeconds]);
+      return rows.map((r) => ({
+        id: r.id,
+        tenantId: r.tenant_id,
+        eventId: r.event_id,
+        topic: r.topic,
+        payload: r.payload,
+        attempts: r.attempts,
+        traceparent: r.traceparent,
+      }));
     });
-    for (const event of claimed) await this.process(event);
+    for (const event of claimed) {
+      const span = startSpan(event.traceparent);
+      await runWithTrace(span, () => this.process(event));
+    }
     return claimed.length;
   }
 
   private async process(event: OutboxEvent): Promise<void> {
     const handler = this.opts.handlers[event.topic];
+    const started = performance.now();
+    const observe = (outcome: OutboxOutcome) => this.opts.observe?.(event, outcome, (performance.now() - started) / 1000);
     try {
       if (handler) await handler(event);
       await withTenant(this.db, event.tenantId, (tx) =>
         tx.query('UPDATE outbox SET processed_at = now(), locked_until = NULL, last_error = NULL WHERE id = $1', [event.id]),
       );
+      observe('processed');
     } catch (err) {
       const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
       const dead = event.attempts >= this.maxAttempts;
@@ -102,11 +128,12 @@ export class OutboxWorker {
               [event.id, message, this.backoff(event.attempts)],
             ),
       );
+      observe(dead ? 'dead' : 'retried');
       if (dead) {
-        this.log.error({ eventId: event.eventId, topic: event.topic, attempts: event.attempts, err: message }, 'outbox event dead-lettered');
+        this.log.error({ eventId: event.eventId, topic: event.topic, attempts: event.attempts, err: message, traceId: currentTrace()?.traceId }, 'outbox event dead-lettered');
         await this.opts.onDead?.(event).catch((e: unknown) => this.log.error({ eventId: event.eventId, err: String(e) }, 'onDead failed'));
       } else {
-        this.log.warn({ eventId: event.eventId, topic: event.topic, attempts: event.attempts, err: message }, 'outbox event failed; will retry');
+        this.log.warn({ eventId: event.eventId, topic: event.topic, attempts: event.attempts, err: message, traceId: currentTrace()?.traceId }, 'outbox event failed; will retry');
       }
     }
   }

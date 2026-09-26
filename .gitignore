@@ -16,3 +16,11 @@ __pycache__/
 !.env.example
 .DS_Store
 .gen-check-*/
+
+# Terraform (infra/terraform): provider caches, state and local variables hold secrets.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log

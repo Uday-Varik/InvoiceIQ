@@ -46,7 +46,7 @@ describe.each(['core-api', 'ai-service'])('%s spec conventions', (name) => {
 
   it.each(ops)('%s has an operationId, an x-phase and a 4xx response', (_, op) => {
     expect(op.operationId).toMatch(/^[a-z][A-Za-z]+$/);
-    expect([0, 1, 2, 3]).toContain(op['x-phase']);
+    expect([0, 1, 2, 3, 4]).toContain(op['x-phase']);
     expect(Object.keys(op.responses ?? {}).some((c) => c.startsWith('4'))).toBe(true);
   });
 
@@ -55,9 +55,9 @@ describe.each(['core-api', 'ai-service'])('%s spec conventions', (name) => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('only /healthz is unauthenticated', () => {
+  it('only the /healthz and /readyz probes are unauthenticated', () => {
     const open = ops.filter(([, op]) => Array.isArray(op.security) && op.security.length === 0).map(([k]) => k);
-    expect(open).toEqual(['GET /healthz']);
+    expect(open.filter((k) => k !== 'GET /readyz')).toEqual(['GET /healthz']);
   });
 });
 

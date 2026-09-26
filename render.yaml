@@ -10,6 +10,9 @@ envVarGroups:
       # core-api signs every call to ai-service with this (HMAC-SHA256).
       - key: AI_SIGNING_SECRET
         generateValue: true
+      # Bearer token Prometheus uses to scrape /metrics on both services.
+      - key: METRICS_TOKEN
+        generateValue: true
 
 services:
   - type: web
@@ -58,6 +61,10 @@ services:
       # Ed25519 private key (PEM or base64 DER) that signs audit checkpoints.
       # Unset means a new key per boot, so old checkpoints stop verifying.
       - key: AUDIT_CHECKPOINT_KEY
+        sync: false
+      # Optional: with this set, boot gives invoiceiq_app LOGIN and this
+      # password, replacing the hand-run ALTER ROLE step (24+ characters).
+      - key: APP_DB_PASSWORD
         sync: false
       # The public demo: one shared demo tenant, no login. Switch to oidc and set
       # OIDC_ISSUER, OIDC_AUDIENCE and OIDC_JWKS_URL for a real deployment.

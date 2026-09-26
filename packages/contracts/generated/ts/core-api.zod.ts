@@ -182,6 +182,12 @@ export type PaymentRunResult = z.infer<typeof PaymentRunResult>;
 export const Problem = z.object({ "type": z.string(), "title": z.string(), "status": z.number().int().gte(100).lte(599), "detail": z.string().optional(), "code": z.string().describe("Machine-readable cause, e.g. a TransitionError such as HUMAN_REQUIRED.").optional() });
 export type Problem = z.infer<typeof Problem>;
 
+export const ReadinessCheck = z.object({ "ok": z.boolean(), "latencyMs": z.number().int().gte(0).optional(), "detail": z.string().max(200).optional() });
+export type ReadinessCheck = z.infer<typeof ReadinessCheck>;
+
+export const Readiness = z.object({ "status": z.enum(["ready","not_ready"]), "checks": z.object({ "database": ReadinessCheck, "migrations": z.object({ "applied": z.number().int().gte(0).optional(), "expected": z.number().int().gte(0) }).and(ReadinessCheck), "aiService": z.object({ "required": z.literal(false) }).and(ReadinessCheck) }).strict() }).strict();
+export type Readiness = z.infer<typeof Readiness>;
+
 export const ReasonOutcome = z.enum(["HOLD","EXCEPTION","REJECTED"]);
 export type ReasonOutcome = z.infer<typeof ReasonOutcome>;
 

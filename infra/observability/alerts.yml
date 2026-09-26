@@ -1,0 +1,114 @@
+# Prometheus alerting rules for InvoiceIQ. Load into Prometheus, Grafana Cloud
+# (Alerting, then import) or any Mimir-compatible ruler. Every metric used here
+# is exported by core-api or ai-service (checked by tests/guardrails/observability.test.ts),
+# and every alert links to its section of docs/runbooks/observability.md.
+#
+# Scrape jobs are expected to be named invoiceiq-core-api and invoiceiq-ai-service.
+groups:
+  - name: invoiceiq-availability
+    rules:
+      - alert: InvoiceIQHighErrorRate
+        expr: |
+          sum(rate(invoiceiq_http_requests_total{status="5xx"}[10m]))
+            / clamp_min(sum(rate(invoiceiq_http_requests_total[10m])), 1e-9) > 0.05
+          and sum(rate(invoiceiq_http_requests_total[10m])) > 0.01
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: More than 5% of core-api requests are failing with 5xx.
+          runbook_url: docs/runbooks/observability.md#invoiceiqhigherrorrate
+
+      - alert: InvoiceIQSlowRequests
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(invoiceiq_http_request_duration_seconds_bucket{route!="/v1/invoices"}[15m]))) > 2
+        for: 15m
+        labels:
+          severity: ticket
+        annotations:
+          summary: core-api p95 latency (uploads excluded) is above 2 seconds.
+          runbook_url: docs/runbooks/observability.md#invoiceiqslowrequests
+
+      - alert: InvoiceIQNotReady
+        expr: increase(invoiceiq_readiness_checks_total{result="not_ready"}[10m]) > 3
+        labels:
+          severity: page
+        annotations:
+          summary: core-api keeps answering /readyz with not_ready (database or migrations).
+          runbook_url: docs/runbooks/observability.md#invoiceiqnotready
+
+      - alert: InvoiceIQEventLoopLag
+        expr: nodejs_eventloop_delay_p99_seconds{job="invoiceiq-core-api"} > 0.5
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: core-api's event loop p99 delay is above 500 ms.
+          runbook_url: docs/runbooks/observability.md#invoiceiqeventlooplag
+
+  - name: invoiceiq-pipeline
+    rules:
+      - alert: InvoiceIQOutboxBacklog
+        expr: invoiceiq_outbox_oldest_pending_age_seconds > 900
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: The oldest outbox event has waited more than 15 minutes; invoices are not being extracted.
+          runbook_url: docs/runbooks/observability.md#invoiceiqoutboxbacklog
+
+      - alert: InvoiceIQOutboxDeadLetters
+        expr: increase(invoiceiq_outbox_events_total{outcome="dead"}[1h]) > 0
+        labels:
+          severity: ticket
+        annotations:
+          summary: Outbox events exhausted their retries; affected invoices are on HOLD for manual review.
+          runbook_url: docs/runbooks/observability.md#invoiceiqoutboxdeadletters
+
+      - alert: InvoiceIQAiServiceUnavailable
+        expr: |
+          sum(rate(invoiceiq_ai_requests_total{outcome="unavailable"}[15m]))
+            / clamp_min(sum(rate(invoiceiq_ai_requests_total[15m])), 1e-9) > 0.5
+        for: 15m
+        labels:
+          severity: ticket
+        annotations:
+          summary: More than half of ai-service calls fail as unavailable (beyond a cold start).
+          runbook_url: docs/runbooks/observability.md#invoiceiqaiserviceunavailable
+
+  - name: invoiceiq-security
+    rules:
+      - alert: InvoiceIQSignatureFailures
+        expr: increase(invoiceiq_ai_signature_failures_total[15m]) > 5
+        labels:
+          severity: ticket
+        annotations:
+          summary: ai-service is refusing unsigned or badly signed requests (probing, or a signing-secret mismatch).
+          runbook_url: docs/runbooks/observability.md#invoiceiqsignaturefailures
+
+      - alert: InvoiceIQRateLimited
+        expr: sum(increase(invoiceiq_http_rate_limited_total[10m])) > 50
+        labels:
+          severity: info
+        annotations:
+          summary: Clients are being rate limited heavily; possible abuse of the public demo.
+          runbook_url: docs/runbooks/observability.md#invoiceiqratelimited
+
+      - alert: InvoiceIQHoldSpike
+        expr: |
+          sum(increase(invoiceiq_invoice_transitions_total{to="HOLD"}[1h]))
+            / clamp_min(sum(increase(invoiceiq_invoice_transitions_total{to=~"PENDING_APPROVAL|HOLD|EXCEPTION"}[1h])), 1) > 0.5
+          and sum(increase(invoiceiq_invoice_transitions_total{to="HOLD"}[1h])) >= 10
+        labels:
+          severity: ticket
+        annotations:
+          summary: More than half of validated invoices went to HOLD in the last hour (injection campaign, duplicate flood, or a broken extractor).
+          runbook_url: docs/runbooks/observability.md#invoiceiqholdspike
+
+      - alert: InvoiceIQBankChangeBurst
+        expr: increase(invoiceiq_vendor_bank_changes_requested_total[1h]) > 5
+        labels:
+          severity: ticket
+        annotations:
+          summary: Unusually many vendor bank-detail changes in an hour; a classic payment-diversion pattern.
+          runbook_url: docs/runbooks/observability.md#invoiceiqbankchangeburst

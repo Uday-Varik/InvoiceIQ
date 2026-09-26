@@ -19,8 +19,8 @@ describe('core-api routes vs contract', () => {
     for (const r of IMPLEMENTED_ROUTES) expect(keys.has(r), r).toBe(true);
   });
 
-  it('every x-phase 0 to 3 operation is implemented, and nothing from a later phase', () => {
-    const due = ops.filter((o) => o.op['x-phase'] <= 3).map((o) => o.key).sort();
+  it('every x-phase 0 to 4 operation is implemented, and nothing from a later phase', () => {
+    const due = ops.filter((o) => o.op['x-phase'] <= 4).map((o) => o.key).sort();
     expect(due).toEqual([...IMPLEMENTED_ROUTES].sort());
   });
 });

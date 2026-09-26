@@ -20,7 +20,7 @@ CORE_SPEC: dict[str, Any] = yaml.safe_load((ROOT / "packages/contracts/openapi/c
 CATALOG: dict[str, Any] = json.loads((ROOT / "packages/contracts/catalog/reason-codes.json").read_text())
 
 
-IMPLEMENTED_PHASE = 1
+IMPLEMENTED_PHASE = 4
 
 
 def _implemented_ops(spec: dict[str, Any]) -> set[str]:

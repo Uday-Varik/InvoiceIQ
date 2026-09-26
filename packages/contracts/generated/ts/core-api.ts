@@ -19,6 +19,46 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/metrics": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Prometheus metrics
+         * @description Prometheus text exposition (version 0.0.4). Needs the scrape token when METRICS_TOKEN is set; in production without one it answers 404. Labels never carry tenant, user, vendor or invoice ids.
+         */
+        readonly get: operations["getMetrics"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/readyz": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Readiness probe
+         * @description 200 when Postgres answers and every migration this build ships is applied, else 503. ai-service is reported but never makes core-api unready, because it scales to zero and the outbox absorbs its cold start. Failure details never include server messages.
+         */
+        readonly get: operations["getReadiness"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/v1/audit/checkpoints": {
         readonly parameters: {
             readonly query?: never;
@@ -884,6 +924,26 @@ export type components = {
             readonly title: string;
             readonly type: string;
         };
+        readonly Readiness: {
+            readonly checks: {
+                readonly aiService: {
+                    /** @constant */
+                    readonly required: false;
+                } & components["schemas"]["ReadinessCheck"];
+                readonly database: components["schemas"]["ReadinessCheck"];
+                readonly migrations: {
+                    readonly applied?: number;
+                    readonly expected: number;
+                } & components["schemas"]["ReadinessCheck"];
+            };
+            /** @enum {string} */
+            readonly status: "ready" | "not_ready";
+        };
+        readonly ReadinessCheck: {
+            readonly detail?: string;
+            readonly latencyMs?: number;
+            readonly ok: boolean;
+        };
         /**
          * @description The 18-code reason catalog. Codes prefixed AI_ are AI-derived and HOLD-only.
          * @enum {string}
@@ -1035,6 +1095,58 @@ export interface operations {
             };
             readonly 429: components["responses"]["Problem"];
             readonly 503: components["responses"]["Problem"];
+        };
+    };
+    readonly getMetrics: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Current metrics */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "text/plain": string;
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 404: components["responses"]["Problem"];
+        };
+    };
+    readonly getReadiness: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Ready for traffic */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Readiness"];
+                };
+            };
+            readonly 429: components["responses"]["Problem"];
+            /** @description Not ready */
+            readonly 503: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Readiness"];
+                };
+            };
         };
     };
     readonly listAuditCheckpoints: {

@@ -10,11 +10,11 @@ bank-detail-change quarantine and a hash-chained audit ledger. Models help with
 extraction and risk signals, but every AI output is structurally limited to
 putting an invoice on HOLD.
 
-> Status: **Phase 3 (controls).** On top of Phase 2's extraction, review,
-> correction and export: tiered approvals with separation of duties, vendor
-> bank-change quarantine with four-eyes verification, payment runs confirmed
-> by a second person with a generated payment file, and Ed25519-signed audit
-> checkpoints. Live model calls and hosting come later.
+> Status: **Phase 4 (operations).** On top of Phase 3's controls: Prometheus
+> metrics, W3C tracing and JSON logs in both services, a readiness probe,
+> per-address rate limits, alert rules with a dashboard and runbook, and
+> Terraform for the Neon, Render and Vercel free tiers. The Terraform has not
+> been applied yet; live model calls come later.
 
 ## The problem
 
@@ -126,6 +126,22 @@ Same labels as above. Decisions in [ADR-0016](docs/adr/0016-phase-3-approvals-ba
 | 7 | Web pages for vendors, payment runs, audit checkpoints and approval progress | Verified-in-sandbox | `apps/web/components/payments.tsx` |
 | 8 | Smoke script covers two-person approval, a payment run and a checkpoint | Verified-in-sandbox | `scripts/smoke.sh` |
 
+## Phase 4 deliverables
+
+Same labels as above. Decisions in [ADR-0017](docs/adr/0017-phase-4-observability-terraform-hosting.md).
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | core-api metrics with bounded labels, token-protected `/metrics` | Verified-in-sandbox | `services/core-api/src/observability/catalog.ts` |
+| 2 | W3C trace context from upload through the outbox to ai-service, JSON logs | Verified-in-sandbox | `services/core-api/src/observability/trace.ts` |
+| 3 | `/readyz`: database reachable and every shipped migration applied | Verified-in-sandbox | `services/core-api/src/observability/readiness.ts` |
+| 4 | Per-address rate limits on writes and uploads, security headers | Verified-in-sandbox | `services/core-api/src/observability/rate-limit.ts` |
+| 5 | ai-service metrics, tracing and JSON logs | Verified-in-sandbox | `services/ai-service/src/ai_service/api/observability.py` |
+| 6 | App role login set by the migrator, refused if it could bypass RLS | Verified-in-sandbox | `services/core-api/src/db/app-role.ts` |
+| 7 | Alert rules with promtool tests, Grafana dashboard, runbook | Verified-in-sandbox | `infra/observability/alerts.yml` |
+| 8 | Terraform for Neon, Render and Vercel, validated against provider schemas | Verified-in-sandbox | `infra/terraform/versions.tf` |
+| 9 | Terraform apply and a live Grafana Cloud scrape (W-UNV: no hosting accounts) | Written-unverified | `infra/terraform/README.md` |
+
 ## Getting started
 
 ```bash
@@ -153,7 +169,7 @@ services/ai-service      FastAPI extraction and signals
 packages/contracts       OpenAPI specs, generated TS/Zod/Pydantic, reason catalog
 data/                    Synthetic labels, red-team taxonomy, splits, frozen sets
 evals/                   Evaluation harness (Phase 2)
-infra/                   Local DB bootstrap, hosting sketches (unverified)
+infra/                   Local DB bootstrap, Terraform for the free tiers, alerts and dashboard
 scripts/                 End-to-end smoke test
 docs/                    ADRs, C4, threat model, runbooks, domain model
 tests/guardrails         Cross-cutting drift and architecture tests
@@ -167,7 +183,7 @@ tests/guardrails         Cross-cutting drift and architecture tests
 | 1 | Persistence with RLS, queue and outbox, invoice intake, review queue UI |
 | 2 | Real extraction behind record/replay, evaluation harness on the frozen set |
 | 3 | Approvals workflow, payment runs, external anchoring of the audit chain (done) |
-| 4 | Hosting on serverless free tiers, Terraform, observability |
+| 4 | Hosting on serverless free tiers, Terraform, observability (done) |
 
 ## License
 
