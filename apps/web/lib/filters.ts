@@ -3,7 +3,8 @@ import { INVOICE_STATES } from './catalog';
 import { parseMoneyInput } from './money';
 
 /**
- * Dashboard filters as the person types them (amounts in major units), and
+ * Dashboard filters as the person types them (amounts in major units of the
+ * chosen currency, or two decimals when none is chosen), and
  * their translation into the API's query string (amounts in minor units).
  * The same query drives the list, the summary and the export links, so what
  * you see is exactly what you export.
@@ -31,8 +32,8 @@ export function validateFilters(f: DashboardFilters): FilterErrors {
   if (f.dateFrom && !DATE_RE.test(f.dateFrom)) errors.dateFrom = 'Use YYYY-MM-DD';
   if (f.dateTo && !DATE_RE.test(f.dateTo)) errors.dateTo = 'Use YYYY-MM-DD';
   if (!errors.dateFrom && !errors.dateTo && f.dateFrom && f.dateTo && f.dateFrom > f.dateTo) errors.dateTo = 'Must be on or after the start date';
-  const min = f.minTotal ? parseMoneyInput(f.minTotal) : undefined;
-  const max = f.maxTotal ? parseMoneyInput(f.maxTotal) : undefined;
+  const min = f.minTotal ? parseMoneyInput(f.minTotal, f.currency) : undefined;
+  const max = f.maxTotal ? parseMoneyInput(f.maxTotal, f.currency) : undefined;
   if (min && !min.ok) errors.minTotal = min.error;
   if (max && !max.ok) errors.maxTotal = max.error;
   if (min?.ok && max?.ok && BigInt(min.minor) > BigInt(max.minor)) errors.maxTotal = 'Must be at least the minimum';
@@ -53,7 +54,7 @@ export function filtersToQuery(f: DashboardFilters): string {
     ['maxTotal', 'maxTotalMinor'],
   ] as const) {
     if (!f[field] || errors[field]) continue;
-    const parsed = parseMoneyInput(f[field]);
+    const parsed = parseMoneyInput(f[field], f.currency);
     if (parsed.ok) p.set(param, parsed.minor);
   }
   return p.toString();

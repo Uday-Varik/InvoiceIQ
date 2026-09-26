@@ -184,6 +184,7 @@ def test_registry_refuses_duplicates_and_sorts_output() -> None:
 
 def test_service_metrics_names() -> None:
     assert ServiceMetrics().registry.names() == [
+        "invoiceiq_ai_document_text_total",
         "invoiceiq_ai_extractions_total",
         "invoiceiq_ai_http_request_duration_seconds",
         "invoiceiq_ai_http_requests_total",

@@ -335,7 +335,7 @@ describeDb('Phase 2 invoice API (real Postgres)', () => {
     it('switching to a currency the tenant does not enable is an EXCEPTION', async () => {
       const id = await upload();
       const inv = await get(id);
-      expect((await patch(id, { expectedVersion: inv.version, currency: 'JPY' })).json()).toMatchObject({
+      expect((await patch(id, { expectedVersion: inv.version, currency: 'CHF' })).json()).toMatchObject({
         state: 'EXCEPTION',
         reasons: ['VALIDATION_CURRENCY_UNSUPPORTED'],
       });

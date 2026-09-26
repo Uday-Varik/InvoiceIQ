@@ -182,7 +182,7 @@ class TransitionEvaluation(BaseModel):
 
 class Money(BaseModel):
     """
-    Integer minor units as a decimal string (never a float) plus ISO 4217 currency.
+    Integer minor units of the currency (ISO 4217 exponent, so cents for USD, yen for JPY, fils for BHD) as a decimal string, never a float, plus the ISO 4217 currency.
     """
 
     model_config = ConfigDict(

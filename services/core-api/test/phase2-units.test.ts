@@ -171,10 +171,10 @@ describe('export: formatMinor', () => {
     ['-1', '-0.01'],
     ['-123450', '-1234.50'],
     ['922337203685477580', '9223372036854775.80'],
-  ])('%s -> %s', (minor, expected) => expect(formatMinor(minor)).toBe(expected));
+  ])('%s -> %s', (minor, expected) => expect(formatMinor(minor, 'USD')).toBe(expected));
 
-  it('null is an empty cell', () => expect(formatMinor(null)).toBe(''));
-  it('refuses a non-integer', () => expect(() => formatMinor('1.5')).toThrow(RangeError));
+  it('null is an empty cell', () => expect(formatMinor(null, 'USD')).toBe(''));
+  it('refuses a non-integer', () => expect(() => formatMinor('1.5', 'USD')).toThrow(RangeError));
 });
 
 describe('export: rows and files', () => {

@@ -170,7 +170,7 @@ export function InvoiceReview({ id }: { id: string }) {
                 <ul className="small changes">
                   {Object.entries(e.changes).map(([field, c]) => (
                     <li key={field}>
-                      {CORRECTION_LABEL[field] ?? field}: {describeValue(field, c.from)} → {describeValue(field, c.to)}
+                      {CORRECTION_LABEL[field] ?? field}: {describeValue(field, c.from, invoice.total?.currency)} → {describeValue(field, c.to, invoice.total?.currency)}
                     </li>
                   ))}
                 </ul>
@@ -189,10 +189,10 @@ export function InvoiceReview({ id }: { id: string }) {
 
 const MONEY_FIELDS = new Set(['total', 'subtotal', 'tax']);
 
-function describeValue(field: string, v: unknown): string {
+function describeValue(field: string, v: unknown, currency?: string): string {
   if (v === null || v === undefined || v === '') return '(empty)';
   if (Array.isArray(v)) return `${v.length} line${v.length === 1 ? '' : 's'}`;
-  if (MONEY_FIELDS.has(field) && typeof v === 'string') return minorToInput(v);
+  if (MONEY_FIELDS.has(field) && typeof v === 'string') return minorToInput(v, currency);
   return String(v);
 }
 

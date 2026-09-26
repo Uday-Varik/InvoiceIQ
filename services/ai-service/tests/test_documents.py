@@ -68,8 +68,9 @@ def test_messy_pdf_uses_loose_patterns_with_lower_confidence() -> None:
     assert f.vendorName.confidence < 0.5, "a letterhead guess must not clear a hold threshold"
 
 
-def test_image_without_ocr_returns_unknown_fields() -> None:
-    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+def test_image_without_ocr_returns_unknown_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("ai_service.documents.shutil.which", lambda _name: None)
+    png = (DOCS / "scanned-invoice.png").read_bytes()
     result = extract_document(_request(png, "image/png"), HeuristicProvider())
     assert result.provider == "heuristic:no-text-layer"
     assert all(getattr(result.fields, n).value is None for n in type(result.fields).model_fields)

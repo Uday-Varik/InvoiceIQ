@@ -22,6 +22,7 @@ immutable once accepted; a reversal is a new ADR that supersedes the old one.
 | [0015](0015-phase-2-invoice-details-corrections-export.md) | Phase 2: line items in Postgres, edit-before-approve re-validates, filtered export | Accepted |
 | [0016](0016-phase-3-approvals-bank-changes-payment-runs-checkpoints.md) | Phase 3: tiered approvals, bank-change quarantine, payment runs, signed checkpoints | Accepted |
 | [0017](0017-phase-4-observability-terraform-hosting.md) | Phase 4: dependency-free observability, Terraform for the free-tier hosts, rate limits | Accepted |
+| [0018](0018-ocr-and-currency-exponents.md) | OCR with Tesseract for scans, and ISO 4217 exponents for every amount | Accepted |
 
 ## Writing a new ADR
 

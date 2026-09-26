@@ -59,3 +59,44 @@ MESSY_INVOICE_LINES = [
     "VAT 20%                         EUR 400.00",
     "Balance due                     EUR 2,400.00",
 ]
+
+SCANNED_INVOICE_LINES = [
+    "Kobe Precision Parts",
+    "Vendor: Kobe Precision Parts",
+    "Invoice Number: KP-7731",
+    "Date: 2026-03-20",
+    "Currency: JPY",
+    "",
+    "Bearings 6204    40    800    32,000",
+    "",
+    "Subtotal: 32,000",
+    "Tax: 3,200",
+    "Total: 35,200",
+]
+
+
+def image_pdf(jpeg: bytes, width: int, height: int) -> bytes:
+    """A PDF whose only page is a JPEG and which has no text layer: what a scanner produces."""
+    content = f"q 612 0 0 {612 * height // width} 0 {842 - 612 * height // width} cm /Im1 Do Q".encode()
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] "
+        b"/Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R >>",
+        f"<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB "
+        f"/BitsPerComponent 8 /Filter /DCTDecode /Length {len(jpeg)} >>\nstream\n".encode()
+        + jpeg
+        + b"\nendstream",
+        b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for i, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{i} 0 obj\n".encode() + body + b"\nendobj\n"
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    for off in offsets:
+        out += f"{off:010d} 00000 n \n".encode()
+    out += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return bytes(out)

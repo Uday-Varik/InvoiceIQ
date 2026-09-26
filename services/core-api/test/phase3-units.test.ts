@@ -572,6 +572,11 @@ describe('payment file', () => {
     expect(l).toHaveLength(4);
   });
 
+  it('writes a yen run in whole yen and a dinar run with three decimals', () => {
+    const amount = (currency: string) => lines(paymentFileCsv({ ...run, currency }, [item({ amount_minor: '35200' })]))[1]!.split(',')[PAYMENT_FILE_COLUMNS.indexOf('amount')];
+    expect([amount('JPY'), amount('BHD'), amount('USD')]).toEqual(['35200', '35.200', '352.00']);
+  });
+
   it('writes amounts as decimals and minor units', () => {
     const row = lines(paymentFileCsv(run, [item()]))[1]!.split(',');
     expect(row[PAYMENT_FILE_COLUMNS.indexOf('amount')]).toBe('1234.50');

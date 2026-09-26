@@ -123,6 +123,10 @@ past a cold start.
 2. ai-service logs: a provider outage shows as `provider_unavailable` in
    `invoiceiq_ai_extractions_total`.
 3. Invoices are not at risk: failed extraction retries, then holds.
+4. Scans are slower: OCR takes seconds per page. If
+   `invoiceiq_ai_document_text_total{source="none"}` climbs for images or
+   scanned PDFs, the OCR tools are missing from the image (ADR-0018) and those
+   invoices wait for a person to type them in.
 
 ### InvoiceIQSignatureFailures
 

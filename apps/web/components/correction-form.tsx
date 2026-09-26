@@ -2,6 +2,7 @@
 
 import { useRef, useState, type FormEvent } from 'react';
 import { ApiError, correctInvoice, idempotencyKey, type Invoice } from '../lib/api';
+import { minorToInput } from '../lib/money';
 import { arithmeticHint, buildCorrection, EMPTY_LINE, formFromInvoice, type CorrectionForm, type FormErrors, type LineForm } from '../lib/corrections';
 
 /**
@@ -19,6 +20,7 @@ export function CorrectionFormPanel({ invoice, onSaved, onCancel }: { invoice: I
   const key = useRef(idempotencyKey());
 
   const hint = arithmeticHint(form);
+  const zero = minorToInput('0', form.currency);
   const set = <K extends keyof CorrectionForm>(k: K, v: CorrectionForm[K]) => setForm((f) => ({ ...f, [k]: v }));
   const setLine = (i: number, patch: Partial<LineForm>) => set('lines', form.lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
@@ -69,9 +71,9 @@ export function CorrectionFormPanel({ invoice, onSaved, onCancel }: { invoice: I
         {input('invoiceDate', 'Invoice date', { type: 'date' })}
         {input('dueDate', 'Due date', { type: 'date' })}
         {input('currency', 'Currency', { maxLength: 3, placeholder: 'USD' })}
-        {input('total', 'Total', { inputMode: 'decimal', placeholder: '0.00' })}
-        {input('subtotal', 'Subtotal (optional)', { inputMode: 'decimal', placeholder: '0.00' })}
-        {input('tax', 'Tax (optional)', { inputMode: 'decimal', placeholder: '0.00' })}
+        {input('total', 'Total', { inputMode: 'decimal', placeholder: zero })}
+        {input('subtotal', 'Subtotal (optional)', { inputMode: 'decimal', placeholder: zero })}
+        {input('tax', 'Tax (optional)', { inputMode: 'decimal', placeholder: zero })}
       </div>
 
       <h3>Line items</h3>

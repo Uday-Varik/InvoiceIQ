@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from ai_service.extraction import MAX_LINE_ITEMS, extract, extract_document
+from ai_service.extraction import MAX_LINE_ITEMS, DocumentError, extract, extract_document
 from ai_service.providers import Completion, HeuristicProvider
 from invoiceiq_contracts.ai_service import DocumentExtractionRequest, ExtractionRequest, ExtractionResult
 
@@ -339,7 +339,7 @@ def test_sample_pdf_lines_sum_to_the_total() -> None:
     assert sum(int(i.amountMinor or 0) for i in result.lineItems) == int(result.fields.totalMinor.value or 0)
 
 
-def test_image_has_no_lines() -> None:
+def test_corrupt_image_is_unreadable_not_guessed() -> None:
     data = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
     req = DocumentExtractionRequest.model_validate(
         {
@@ -349,9 +349,9 @@ def test_image_has_no_lines() -> None:
             "contentBase64": base64.b64encode(data).decode(),
         }
     )
-    result = extract_document(req, HeuristicProvider())
-    assert result.lineItems == []
-    assert result.fields.taxMinor.value is None
+    # core-api holds an unreadable document for manual review.
+    with pytest.raises(DocumentError, match="not a PNG"):
+        extract_document(req, HeuristicProvider())
 
 
 # ---- provider output hygiene ------------------------------------------------

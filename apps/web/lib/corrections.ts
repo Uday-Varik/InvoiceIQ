@@ -36,21 +36,25 @@ export interface CorrectionForm {
 
 export type FormErrors = Partial<Record<Exclude<keyof CorrectionForm, 'lines'>, string>> & { lines?: Record<number, string> };
 
+function currencyOf(inv: Invoice): string {
+  return inv.total?.currency ?? inv.extraction?.fields.currency.value ?? '';
+}
+
 export function formFromInvoice(inv: Invoice): CorrectionForm {
   return {
     vendorName: inv.vendorName ?? '',
     invoiceNumber: inv.invoiceNumber ?? '',
     invoiceDate: inv.invoiceDate ?? '',
     dueDate: inv.dueDate ?? '',
-    currency: inv.total?.currency ?? inv.extraction?.fields.currency.value ?? '',
-    total: minorToInput(inv.total?.amountMinor),
-    subtotal: minorToInput(inv.subtotal?.amountMinor),
-    tax: minorToInput(inv.tax?.amountMinor),
+    currency: currencyOf(inv),
+    total: minorToInput(inv.total?.amountMinor, currencyOf(inv)),
+    subtotal: minorToInput(inv.subtotal?.amountMinor, currencyOf(inv)),
+    tax: minorToInput(inv.tax?.amountMinor, currencyOf(inv)),
     lines: (inv.lineItems ?? []).map((l) => ({
       description: l.description,
       quantity: l.quantity ?? '',
-      unitPrice: minorToInput(l.unitPriceMinor),
-      amount: minorToInput(l.amountMinor),
+      unitPrice: minorToInput(l.unitPriceMinor, currencyOf(inv)),
+      amount: minorToInput(l.amountMinor, currencyOf(inv)),
     })),
     comment: '',
   };
@@ -60,7 +64,7 @@ export const EMPTY_LINE: LineForm = { description: '', quantity: '', unitPrice: 
 
 type LineBody = NonNullable<InvoiceCorrection['lineItems']>[number];
 
-function lineBody(l: LineForm, i: number, errors: Record<number, string>): LineBody | undefined {
+function lineBody(l: LineForm, i: number, errors: Record<number, string>, currency: string): LineBody | undefined {
   const description = l.description.trim();
   if (!description) {
     errors[i] = 'Every line needs a description';
@@ -80,7 +84,7 @@ function lineBody(l: LineForm, i: number, errors: Record<number, string>): LineB
     ['amount', 'amountMinor'],
   ] as const) {
     if (!l[field].trim()) continue;
-    const m = parseMoneyInput(l[field]);
+    const m = parseMoneyInput(l[field], currency);
     if (!m.ok) {
       errors[i] = m.error;
       return undefined;
@@ -146,7 +150,7 @@ export function buildCorrection(inv: Invoice, form: CorrectionForm): BuildResult
   if (!/^[A-Z]{3}$/.test(currency)) errors.currency = 'A 3-letter code like USD';
   else set('currency', 'currency', currency, inv.total?.currency);
 
-  const total = parseMoneyInput(form.total);
+  const total = parseMoneyInput(form.total, currency);
   if (!total.ok) errors.total = total.error;
   else set('totalMinor', 'total', total.minor, inv.total?.amountMinor);
 
@@ -158,13 +162,13 @@ export function buildCorrection(inv: Invoice, form: CorrectionForm): BuildResult
       set(key, field, null, before);
       continue;
     }
-    const m = parseMoneyInput(form[field]);
+    const m = parseMoneyInput(form[field], currency);
     if (!m.ok) errors[field] = m.error;
     else set(key, field, m.minor, before);
   }
 
   const lineErrors: Record<number, string> = {};
-  const lines = form.lines.map((l, i) => lineBody(l, i, lineErrors));
+  const lines = form.lines.map((l, i) => lineBody(l, i, lineErrors, currency));
   if (Object.keys(lineErrors).length > 0) errors.lines = lineErrors;
   else if (form.lines.length > 200) errors.lines = { 200: 'At most 200 lines' };
   else if (!sameLines(lines as LineBody[], inv.lineItems ?? [])) {
@@ -178,10 +182,10 @@ export function buildCorrection(inv: Invoice, form: CorrectionForm): BuildResult
 }
 
 /** Sum of the line amounts in minor units, or undefined when any line has no amount. */
-export function linesSum(lines: readonly LineForm[]): string | undefined {
+export function linesSum(lines: readonly LineForm[], currency?: string): string | undefined {
   let sum = 0n;
   for (const l of lines) {
-    const m = parseMoneyInput(l.amount);
+    const m = parseMoneyInput(l.amount, currency);
     if (!m.ok) return undefined;
     sum += BigInt(m.minor);
   }
@@ -190,19 +194,20 @@ export function linesSum(lines: readonly LineForm[]): string | undefined {
 
 /** What the form's numbers imply, for a live "does it add up" hint. */
 export function arithmeticHint(form: CorrectionForm): string | undefined {
-  const total = parseMoneyInput(form.total);
+  const cur = form.currency;
+  const total = parseMoneyInput(form.total, cur);
   if (!total.ok) return undefined;
-  const tax = form.tax.trim() ? parseMoneyInput(form.tax) : { ok: true as const, minor: '0' };
+  const tax = form.tax.trim() ? parseMoneyInput(form.tax, cur) : { ok: true as const, minor: '0' };
   if (!tax.ok) return undefined;
   if (form.subtotal.trim()) {
-    const sub = parseMoneyInput(form.subtotal);
+    const sub = parseMoneyInput(form.subtotal, cur);
     if (sub.ok && BigInt(sub.minor) + BigInt(tax.minor) !== BigInt(total.minor)) {
-      return `Subtotal + tax is ${minorToInput((BigInt(sub.minor) + BigInt(tax.minor)).toString())}, not ${minorToInput(total.minor)}`;
+      return `Subtotal + tax is ${minorToInput((BigInt(sub.minor) + BigInt(tax.minor)).toString(), cur)}, not ${minorToInput(total.minor, cur)}`;
     }
   }
-  const sum = form.lines.length > 0 ? linesSum(form.lines) : undefined;
+  const sum = form.lines.length > 0 ? linesSum(form.lines, cur) : undefined;
   if (sum !== undefined && BigInt(sum) + BigInt(tax.minor) !== BigInt(total.minor)) {
-    return `Lines + tax is ${minorToInput((BigInt(sum) + BigInt(tax.minor)).toString())}, not ${minorToInput(total.minor)}`;
+    return `Lines + tax is ${minorToInput((BigInt(sum) + BigInt(tax.minor)).toString(), cur)}, not ${minorToInput(total.minor, cur)}`;
   }
   return undefined;
 }

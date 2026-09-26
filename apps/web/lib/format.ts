@@ -1,11 +1,12 @@
 import type { InvoiceState } from './api';
+import { minorToInput } from './money';
 
-/** Format integer minor units without ever going through a float. Assumes 2 decimals (no JPY-style currencies yet). */
+/** Format integer minor units in the currency's own decimal places, never through a float. */
 export function formatMoney(amountMinor: string, currency: string): string {
-  const neg = amountMinor.startsWith('-');
-  const digits = (neg ? amountMinor.slice(1) : amountMinor).padStart(3, '0');
-  const whole = digits.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return `${neg ? '-' : ''}${whole}.${digits.slice(-2)} ${currency}`;
+  const plain = minorToInput(amountMinor, currency);
+  const [whole = '', frac] = plain.split('.');
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${frac === undefined ? grouped : `${grouped}.${frac}`} ${currency}`;
 }
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low';

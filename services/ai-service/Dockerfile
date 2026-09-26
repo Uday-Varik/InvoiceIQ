@@ -1,5 +1,6 @@
 # ai-service: multi-stage build, non-root runtime, health check. No database
-# driver is installed and no DATABASE_URL is passed (ADR-0007).
+# driver is installed and no DATABASE_URL is passed (ADR-0007). Tesseract and
+# Poppler come from Debian's archive for OCR of scans (ADR-0018).
 # Build from the repo root: docker build -f services/ai-service/Dockerfile .
 ARG PYTHON_IMAGE=python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9
 
@@ -18,7 +19,10 @@ COPY services/ai-service/src services/ai-service/src
 RUN uv sync --frozen --no-dev --package invoiceiq-ai-service --no-editable
 
 FROM ${PYTHON_IMAGE} AS runtime
-RUN useradd --system --uid 10001 --no-create-home app
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends tesseract-ocr tesseract-ocr-eng poppler-utils \
+  && rm -rf /var/lib/apt/lists/* \
+  && useradd --system --uid 10001 --no-create-home app
 COPY --from=build --chown=app:app /app/.venv /app/.venv
 ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 PORT=8001
 WORKDIR /app
