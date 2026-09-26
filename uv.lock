@@ -13,6 +13,7 @@ members = [
     "invoiceiq-ai-service",
     "invoiceiq-contracts",
     "invoiceiq-data",
+    "invoiceiq-evals",
 ]
 
 [manifest.dependency-groups]
@@ -476,6 +477,23 @@ requires-dist = [
     { name = "invoiceiq-contracts", editable = "packages/contracts" },
     { name = "pydantic", specifier = "==2.13.5" },
     { name = "pyyaml", specifier = "==6.0.3" },
+]
+
+[[package]]
+name = "invoiceiq-evals"
+version = "0.1.0"
+source = { editable = "evals" }
+dependencies = [
+    { name = "invoiceiq-ai-service" },
+    { name = "invoiceiq-contracts" },
+    { name = "invoiceiq-data" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "invoiceiq-ai-service", editable = "services/ai-service" },
+    { name = "invoiceiq-contracts", editable = "packages/contracts" },
+    { name = "invoiceiq-data", editable = "data" },
 ]
 
 [[package]]

@@ -23,6 +23,7 @@ immutable once accepted; a reversal is a new ADR that supersedes the old one.
 | [0016](0016-phase-3-approvals-bank-changes-payment-runs-checkpoints.md) | Phase 3: tiered approvals, bank-change quarantine, payment runs, signed checkpoints | Accepted |
 | [0017](0017-phase-4-observability-terraform-hosting.md) | Phase 4: dependency-free observability, Terraform for the free-tier hosts, rate limits | Accepted |
 | [0018](0018-ocr-and-currency-exponents.md) | OCR with Tesseract for scans, and ISO 4217 exponents for every amount | Accepted |
+| [0019](0019-offline-eval-harness.md) | Offline evaluation harness for AI signals | Accepted |
 
 ## Writing a new ADR
 

@@ -1,0 +1,25 @@
+[project]
+name = "invoiceiq-evals"
+version = "0.1.0"
+description = "Offline evaluation harness: scores extraction and signals against the frozen test set"
+requires-python = ">=3.11"
+dependencies = [
+  "invoiceiq-contracts",
+  "invoiceiq-data",
+  "invoiceiq-ai-service",
+]
+
+[project.scripts]
+invoiceiq-evals = "invoiceiq_evals.cli:main"
+
+[tool.uv.sources]
+invoiceiq-contracts = { workspace = true }
+invoiceiq-data = { workspace = true }
+invoiceiq-ai-service = { workspace = true }
+
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/invoiceiq_evals"]
