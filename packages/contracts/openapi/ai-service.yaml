@@ -45,6 +45,28 @@ paths:
           $ref: '#/components/responses/Problem'
         '503':
           $ref: '#/components/responses/Problem'
+  /metrics:
+    get:
+      operationId: getMetrics
+      summary: Prometheus metrics
+      description: >-
+        Prometheus text exposition (version 0.0.4). With METRICS_TOKEN set it
+        answers that bearer token; without one it needs a request signature
+        like every other route.
+      tags: [health]
+      security:
+        - metricsToken: []
+        - requestSignature: []
+      x-phase: 4
+      responses:
+        '200':
+          description: Current metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Problem'
   /v1/extract:
     post:
       operationId: extractInvoice
@@ -132,6 +154,10 @@ components:
         HMAC-SHA256 request signature from core-api:
         `v1=hex(hmac(secret, timestamp + "." + METHOD + "." + path + "." + hex(sha256(body))))`,
         with the Unix timestamp in `X-IIQ-Timestamp`. Requests older than 300 seconds are refused.
+    metricsToken:
+      type: http
+      scheme: bearer
+      description: The METRICS_TOKEN value; only /metrics accepts it.
   responses:
     Problem:
       description: RFC 9457 problem details

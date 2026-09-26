@@ -1,0 +1,10 @@
+# Rename to backend.tf to keep state in HCP Terraform (free tier). State holds
+# generated secrets, so never commit a terraform.tfstate file.
+terraform {
+  cloud {
+    organization = "your-org"
+    workspaces {
+      name = "invoiceiq"
+    }
+  }
+}

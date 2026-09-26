@@ -52,6 +52,56 @@ paths:
           $ref: '#/components/responses/Problem'
         '503':
           $ref: '#/components/responses/Problem'
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Readiness probe
+      description: >-
+        200 when Postgres answers and every migration this build ships is
+        applied, else 503. ai-service is reported but never makes core-api
+        unready, because it scales to zero and the outbox absorbs its cold
+        start. Failure details never include server messages.
+      tags: [health]
+      security: []
+      x-phase: 4
+      responses:
+        '200':
+          description: Ready for traffic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Readiness'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '503':
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Readiness'
+  /metrics:
+    get:
+      operationId: getMetrics
+      summary: Prometheus metrics
+      description: >-
+        Prometheus text exposition (version 0.0.4). Needs the scrape token when
+        METRICS_TOKEN is set; in production without one it answers 404. Labels
+        never carry tenant, user, vendor or invoice ids.
+      tags: [health]
+      security:
+        - metricsToken: []
+      x-phase: 4
+      responses:
+        '200':
+          description: Current metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
   /v1/lifecycle/states:
     get:
       operationId: listLifecycleStates
@@ -901,6 +951,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    metricsToken:
+      type: http
+      scheme: bearer
+      description: The METRICS_TOKEN value; only /metrics accepts it.
   parameters:
     Search:
       name: q
@@ -996,6 +1050,54 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    Readiness:
+      type: object
+      additionalProperties: false
+      required: [status, checks]
+      properties:
+        status:
+          type: string
+          enum: [ready, not_ready]
+        checks:
+          type: object
+          additionalProperties: false
+          required: [database, migrations, aiService]
+          properties:
+            database:
+              $ref: '#/components/schemas/ReadinessCheck'
+            migrations:
+              allOf:
+                - $ref: '#/components/schemas/ReadinessCheck'
+              type: object
+              required: [expected]
+              properties:
+                applied:
+                  type: integer
+                  minimum: 0
+                expected:
+                  type: integer
+                  minimum: 0
+            aiService:
+              allOf:
+                - $ref: '#/components/schemas/ReadinessCheck'
+              type: object
+              required: [required]
+              properties:
+                required:
+                  type: boolean
+                  const: false
+    ReadinessCheck:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+        latencyMs:
+          type: integer
+          minimum: 0
+        detail:
+          type: string
+          maxLength: 200
     Health:
       type: object
       additionalProperties: false

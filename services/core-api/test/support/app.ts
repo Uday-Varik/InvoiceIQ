@@ -5,7 +5,8 @@ import type { Authenticator } from '../../src/auth/auth.js';
 import { createPool, type Db } from '../../src/db/pool.js';
 import { buildApp } from '../../src/http/app.js';
 import type { OutboxWorker } from '../../src/outbox/worker.js';
-import { createWorker } from '../../src/runtime.js';
+import type { CoreMetrics } from '../../src/observability/catalog.js';
+import { createWorker, outboxCollector } from '../../src/runtime.js';
 import { STUB_SECRET, type AiStub } from './ai-stub.js';
 
 export interface Harness {
@@ -16,12 +17,32 @@ export interface Harness {
 }
 
 /** The real app and worker on a real database; only ai-service is a (signed-HTTP) stub. */
-export function harness(appUrl: string, ai: AiStub, opts: { auth?: Authenticator; maxAttempts?: number } = {}): Harness {
+export function harness(appUrl: string, ai: AiStub, opts: { auth?: Authenticator; maxAttempts?: number; metrics?: CoreMetrics } = {}): Harness {
   const db = createPool(appUrl);
-  const client = httpAiClient({ baseUrl: ai.url, signingSecret: STUB_SECRET, timeoutMs: 5_000 });
-  const worker = createWorker(db, client, { maxAttempts: opts.maxAttempts ?? 3 });
+  const m = opts.metrics;
+  const client = httpAiClient({
+    baseUrl: ai.url,
+    signingSecret: STUB_SECRET,
+    timeoutMs: 5_000,
+    ...(m
+      ? {
+          observe: (operation, outcome, seconds) => {
+            m.aiRequests.inc({ operation, outcome });
+            m.aiDuration.observe(seconds, { operation });
+          },
+        }
+      : {}),
+  });
+  const worker = createWorker(db, client, { maxAttempts: opts.maxAttempts ?? 3, ...(m ? { metrics: m } : {}) });
+  if (m) m.registry.addCollector(outboxCollector(db, m));
   // No kick: tests drain explicitly so each assertion sees a settled state.
-  const app = buildApp({ ...(opts.auth ? { auth: opts.auth } : {}), deps: { db }, maxUploadBytes: 64 * 1024 });
+  const app = buildApp({
+    ...(opts.auth ? { auth: opts.auth } : {}),
+    deps: { db },
+    maxUploadBytes: 64 * 1024,
+    ...(m ? { metrics: m } : {}),
+    aiPing: () => client.ping?.() ?? Promise.resolve(false),
+  });
   return {
     app,
     db,

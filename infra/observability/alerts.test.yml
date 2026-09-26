@@ -1,0 +1,153 @@
+# promtool unit tests for alerts.yml: `promtool test rules alerts.test.yml`.
+# Each case feeds synthetic series and states exactly which alerts fire.
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: 5xx above 5% for 10 minutes pages; a quiet service does not
+    interval: 1m
+    input_series:
+      - series: 'invoiceiq_http_requests_total{job="invoiceiq-core-api",method="GET",route="/v1/invoices",status="2xx"}'
+        values: '0+90x40'
+      - series: 'invoiceiq_http_requests_total{job="invoiceiq-core-api",method="GET",route="/v1/invoices",status="5xx"}'
+        values: '0+10x40'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: InvoiceIQHighErrorRate
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: InvoiceIQHighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: More than 5% of core-api requests are failing with 5xx.
+              runbook_url: docs/runbooks/observability.md#invoiceiqhigherrorrate
+
+  - name: an idle service with one stray 5xx does not page
+    interval: 1m
+    input_series:
+      - series: 'invoiceiq_http_requests_total{job="invoiceiq-core-api",method="GET",route="/healthz",status="5xx"}'
+        values: '0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 29m
+        alertname: InvoiceIQHighErrorRate
+        exp_alerts: []
+
+  - name: a stuck outbox pages after 10 minutes over 15 minutes old
+    interval: 1m
+    input_series:
+      - series: 'invoiceiq_outbox_oldest_pending_age_seconds{job="invoiceiq-core-api"}'
+        values: '0+60x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: InvoiceIQOutboxBacklog
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: InvoiceIQOutboxBacklog
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              job: invoiceiq-core-api
+            exp_annotations:
+              summary: The oldest outbox event has waited more than 15 minutes; invoices are not being extracted.
+              runbook_url: docs/runbooks/observability.md#invoiceiqoutboxbacklog
+
+  - name: one dead-lettered extraction opens a ticket
+    interval: 1m
+    input_series:
+      - series: 'invoiceiq_outbox_events_total{job="invoiceiq-core-api",topic="invoice.received",outcome="dead"}'
+        values: '0 0 0 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: InvoiceIQOutboxDeadLetters
+        exp_alerts: []
+      - eval_time: 9m
+        alertname: InvoiceIQOutboxDeadLetters
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+              job: invoiceiq-core-api
+              topic: invoice.received
+              outcome: dead
+            exp_annotations:
+              summary: Outbox events exhausted their retries; affected invoices are on HOLD for manual review.
+              runbook_url: docs/runbooks/observability.md#invoiceiqoutboxdeadletters
+
+  - name: a burst of bank-detail changes is a fraud signal
+    interval: 5m
+    input_series:
+      - series: 'invoiceiq_vendor_bank_changes_requested_total{job="invoiceiq-core-api"}'
+        values: '0 1 2 3 4 5 6 7 8 9 10 11 12'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: InvoiceIQBankChangeBurst
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: InvoiceIQBankChangeBurst
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+              job: invoiceiq-core-api
+            exp_annotations:
+              summary: Unusually many vendor bank-detail changes in an hour; a classic payment-diversion pattern.
+              runbook_url: docs/runbooks/observability.md#invoiceiqbankchangeburst
+
+  - name: most validated invoices landing on HOLD is flagged, a few holds are not
+    interval: 5m
+    input_series:
+      - series: 'invoiceiq_invoice_transitions_total{job="invoiceiq-core-api",to="HOLD"}'
+        values: '0+2x12'
+      - series: 'invoiceiq_invoice_transitions_total{job="invoiceiq-core-api",to="PENDING_APPROVAL"}'
+        values: '0+1x12'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: InvoiceIQHoldSpike
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: InvoiceIQHoldSpike
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+            exp_annotations:
+              summary: More than half of validated invoices went to HOLD in the last hour (injection campaign, duplicate flood, or a broken extractor).
+              runbook_url: docs/runbooks/observability.md#invoiceiqholdspike
+
+  - name: ai-service failing most calls opens a ticket
+    interval: 1m
+    input_series:
+      - series: 'invoiceiq_ai_requests_total{job="invoiceiq-core-api",operation="extract_document",outcome="unavailable"}'
+        values: '0+3x40'
+      - series: 'invoiceiq_ai_requests_total{job="invoiceiq-core-api",operation="extract_document",outcome="ok"}'
+        values: '0+1x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: InvoiceIQAiServiceUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+            exp_annotations:
+              summary: More than half of ai-service calls fail as unavailable (beyond a cold start).
+              runbook_url: docs/runbooks/observability.md#invoiceiqaiserviceunavailable
+
+  - name: repeated not_ready answers page
+    interval: 1m
+    input_series:
+      - series: 'invoiceiq_readiness_checks_total{job="invoiceiq-core-api",result="not_ready"}'
+        values: '0 0 1 2 3 4 5 6 7 8 9 10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: InvoiceIQNotReady
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: InvoiceIQNotReady
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              job: invoiceiq-core-api
+              result: not_ready
+            exp_annotations:
+              summary: core-api keeps answering /readyz with not_ready (database or migrations).
+              runbook_url: docs/runbooks/observability.md#invoiceiqnotready

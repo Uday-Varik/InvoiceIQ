@@ -36,6 +36,7 @@ services:
       dockerfile: services/ai-service/Dockerfile
     environment:
       AI_SIGNING_SECRET: local-only-signing-secret-do-not-deploy
+      METRICS_TOKEN: local-only-metrics-token-do-not-deploy
     ports:
       - '8001:8001'
 
@@ -45,11 +46,16 @@ services:
       context: .
       dockerfile: services/core-api/Dockerfile
     environment:
-      DATABASE_URL: postgres://invoiceiq_app:invoiceiq-local-only@db:5432/invoiceiq
+      DATABASE_URL: postgres://invoiceiq_app:invoiceiq-local-only-app-password@db:5432/invoiceiq
       MIGRATION_DATABASE_URL: postgres://invoiceiq:invoiceiq-local-only@db:5432/invoiceiq
       AUTH_MODE: demo
       AI_SERVICE_URL: http://ai-service:8001
       AI_SIGNING_SECRET: local-only-signing-secret-do-not-deploy
+      METRICS_TOKEN: local-only-metrics-token-do-not-deploy
+      # Exercise the boot-time app-role login step the hosted stack relies on.
+      APP_DB_PASSWORD: invoiceiq-local-only-app-password
+      # Nothing sits in front of core-api locally.
+      TRUST_PROXY_HOPS: '0'
     ports:
       - '3001:3001'
     depends_on:

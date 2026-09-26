@@ -1,5 +1,6 @@
 import { createHash, createHmac } from 'node:crypto';
 import { z } from 'zod';
+import { outgoingTraceparent } from '../observability/trace.js';
 
 /**
  * Signed HTTP client for ai-service. ai-service is advisory: nothing it returns
@@ -71,7 +72,12 @@ export interface AiClient {
   signals(req: { extraction: ExtractionResult; extractionConfidenceHoldBelow: number }): Promise<SignalResponse>;
   /** Fire a health check so a scaled-to-zero ai-service starts booting early. Never throws. */
   wake(): Promise<void>;
+  /** Whether ai-service answers its health check right now. Never throws. */
+  ping?(): Promise<boolean>;
 }
+
+export type AiOperation = 'extract_document' | 'signals';
+export type AiOutcome = 'ok' | 'unavailable' | 'rejected';
 
 /** Network failure, timeout or 5xx: worth retrying later (a cold start looks like this). */
 export class AiUnavailableError extends Error {
@@ -101,6 +107,8 @@ export interface HttpAiClientOptions {
   readonly timeoutMs?: number;
   readonly fetch?: typeof fetch;
   readonly now?: () => number;
+  /** Told about every call once its outcome is known (metrics). */
+  readonly observe?: (operation: AiOperation, outcome: AiOutcome, seconds: number) => void;
 }
 
 export function httpAiClient(opts: HttpAiClientOptions): AiClient {
@@ -109,8 +117,21 @@ export function httpAiClient(opts: HttpAiClientOptions): AiClient {
   const timeoutMs = opts.timeoutMs ?? 60_000;
   const now = opts.now ?? (() => Math.floor(Date.now() / 1000));
 
-  async function post<T>(path: string, payload: unknown, schema: z.ZodType<T>): Promise<T> {
+  async function post<T>(operation: AiOperation, path: string, payload: unknown, schema: z.ZodType<T>): Promise<T> {
+    const started = performance.now();
+    try {
+      const result = await call(path, payload, schema);
+      opts.observe?.(operation, 'ok', (performance.now() - started) / 1000);
+      return result;
+    } catch (err) {
+      opts.observe?.(operation, err instanceof AiRejectedError ? 'rejected' : 'unavailable', (performance.now() - started) / 1000);
+      throw err;
+    }
+  }
+
+  async function call<T>(path: string, payload: unknown, schema: z.ZodType<T>): Promise<T> {
     const body = JSON.stringify(payload);
+    const traceparent = outgoingTraceparent();
     const ts = now();
     let res: Response;
     try {
@@ -120,6 +141,7 @@ export function httpAiClient(opts: HttpAiClientOptions): AiClient {
           'content-type': 'application/json',
           'x-iiq-timestamp': String(ts),
           'x-iiq-signature': signRequest(opts.signingSecret, ts, 'POST', path, body),
+          ...(traceparent ? { traceparent } : {}),
         },
         body,
         signal: AbortSignal.timeout(timeoutMs),
@@ -144,6 +166,7 @@ export function httpAiClient(opts: HttpAiClientOptions): AiClient {
   return {
     extractDocument: (req) =>
       post(
+        'extract_document',
         '/v1/extract/document',
         {
           tenantId: req.tenantId,
@@ -153,12 +176,20 @@ export function httpAiClient(opts: HttpAiClientOptions): AiClient {
         },
         ExtractionResultSchema,
       ),
-    signals: (req) => post('/v1/signals', req, SignalResponseSchema),
+    signals: (req) => post('signals', '/v1/signals', req, SignalResponseSchema),
     async wake() {
       try {
         await doFetch(`${base}/healthz`, { signal: AbortSignal.timeout(timeoutMs) });
       } catch {
         // Waking is best-effort; the outbox retries real calls.
+      }
+    },
+    async ping() {
+      try {
+        const res = await doFetch(`${base}/healthz`, { signal: AbortSignal.timeout(Math.min(timeoutMs, 2_000)) });
+        return res.ok;
+      } catch {
+        return false;
       }
     },
   };

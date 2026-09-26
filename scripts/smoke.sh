@@ -8,6 +8,7 @@
 # Separation of duties needs distinct people. In demo auth mode the script uses
 # the demo personas; with SMOKE_TOKEN (uploader) also set SMOKE_MANAGER_TOKEN
 # (ap_manager, approves and assembles) and SMOKE_CONTROLLER_TOKEN (confirms).
+# SMOKE_METRICS_TOKEN, when set, also checks /metrics after the flow.
 set -euo pipefail
 
 BASE="${1:-http://localhost:3001}"
@@ -31,13 +32,22 @@ for i in $(seq 1 60); do
   sleep 3
 done
 
+say "checking readiness (database and migrations)"
+READY="$(curl -fsS "${BASE}/readyz")" || fail "/readyz is not ready: $(curl -sS "${BASE}/readyz")"
+jq -c '{status, migrations: .checks.migrations}' <<<"$READY"
+
 # A unique trailer gives unique bytes, so reruns never hit the duplicate-document check.
 TMP="$(mktemp)"; trap 'rm -f "$TMP"' EXIT
 cat "$PDF" > "$TMP"; printf '\n%% smoke %s\n' "$(date +%s%N)" >> "$TMP"
 
-say "uploading the sample invoice"
-INVOICE="$(curl -fsS "${AUTH[@]}" -H "idempotency-key: smoke-$(date +%s%N)" \
+say "uploading the sample invoice (with a trace id to follow)"
+TRACE_ID="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+HEADERS="$(mktemp)"; trap 'rm -f "$TMP" "$HEADERS"' EXIT
+INVOICE="$(curl -fsS -D "$HEADERS" "${AUTH[@]}" -H "idempotency-key: smoke-$(date +%s%N)" \
+  -H "traceparent: 00-${TRACE_ID}-00f067aa0ba902b7-01" \
   -F "file=@${TMP};filename=sample-invoice.pdf;type=application/pdf" "${BASE}/v1/invoices")"
+grep -qi "^x-trace-id: ${TRACE_ID}" "$HEADERS" || fail "core-api did not continue the caller's trace"
+echo "trace ${TRACE_ID}"
 ID="$(jq -r .id <<<"$INVOICE")"
 echo "invoice ${ID} is $(jq -r .state <<<"$INVOICE")"
 
@@ -100,5 +110,13 @@ say "verifying the audit chain"
 VERIFY="$(curl -fsS "${AUTH[@]}" "${BASE}/v1/audit/verify")"
 echo "$VERIFY"
 [[ "$(jq -r .ok <<<"$VERIFY")" == true ]] || fail "audit chain does not verify"
+
+if [[ -n "${SMOKE_METRICS_TOKEN:-}" ]]; then
+  say "checking /metrics saw the flow"
+  METRICS="$(curl -fsS -H "authorization: Bearer ${SMOKE_METRICS_TOKEN}" "${BASE}/metrics")"
+  grep -q '^invoiceiq_invoice_transitions_total{to="PAID"} ' <<<"$METRICS" || fail "no PAID transition in /metrics"
+  grep -q '^invoiceiq_ai_requests_total{operation="extract_document",outcome="ok"} ' <<<"$METRICS" || fail "no ai-service call in /metrics"
+  grep -E '^invoiceiq_outbox_(pending|dead) ' <<<"$METRICS"
+fi
 
 say "smoke passed"

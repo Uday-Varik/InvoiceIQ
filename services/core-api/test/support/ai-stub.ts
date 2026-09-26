@@ -35,7 +35,7 @@ export type StubMode =
  */
 export class AiStub {
   mode: StubMode = { kind: 'fields', fields: GOOD_FIELDS };
-  readonly calls: Array<{ path: string; signed: boolean }> = [];
+  readonly calls: Array<{ path: string; signed: boolean; traceparent?: string }> = [];
   private server: Server | undefined;
   url = '';
 
@@ -48,7 +48,8 @@ export class AiStub {
         const path = req.url ?? '/';
         const ts = Number(req.headers['x-iiq-timestamp']);
         const signed = req.headers['x-iiq-signature'] === signRequest(STUB_SECRET, ts, req.method ?? 'GET', path, body);
-        this.calls.push({ path, signed });
+        const tp = req.headers['traceparent'];
+        this.calls.push({ path, signed, ...(typeof tp === 'string' ? { traceparent: tp } : {}) });
         const send = (status: number, payload: unknown) => {
           res.writeHead(status, { 'content-type': 'application/json' });
           res.end(JSON.stringify(payload));

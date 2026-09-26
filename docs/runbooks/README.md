@@ -7,3 +7,4 @@
 | [audit-chain-break.md](audit-chain-break.md) | `/v1/audit/verify` reports a broken chain |
 | [bank-change-quarantine.md](bank-change-quarantine.md) | A vendor asks why payment is held after a bank change |
 | [contract-drift.md](contract-drift.md) | CI fails a contracts or catalog drift check |
+| [observability.md](observability.md) | Wiring up metrics, logs and alerts, and answering an InvoiceIQ alert |

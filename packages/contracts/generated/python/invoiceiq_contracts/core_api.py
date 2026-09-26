@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from enum import StrEnum
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from typing import Any, Literal
 from datetime import date
 from uuid import UUID
+
+
+class Status(StrEnum):
+    ready = "ready"
+    not_ready = "not_ready"
+
+
+class ReadinessCheck(BaseModel):
+    ok: bool
+    latencyMs: int | None = Field(None, ge=0)
+    detail: str | None = Field(None, max_length=200)
 
 
 class Health(BaseModel):
@@ -499,7 +510,7 @@ class VendorPayment(BaseModel):
     releasesAt: AwareDatetime | None = None
 
 
-class Status(StrEnum):
+class Status1(StrEnum):
     active = "active"
     inactive = "inactive"
 
@@ -510,7 +521,7 @@ class Vendor(BaseModel):
     )
     id: UUID
     name: str = Field(..., max_length=256)
-    status: Status
+    status: Status1
     version: int = Field(..., ge=1)
     bankAccountLast4: str | None = Field(..., pattern="^[0-9A-Z]{4}$")
     openInvoices: int = Field(..., ge=0)
@@ -540,7 +551,7 @@ class VendorDetail(BaseModel):
     )
     id: UUID
     name: str = Field(..., max_length=256)
-    status: Status
+    status: Status1
     version: int = Field(..., ge=1)
     bankAccountLast4: str | None = Field(..., pattern="^[0-9A-Z]{4}$")
     openInvoices: int = Field(..., ge=0)
@@ -570,7 +581,7 @@ class VendorUpdate(BaseModel):
         extra="forbid",
     )
     expectedVersion: int = Field(..., ge=1)
-    status: Status
+    status: Status1
     comment: str | None = Field(None, max_length=2000)
 
 
@@ -734,6 +745,32 @@ class AuditCheckpointVerification(BaseModel):
     )
     seq: int | None = Field(None, ge=0)
     reason: str | None = None
+
+
+class Migrations(ReadinessCheck):
+    applied: int | None = Field(None, ge=0)
+    expected: int = Field(..., ge=0)
+
+
+class AiService(ReadinessCheck):
+    required: Literal[False]
+
+
+class Checks(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    database: ReadinessCheck
+    migrations: Migrations
+    aiService: AiService
+
+
+class Readiness(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Status
+    checks: Checks
 
 
 class InvoiceExtraction(BaseModel):
