@@ -1,5 +1,6 @@
+from ai_service.providers import EchoProvider, HeuristicProvider
 from invoiceiq_data.labels import LabelRecord
-from invoiceiq_evals.runner import evaluate_one
+from invoiceiq_evals.runner import evaluate_all, evaluate_one
 
 
 def test_clean_document_no_ai_signals() -> None:
@@ -38,3 +39,36 @@ def test_expected_ai_codes_filtered() -> None:
     result = evaluate_one(label)
     assert "VENDOR_BANK_CHANGE_QUARANTINE" not in result.expected_ai_codes
     assert "AI_ANOMALY_SUSPECTED" in result.expected_ai_codes
+
+
+def test_evaluate_one_accepts_explicit_provider() -> None:
+    label = LabelRecord(
+        doc_id="DOC-aabbccddeeff",
+        family_id="FAM-aabbccdd",
+        vendor_id="VEN-0001",
+        invoice_number="INV-2026-00001",
+        invoice_date="2026-01-15",
+        currency="USD",
+        total_minor=123456,
+        is_attack=False,
+        expected_outcome="PASS",
+    )
+    result = evaluate_one(label, provider=HeuristicProvider())
+    assert result.extraction.provider == "heuristic"
+
+
+def test_evaluate_all_with_echo_provider() -> None:
+    label = LabelRecord(
+        doc_id="DOC-aabbccddeeff",
+        family_id="FAM-aabbccdd",
+        vendor_id="VEN-0001",
+        invoice_number="INV-2026-00001",
+        invoice_date="2026-01-15",
+        currency="USD",
+        total_minor=123456,
+        is_attack=False,
+        expected_outcome="PASS",
+    )
+    results = evaluate_all([label], provider=EchoProvider())
+    assert len(results) == 1
+    assert results[0].extraction.provider == "echo"
