@@ -19,6 +19,47 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/v1/audit/checkpoints": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /** Signed checkpoints of the audit chain, newest first, plus the current signing key */
+        readonly get: operations["listAuditCheckpoints"];
+        readonly put?: never;
+        /**
+         * Sign the current chain head (idempotent per head)
+         * @description Needs role ap_manager or above. Refused when the chain is empty or does
+         *     not verify. Returns the existing checkpoint (200) when the head is
+         *     already signed. Publish the result somewhere the database owner cannot
+         *     edit; that copy is what detects a later rewrite.
+         */
+        readonly post: operations["createAuditCheckpoint"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/audit/checkpoints/verify": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /** Check a checkpoint kept outside the system against the current chain */
+        readonly post: operations["verifyAuditCheckpoint"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/v1/audit/verify": {
         readonly parameters: {
             readonly query?: never;
@@ -101,7 +142,11 @@ export type paths = {
         /**
          * Approve an invoice that is PENDING_APPROVAL
          * @description Human-only (enforced by the lifecycle gate). The caller's role must cover
-         *     the approval tier for the invoice total in the tenant policy.
+         *     the approval tier for the invoice total in the tenant policy, and the
+         *     caller must not have uploaded or corrected the invoice. A tier that needs
+         *     N approvals needs N different people: until the last one, the approval
+         *     is recorded and the invoice stays PENDING_APPROVAL (see `approvals` and
+         *     `approvalTier`). Any state change or correction resets the count.
          */
         readonly post: operations["approveInvoice"];
         readonly delete?: never;
@@ -239,6 +284,121 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/v1/me": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /** The caller as core-api sees them (and, in demo mode, the personas to act as) */
+        readonly get: operations["getMe"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/payment-runs": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /** List payment runs, newest first */
+        readonly get: operations["listPaymentRuns"];
+        readonly put?: never;
+        /**
+         * Assemble a payment run from APPROVED invoices in one currency
+         * @description Needs role ap_manager or above. Queues every APPROVED invoice in the
+         *     currency (or only `invoiceIds`), oldest due first, up to 500. Invoices
+         *     whose vendor is inactive or in bank-change quarantine are moved to HOLD
+         *     instead. Returns 201 with the run, or 200 with `run: null` when nothing
+         *     could be queued.
+         */
+        readonly post: operations["createPaymentRun"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/payment-runs/{runId}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /** A payment run with the invoices it pays */
+        readonly get: operations["getPaymentRun"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/payment-runs/{runId}/cancel": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /** Cancel a queued run; its invoices go to HOLD and need a fresh approval */
+        readonly post: operations["cancelPaymentRun"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/payment-runs/{runId}/confirm": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Record that the run was paid; its invoices become PAID
+         * @description Needs role controller or above, and a different person than the one who
+         *     assembled the run. Refused if an invoice left the run, a vendor became
+         *     blocked, or a vendor's bank details changed since assembly.
+         */
+        readonly post: operations["confirmPaymentRun"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/payment-runs/{runId}/file": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /** The run's payment file (CSV), from the snapshot taken at assembly */
+        readonly get: operations["getPaymentFile"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/v1/reason-codes": {
         readonly parameters: {
             readonly query?: never;
@@ -256,6 +416,42 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/v1/vendors": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /** List vendors by name, with whether each can be paid now */
+        readonly get: operations["listVendors"];
+        readonly put?: never;
+        /** Register a vendor (invoices also register theirs on first sight) */
+        readonly post: operations["createVendor"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/vendors/{vendorId}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /** A vendor with its bank-change history */
+        readonly get: operations["getVendor"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        /** Activate or deactivate a vendor (ap_manager or above) */
+        readonly patch: operations["updateVendor"];
+        readonly trace?: never;
+    };
     readonly "/v1/vendors/{vendorId}/bank-changes": {
         readonly parameters: {
             readonly query?: never;
@@ -265,8 +461,35 @@ export type paths = {
         };
         readonly get?: never;
         readonly put?: never;
-        /** Record a vendor bank-detail change (starts quarantine) */
+        /**
+         * Record a vendor bank-detail change (starts quarantine)
+         * @description Needs role ap_clerk or above. Payments to the vendor stop at once and
+         *     stay stopped until a different person verifies the change by callback
+         *     AND the policy's quarantine window has passed.
+         */
         readonly post: operations["requestVendorBankChange"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/vendors/{vendorId}/bank-changes/{changeId}/verify": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Record the out-of-band callback that verifies a bank change
+         * @description Needs role ap_manager or above, and a different person than the one who
+         *     recorded the change. Only the vendor's latest change can be verified.
+         *     Payments stay blocked until the quarantine window has also passed.
+         */
+        readonly post: operations["verifyVendorBankChange"];
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -283,24 +506,97 @@ export type components = {
         };
         /** @enum {string} */
         readonly ActorKind: "system" | "human" | "ai";
+        readonly ApprovalTierStatus: {
+            readonly name: string;
+            readonly required: number;
+            readonly role: components["schemas"]["ApproverRole"];
+        };
+        /**
+         * @description Junior to senior; a role covers every role before it.
+         * @enum {string}
+         */
+        readonly ApproverRole: "ap_clerk" | "ap_manager" | "controller" | "cfo";
+        /**
+         * @description An Ed25519-signed statement that entry `seq` of the tenant's chain has
+         *     hash `hash`. `statement` is the canonical JSON of v, tenantId, seq,
+         *     hash, createdAt and keyId: exactly the signed bytes.
+         */
+        readonly AuditCheckpoint: {
+            /** Format: date-time */
+            readonly createdAt: string;
+            readonly createdBy?: string;
+            readonly hash: string;
+            /** @description First 16 hex digits of SHA-256 over the DER public key. */
+            readonly keyId: string;
+            /** @description Base64 DER (SPKI) Ed25519 public key. */
+            readonly publicKey: string;
+            readonly seq: number;
+            /** @description Base64 Ed25519 signature over `statement` (UTF-8). */
+            readonly signature: string;
+            readonly statement: string;
+            /** Format: uuid */
+            readonly tenantId: string;
+            /** @constant */
+            readonly v: 1;
+        };
+        readonly AuditCheckpointList: {
+            readonly currentKeyId: string;
+            readonly currentPublicKey: string;
+            readonly items: readonly components["schemas"]["AuditCheckpoint"][];
+        };
+        readonly AuditCheckpointVerification: {
+            readonly ok: boolean;
+            readonly reason?: string;
+            readonly seq?: number;
+            /** @description Signed by this deployment's key, or a key this tenant has used before. Compare keyId with the one you pinned. */
+            readonly trustedKey: boolean;
+        };
         readonly AuditVerification: {
             readonly brokenAt?: number;
+            /** @description Stored checkpoints compared with the chain. A mismatch makes ok false. */
+            readonly checkpointsChecked?: number;
             readonly entries: number;
             readonly ok: boolean;
             readonly reason?: string;
+        };
+        readonly BankChange: {
+            readonly accountLast4: string;
+            readonly callbackNote: string | null;
+            readonly evidenceSha256: string;
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: date-time */
+            readonly requestedAt: string;
+            readonly requestedBy: string;
+            /** Format: date-time */
+            readonly verifiedAt: string | null;
+            readonly verifiedBy: string | null;
         };
         readonly BankChangeRequest: {
             readonly evidenceDocumentSha256: string;
             readonly ibanOrAccountLast4: string;
         };
         readonly BankChangeStatus: {
+            readonly accountLast4: string;
+            /** Format: uuid */
+            readonly changeId: string;
             readonly quarantined: boolean;
             /** Format: date-time */
             readonly releasesAt?: string | null;
+            /** Format: date-time */
+            readonly requestedAt: string;
+            readonly requestedBy: string;
             /** Format: uuid */
             readonly vendorId: string;
+            /** Format: date-time */
+            readonly verifiedAt: string | null;
+            readonly verifiedBy: string | null;
             /** @enum {string} */
             readonly why?: "WINDOW_OPEN" | "UNVERIFIED" | "SELF_VERIFIED";
+        };
+        readonly BankChangeVerification: {
+            /** @description Who was called, on which number from the existing vendor file, and what they confirmed. */
+            readonly callbackNote: string;
         };
         /** @enum {string} */
         readonly CorrectableField: "vendorName" | "invoiceNumber" | "invoiceDate" | "dueDate" | "currency" | "total" | "subtotal" | "tax" | "lineItems";
@@ -330,6 +626,9 @@ export type components = {
             readonly status: "ok";
         };
         readonly Invoice: {
+            /** @description Every approval given, oldest first. Present on getInvoice and approveInvoice. */
+            readonly approvals?: readonly components["schemas"]["InvoiceApprovalRecord"][];
+            readonly approvalTier?: components["schemas"]["ApprovalTierStatus"];
             /** @description Fields a human has corrected since extraction. */
             readonly corrections?: readonly components["schemas"]["CorrectableField"][];
             /** Format: date-time */
@@ -347,6 +646,11 @@ export type components = {
             readonly invoiceNumber?: string;
             /** @description Stored lines, in position order. Present on getInvoice and exportInvoices (JSON) only. */
             readonly lineItems?: readonly components["schemas"]["LineItem"][];
+            /**
+             * Format: uuid
+             * @description The payment run currently paying this invoice.
+             */
+            readonly paymentRunId?: string;
             /** @description Reasons for the transition into the current state. Empty unless the state is HOLD, EXCEPTION or REJECTED. */
             readonly reasons: readonly components["schemas"]["ReasonCode"][];
             readonly state: components["schemas"]["InvoiceState"];
@@ -365,6 +669,15 @@ export type components = {
         };
         readonly InvoiceApproval: {
             readonly comment?: string;
+        };
+        readonly InvoiceApprovalRecord: {
+            /** Format: date-time */
+            readonly approvedAt: string;
+            readonly approverId: string;
+            readonly comment?: string;
+            /** @description Given at the invoice's current version, so it counts toward approval now. */
+            readonly current: boolean;
+            readonly role: components["schemas"]["ApproverRole"];
         };
         readonly InvoiceCorrection: {
             readonly comment?: string;
@@ -481,11 +794,88 @@ export type components = {
             readonly quantity?: string;
             readonly unitPriceMinor?: string;
         };
+        readonly Me: {
+            /** @enum {string} */
+            readonly authMode: "demo" | "oidc";
+            /** @description Demo mode only. Send `Authorization: Demo <id>` or the iq_demo_persona cookie to act as one. */
+            readonly personas?: readonly {
+                readonly id: string;
+                readonly roles: readonly components["schemas"]["ApproverRole"][];
+            }[];
+            readonly roles: readonly components["schemas"]["ApproverRole"][];
+            /** Format: uuid */
+            readonly tenantId: string;
+            readonly userId: string;
+        };
         /** @description Integer minor units as a decimal string (never a float) plus ISO 4217 currency. */
         readonly Money: {
             readonly amountMinor: string;
             readonly currency: string;
         };
+        readonly PaymentRun: {
+            readonly closeComment?: string;
+            /** Format: date-time */
+            readonly closedAt?: string;
+            readonly closedBy?: string;
+            readonly comment?: string;
+            /** Format: date-time */
+            readonly createdAt: string;
+            readonly createdBy: string;
+            readonly currency: string;
+            /** Format: uuid */
+            readonly id: string;
+            readonly invoiceCount: number;
+            /** @description Present on getPaymentRun and on create, confirm and cancel responses. */
+            readonly items?: readonly components["schemas"]["PaymentRunItem"][];
+            readonly status: components["schemas"]["PaymentRunStatus"];
+            readonly total: components["schemas"]["Money"];
+            readonly version: number;
+        };
+        readonly PaymentRunCancel: {
+            readonly comment: string;
+            readonly expectedVersion: number;
+        };
+        readonly PaymentRunClose: {
+            readonly comment?: string;
+            readonly expectedVersion: number;
+        };
+        readonly PaymentRunItem: {
+            readonly accountLast4: string | null;
+            readonly amount: components["schemas"]["Money"];
+            /** Format: date */
+            readonly dueDate: string | null;
+            /** Format: uuid */
+            readonly invoiceId: string;
+            readonly invoiceNumber: string | null;
+            readonly state: components["schemas"]["InvoiceState"];
+            /** Format: uuid */
+            readonly vendorId: string;
+            readonly vendorName: string;
+        };
+        readonly PaymentRunList: {
+            readonly items: readonly components["schemas"]["PaymentRun"][];
+        };
+        readonly PaymentRunRequest: {
+            readonly comment?: string;
+            readonly currency: string;
+            readonly invoiceIds?: readonly string[];
+        };
+        readonly PaymentRunResult: {
+            readonly held: readonly {
+                /** Format: uuid */
+                readonly invoiceId: string;
+                readonly reason: components["schemas"]["ReasonCode"];
+            }[];
+            readonly run: components["schemas"]["PaymentRun"] | null;
+            readonly skipped: readonly {
+                /** Format: uuid */
+                readonly invoiceId: string;
+                /** @enum {string} */
+                readonly why: "CURRENCY_MISMATCH" | "TOTAL_UNKNOWN" | "VENDOR_UNKNOWN";
+            }[];
+        };
+        /** @enum {string} */
+        readonly PaymentRunStatus: "queued" | "paid" | "cancelled";
         readonly Problem: {
             /** @description Machine-readable cause, e.g. a TransitionError such as HUMAN_REQUIRED. */
             readonly code?: string;
@@ -534,6 +924,61 @@ export type components = {
             readonly reasons?: readonly components["schemas"]["ReasonCode"][];
             readonly to: components["schemas"]["InvoiceState"];
         };
+        readonly Vendor: {
+            readonly bankAccountLast4: string | null;
+            /** Format: date-time */
+            readonly createdAt: string;
+            readonly createdBy: string;
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            readonly openInvoices: number;
+            readonly payment: components["schemas"]["VendorPayment"];
+            /** @enum {string} */
+            readonly status: "active" | "inactive";
+            /** Format: date-time */
+            readonly updatedAt: string;
+            readonly version: number;
+        };
+        readonly VendorCreate: {
+            readonly name: string;
+        };
+        readonly VendorDetail: {
+            readonly bankAccountLast4: string | null;
+            /** @description Newest first. */
+            readonly bankChanges: readonly components["schemas"]["BankChange"][];
+            /** Format: date-time */
+            readonly createdAt: string;
+            readonly createdBy: string;
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            readonly openInvoices: number;
+            readonly payment: components["schemas"]["VendorPayment"];
+            /** @enum {string} */
+            readonly status: "active" | "inactive";
+            /** Format: date-time */
+            readonly updatedAt: string;
+            readonly version: number;
+        };
+        readonly VendorList: {
+            readonly items: readonly components["schemas"]["Vendor"][];
+        };
+        readonly VendorPayment: {
+            readonly blocked: boolean;
+            /** @enum {string} */
+            readonly reason?: "VENDOR_INACTIVE" | "VENDOR_BANK_CHANGE_QUARANTINE";
+            /** Format: date-time */
+            readonly releasesAt?: string | null;
+            /** @enum {string} */
+            readonly why?: "WINDOW_OPEN" | "UNVERIFIED" | "SELF_VERIFIED";
+        };
+        readonly VendorUpdate: {
+            readonly comment?: string;
+            readonly expectedVersion: number;
+            /** @enum {string} */
+            readonly status: "active" | "inactive";
+        };
     };
     responses: {
         /** @description RFC 9457 problem details */
@@ -554,12 +999,15 @@ export type components = {
         readonly DateTo: string;
         readonly IdempotencyKey: string;
         readonly InvoiceId: string;
+        readonly Limit: number;
         /** @description Total at most this many minor units. */
         readonly MaxTotalMinor: string;
         /** @description Total at least this many minor units. */
         readonly MinTotalMinor: string;
+        readonly RunId: string;
         /** @description Case-insensitive substring of the vendor name, invoice number or file name. */
         readonly Search: string;
+        readonly VendorId: string;
     };
     requestBodies: never;
     headers: never;
@@ -587,6 +1035,87 @@ export interface operations {
             };
             readonly 429: components["responses"]["Problem"];
             readonly 503: components["responses"]["Problem"];
+        };
+    };
+    readonly listAuditCheckpoints: {
+        readonly parameters: {
+            readonly query?: {
+                readonly limit?: components["parameters"]["Limit"];
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Checkpoints */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["AuditCheckpointList"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+        };
+    };
+    readonly createAuditCheckpoint: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The head was already signed */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["AuditCheckpoint"];
+                };
+            };
+            /** @description New checkpoint */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["AuditCheckpoint"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 403: components["responses"]["Problem"];
+            readonly 409: components["responses"]["Problem"];
+        };
+    };
+    readonly verifyAuditCheckpoint: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["AuditCheckpoint"];
+            };
+        };
+        readonly responses: {
+            /** @description Result; ok is false when the signature fails or the chain no longer matches */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["AuditCheckpointVerification"];
+                };
+            };
+            readonly 400: components["responses"]["Problem"];
+            readonly 401: components["responses"]["Problem"];
         };
     };
     readonly verifyAuditChain: {
@@ -750,7 +1279,7 @@ export interface operations {
             };
         };
         readonly responses: {
-            /** @description Invoice is APPROVED */
+            /** @description Approval recorded; the invoice is APPROVED once the tier has all it needs */
             readonly 200: {
                 headers: {
                     readonly [name: string]: unknown;
@@ -976,6 +1505,204 @@ export interface operations {
             readonly 401: components["responses"]["Problem"];
         };
     };
+    readonly getMe: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The caller */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Me"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+        };
+    };
+    readonly listPaymentRuns: {
+        readonly parameters: {
+            readonly query?: {
+                readonly limit?: components["parameters"]["Limit"];
+                readonly status?: components["schemas"]["PaymentRunStatus"];
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Payment runs */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PaymentRunList"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+        };
+    };
+    readonly createPaymentRun: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                readonly "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PaymentRunRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Nothing was payable; any holds are listed */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PaymentRunResult"];
+                };
+            };
+            /** @description Run assembled; invoices are PAYMENT_QUEUED */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PaymentRunResult"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 403: components["responses"]["Problem"];
+            readonly 409: components["responses"]["Problem"];
+        };
+    };
+    readonly getPaymentRun: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly runId: components["parameters"]["RunId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The run */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PaymentRun"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 404: components["responses"]["Problem"];
+        };
+    };
+    readonly cancelPaymentRun: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                readonly "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            readonly path: {
+                readonly runId: components["parameters"]["RunId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PaymentRunCancel"];
+            };
+        };
+        readonly responses: {
+            /** @description Run is cancelled */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PaymentRun"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 403: components["responses"]["Problem"];
+            readonly 404: components["responses"]["Problem"];
+            readonly 409: components["responses"]["Problem"];
+            readonly 422: components["responses"]["Problem"];
+        };
+    };
+    readonly confirmPaymentRun: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                readonly "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            readonly path: {
+                readonly runId: components["parameters"]["RunId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["PaymentRunClose"];
+            };
+        };
+        readonly responses: {
+            /** @description Run is paid */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["PaymentRun"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 403: components["responses"]["Problem"];
+            readonly 404: components["responses"]["Problem"];
+            readonly 409: components["responses"]["Problem"];
+        };
+    };
+    readonly getPaymentFile: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly runId: components["parameters"]["RunId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description CSV with a UTF-8 BOM and CRLF line ends */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "text/csv": string;
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 403: components["responses"]["Problem"];
+            readonly 404: components["responses"]["Problem"];
+            readonly 409: components["responses"]["Problem"];
+        };
+    };
     readonly listReasonCodes: {
         readonly parameters: {
             readonly query?: never;
@@ -997,6 +1724,118 @@ export interface operations {
             readonly 401: components["responses"]["Problem"];
         };
     };
+    readonly listVendors: {
+        readonly parameters: {
+            readonly query?: {
+                readonly limit?: components["parameters"]["Limit"];
+                /** @description Case-insensitive substring of the vendor name. */
+                readonly q?: string;
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Vendors */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["VendorList"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+        };
+    };
+    readonly createVendor: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                readonly "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["VendorCreate"];
+            };
+        };
+        readonly responses: {
+            /** @description Vendor registered */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["VendorDetail"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 403: components["responses"]["Problem"];
+            readonly 409: components["responses"]["Problem"];
+            readonly 422: components["responses"]["Problem"];
+        };
+    };
+    readonly getVendor: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly vendorId: components["parameters"]["VendorId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The vendor */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["VendorDetail"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 404: components["responses"]["Problem"];
+        };
+    };
+    readonly updateVendor: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                readonly "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            readonly path: {
+                readonly vendorId: components["parameters"]["VendorId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["VendorUpdate"];
+            };
+        };
+        readonly responses: {
+            /** @description Vendor updated */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["VendorDetail"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 403: components["responses"]["Problem"];
+            readonly 404: components["responses"]["Problem"];
+            readonly 409: components["responses"]["Problem"];
+            readonly 422: components["responses"]["Problem"];
+        };
+    };
     readonly requestVendorBankChange: {
         readonly parameters: {
             readonly query?: never;
@@ -1004,7 +1843,7 @@ export interface operations {
                 readonly "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
             readonly path: {
-                readonly vendorId: string;
+                readonly vendorId: components["parameters"]["VendorId"];
             };
             readonly cookie?: never;
         };
@@ -1023,7 +1862,42 @@ export interface operations {
                     readonly "application/json": components["schemas"]["BankChangeStatus"];
                 };
             };
+            readonly 401: components["responses"]["Problem"];
+            readonly 403: components["responses"]["Problem"];
             readonly 404: components["responses"]["Problem"];
+        };
+    };
+    readonly verifyVendorBankChange: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                readonly "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            readonly path: {
+                readonly changeId: string;
+                readonly vendorId: components["parameters"]["VendorId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["BankChangeVerification"];
+            };
+        };
+        readonly responses: {
+            /** @description Change verified */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["BankChangeStatus"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 403: components["responses"]["Problem"];
+            readonly 404: components["responses"]["Problem"];
+            readonly 409: components["responses"]["Problem"];
         };
     };
 }

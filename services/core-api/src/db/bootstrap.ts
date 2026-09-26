@@ -16,7 +16,7 @@ export function defaultPolicy(tenantId: string): PolicyInput {
       { name: 'clerk', maxAmountMinor: '100000', approverRole: 'ap_clerk' },
       { name: 'manager', maxAmountMinor: '1000000', approverRole: 'ap_manager' },
       { name: 'controller', maxAmountMinor: '10000000', approverRole: 'controller' },
-      { name: 'cfo', maxAmountMinor: '100000000', approverRole: 'cfo' },
+      { name: 'cfo', maxAmountMinor: '100000000', approverRole: 'cfo', approvalsRequired: 2 },
     ],
     ai: { extractionConfidenceHoldBelow: 0.8, anomalyScoreHoldAbove: 0.8 },
   };

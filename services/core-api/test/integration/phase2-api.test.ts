@@ -69,8 +69,14 @@ describeDb('Phase 2 invoice API (real Postgres)', () => {
   const get = async (id: string, app: Harness = h) => (await app.app.inject({ method: 'GET', url: `/v1/invoices/${id}` })).json();
   const patch = (id: string, body: object, idem = key(), app: Harness = h) =>
     app.app.inject({ method: 'PATCH', url: `/v1/invoices/${id}`, payload: body, headers: { 'idempotency-key': idem } });
+  // demo-user uploads and corrects, so approvals come from a different demo persona.
   const act = (id: string, action: string, body: object, app: Harness = h) =>
-    app.app.inject({ method: 'POST', url: `/v1/invoices/${id}/${action}`, payload: body, headers: { 'idempotency-key': key() } });
+    app.app.inject({
+      method: 'POST',
+      url: `/v1/invoices/${id}/${action}`,
+      payload: body,
+      headers: { 'idempotency-key': key(), ...(action === 'approve' && app === h ? { authorization: 'Demo demo-manager' } : {}) },
+    });
 
   describe('extracted details are stored', () => {
     it('subtotal, tax, due date and line items come back on getInvoice, contract-valid', async () => {

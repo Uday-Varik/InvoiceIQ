@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
 # End-to-end smoke test against a running stack (docker compose up, or a deploy).
 # Uploads the sample invoice, waits for the pipeline, checks its line items,
-# corrects a field, finds it with a filter and in the CSV export, approves it
-# and verifies the audit chain. Needs curl and jq. Usage: scripts/smoke.sh [base-url]
+# corrects a field, finds it with a filter and in the CSV export, approves it as
+# a second person, pays it in a run confirmed by a third, signs an audit
+# checkpoint and verifies the chain. Needs curl and jq. Usage: scripts/smoke.sh [base-url]
+#
+# Separation of duties needs distinct people. In demo auth mode the script uses
+# the demo personas; with SMOKE_TOKEN (uploader) also set SMOKE_MANAGER_TOKEN
+# (ap_manager, approves and assembles) and SMOKE_CONTROLLER_TOKEN (confirms).
 set -euo pipefail
 
 BASE="${1:-http://localhost:3001}"
 PDF="$(dirname "$0")/../apps/web/public/sample-invoice.pdf"
 AUTH=()
-if [[ -n "${SMOKE_TOKEN:-}" ]]; then AUTH=(-H "authorization: Bearer ${SMOKE_TOKEN}"); fi
+MANAGER=(-H "authorization: Demo demo-manager")
+CONTROLLER=(-H "authorization: Demo demo-controller")
+if [[ -n "${SMOKE_TOKEN:-}" ]]; then
+  AUTH=(-H "authorization: Bearer ${SMOKE_TOKEN}")
+  MANAGER=(-H "authorization: Bearer ${SMOKE_MANAGER_TOKEN:?set SMOKE_MANAGER_TOKEN with SMOKE_TOKEN}")
+  CONTROLLER=(-H "authorization: Bearer ${SMOKE_CONTROLLER_TOKEN:?set SMOKE_CONTROLLER_TOKEN with SMOKE_TOKEN}")
+fi
 
 say() { printf '\n== %s\n' "$*"; }
 fail() { printf 'SMOKE FAILED: %s\n' "$*" >&2; exit 1; }
@@ -60,11 +71,30 @@ FOUND="$(curl -fsS "${AUTH[@]}" "${BASE}/v1/invoices?q=SMOKE-${ID:0:8}" | jq -r 
 curl -fsS "${AUTH[@]}" "${BASE}/v1/invoices/export?q=SMOKE-${ID:0:8}" | grep -q "SMOKE-${ID:0:8}" || fail "CSV export is missing the invoice"
 curl -fsS "${AUTH[@]}" "${BASE}/v1/invoices/summary" | jq -c '{count, byCurrency}'
 
-say "approving"
-APPROVED="$(curl -fsS "${AUTH[@]}" -H 'content-type: application/json' -H "idempotency-key: smoke-approve-${ID}" \
+say "approving as a second person (the uploader cannot approve)"
+APPROVED="$(curl -fsS "${MANAGER[@]}" -H 'content-type: application/json' -H "idempotency-key: smoke-approve-${ID}" \
   -d '{"comment":"smoke test"}' "${BASE}/v1/invoices/${ID}/approve" | jq -r .state)"
 [[ "$APPROVED" == APPROVED ]] || fail "approve returned ${APPROVED}"
 echo "invoice ${ID} is APPROVED"
+
+say "paying it in a run: assembled by the manager, confirmed by the controller"
+CURRENCY="$(curl -fsS "${AUTH[@]}" "${BASE}/v1/invoices/${ID}" | jq -r .total.currency)"
+RUN="$(curl -fsS "${MANAGER[@]}" -H 'content-type: application/json' -H "idempotency-key: smoke-run-${ID}" \
+  -d "{\"currency\":\"${CURRENCY}\",\"invoiceIds\":[\"${ID}\"],\"comment\":\"smoke test\"}" "${BASE}/v1/payment-runs")"
+RUN_ID="$(jq -r .run.id <<<"$RUN")"
+[[ "$(jq -r .run.invoiceCount <<<"$RUN")" == 1 ]] || fail "payment run did not take the invoice: $(jq -c .held <<<"$RUN")"
+curl -fsS "${MANAGER[@]}" "${BASE}/v1/payment-runs/${RUN_ID}/file" | grep -q "$ID" || fail "payment file is missing the invoice"
+PAID="$(curl -fsS "${CONTROLLER[@]}" -H 'content-type: application/json' -H "idempotency-key: smoke-confirm-${RUN_ID}" \
+  -d '{"expectedVersion":1}' "${BASE}/v1/payment-runs/${RUN_ID}/confirm" | jq -r .status)"
+[[ "$PAID" == paid ]] || fail "confirm returned ${PAID}"
+[[ "$(curl -fsS "${AUTH[@]}" "${BASE}/v1/invoices/${ID}" | jq -r .state)" == PAID ]] || fail "invoice is not PAID"
+echo "run ${RUN_ID} is paid"
+
+say "signing an audit checkpoint and verifying a copy of it"
+CHECKPOINT="$(curl -fsS "${MANAGER[@]}" -X POST "${BASE}/v1/audit/checkpoints")"
+jq -c '{seq, keyId}' <<<"$CHECKPOINT"
+[[ "$(curl -fsS "${AUTH[@]}" -H 'content-type: application/json' -d "$CHECKPOINT" "${BASE}/v1/audit/checkpoints/verify" | jq -r .ok)" == true ]] \
+  || fail "checkpoint does not verify"
 
 say "verifying the audit chain"
 VERIFY="$(curl -fsS "${AUTH[@]}" "${BASE}/v1/audit/verify")"

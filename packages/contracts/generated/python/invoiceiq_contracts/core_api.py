@@ -400,9 +400,15 @@ class BankChangeStatus(BaseModel):
         extra="forbid",
     )
     vendorId: UUID
+    changeId: UUID
+    accountLast4: str = Field(..., pattern="^[0-9A-Z]{4}$")
     quarantined: bool
     releasesAt: AwareDatetime | None = None
     why: Why | None = None
+    requestedBy: str
+    requestedAt: AwareDatetime
+    verifiedBy: str | None
+    verifiedAt: AwareDatetime | None
 
 
 class AuditVerification(BaseModel):
@@ -412,6 +418,321 @@ class AuditVerification(BaseModel):
     ok: bool
     entries: int = Field(..., ge=0)
     brokenAt: int | None = Field(None, ge=0)
+    reason: str | None = None
+    checkpointsChecked: int | None = Field(
+        None, description="Stored checkpoints compared with the chain. A mismatch makes ok false.", ge=0
+    )
+
+
+class ApproverRole(StrEnum):
+    """
+    Junior to senior; a role covers every role before it.
+    """
+
+    ap_clerk = "ap_clerk"
+    ap_manager = "ap_manager"
+    controller = "controller"
+    cfo = "cfo"
+
+
+class InvoiceApprovalRecord(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    approverId: str
+    role: ApproverRole
+    approvedAt: AwareDatetime
+    current: bool = Field(
+        ..., description="Given at the invoice's current version, so it counts toward approval now."
+    )
+    comment: str | None = Field(None, max_length=2000)
+
+
+class ApprovalTierStatus(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: str
+    role: ApproverRole
+    required: int = Field(..., ge=1, le=3)
+
+
+class AuthMode(StrEnum):
+    demo = "demo"
+    oidc = "oidc"
+
+
+class Persona(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: str
+    roles: list[ApproverRole]
+
+
+class Me(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    userId: str
+    tenantId: UUID
+    roles: list[ApproverRole]
+    authMode: AuthMode
+    personas: list[Persona] | None = Field(
+        None,
+        description="Demo mode only. Send `Authorization: Demo <id>` or the iq_demo_persona cookie to act as one.",
+    )
+
+
+class Reason(StrEnum):
+    VENDOR_INACTIVE = "VENDOR_INACTIVE"
+    VENDOR_BANK_CHANGE_QUARANTINE = "VENDOR_BANK_CHANGE_QUARANTINE"
+
+
+class VendorPayment(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    blocked: bool
+    reason: Reason | None = None
+    why: Why | None = None
+    releasesAt: AwareDatetime | None = None
+
+
+class Status(StrEnum):
+    active = "active"
+    inactive = "inactive"
+
+
+class Vendor(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: UUID
+    name: str = Field(..., max_length=256)
+    status: Status
+    version: int = Field(..., ge=1)
+    bankAccountLast4: str | None = Field(..., pattern="^[0-9A-Z]{4}$")
+    openInvoices: int = Field(..., ge=0)
+    payment: VendorPayment
+    createdBy: str
+    createdAt: AwareDatetime
+    updatedAt: AwareDatetime
+
+
+class BankChange(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: UUID
+    accountLast4: str = Field(..., pattern="^[0-9A-Z]{4}$")
+    evidenceSha256: str = Field(..., pattern="^[0-9a-f]{64}$")
+    requestedBy: str
+    requestedAt: AwareDatetime
+    verifiedBy: str | None
+    verifiedAt: AwareDatetime | None
+    callbackNote: str | None
+
+
+class VendorDetail(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: UUID
+    name: str = Field(..., max_length=256)
+    status: Status
+    version: int = Field(..., ge=1)
+    bankAccountLast4: str | None = Field(..., pattern="^[0-9A-Z]{4}$")
+    openInvoices: int = Field(..., ge=0)
+    payment: VendorPayment
+    createdBy: str
+    createdAt: AwareDatetime
+    updatedAt: AwareDatetime
+    bankChanges: list[BankChange] = Field(..., description="Newest first.")
+
+
+class VendorList(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    items: list[Vendor]
+
+
+class VendorCreate(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: str = Field(..., max_length=256, min_length=1)
+
+
+class VendorUpdate(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    expectedVersion: int = Field(..., ge=1)
+    status: Status
+    comment: str | None = Field(None, max_length=2000)
+
+
+class BankChangeVerification(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    callbackNote: str = Field(
+        ...,
+        description="Who was called, on which number from the existing vendor file, and what they confirmed.",
+        max_length=2000,
+        min_length=10,
+    )
+
+
+class PaymentRunStatus(StrEnum):
+    queued = "queued"
+    paid = "paid"
+    cancelled = "cancelled"
+
+
+class PaymentRunItem(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    invoiceId: UUID
+    vendorId: UUID
+    vendorName: str
+    accountLast4: str | None
+    amount: Money
+    invoiceNumber: str | None
+    dueDate: date | None
+    state: InvoiceState
+
+
+class PaymentRun(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: UUID
+    currency: str = Field(..., pattern="^[A-Z]{3}$")
+    status: PaymentRunStatus
+    invoiceCount: int = Field(..., ge=1)
+    total: Money
+    version: int = Field(..., ge=1)
+    comment: str | None = None
+    createdBy: str
+    createdAt: AwareDatetime
+    closedBy: str | None = None
+    closedAt: AwareDatetime | None = None
+    closeComment: str | None = None
+    items: list[PaymentRunItem] | None = Field(
+        None, description="Present on getPaymentRun and on create, confirm and cancel responses."
+    )
+
+
+class PaymentRunList(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    items: list[PaymentRun]
+
+
+class PaymentRunRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    currency: str = Field(..., pattern="^[A-Z]{3}$")
+    invoiceIds: list[UUID] | None = Field(None, max_length=500, min_length=1)
+    comment: str | None = Field(None, max_length=2000)
+
+
+class HeldItem(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    invoiceId: UUID
+    reason: ReasonCode
+
+
+class Why2(StrEnum):
+    CURRENCY_MISMATCH = "CURRENCY_MISMATCH"
+    TOTAL_UNKNOWN = "TOTAL_UNKNOWN"
+    VENDOR_UNKNOWN = "VENDOR_UNKNOWN"
+
+
+class SkippedItem(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    invoiceId: UUID
+    why: Why2
+
+
+class PaymentRunResult(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    run: PaymentRun | None
+    held: list[HeldItem]
+    skipped: list[SkippedItem]
+
+
+class PaymentRunClose(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    expectedVersion: int = Field(..., ge=1)
+    comment: str | None = Field(None, max_length=2000)
+
+
+class PaymentRunCancel(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    expectedVersion: int = Field(..., ge=1)
+    comment: str = Field(..., max_length=2000, min_length=1)
+
+
+class AuditCheckpoint(BaseModel):
+    """
+    An Ed25519-signed statement that entry `seq` of the tenant's chain has
+    hash `hash`. `statement` is the canonical JSON of v, tenantId, seq,
+    hash, createdAt and keyId: exactly the signed bytes.
+
+    """
+
+    v: Literal[1]
+    tenantId: UUID
+    seq: int = Field(..., ge=0)
+    hash: str = Field(..., pattern="^[0-9a-f]{64}$")
+    createdAt: AwareDatetime
+    keyId: str = Field(
+        ..., description="First 16 hex digits of SHA-256 over the DER public key.", pattern="^[0-9a-f]{16}$"
+    )
+    statement: str = Field(..., max_length=1000)
+    signature: str = Field(
+        ..., description="Base64 Ed25519 signature over `statement` (UTF-8).", max_length=200
+    )
+    publicKey: str = Field(..., description="Base64 DER (SPKI) Ed25519 public key.", max_length=200)
+    createdBy: str | None = None
+
+
+class AuditCheckpointList(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    currentKeyId: str = Field(..., pattern="^[0-9a-f]{16}$")
+    currentPublicKey: str
+    items: list[AuditCheckpoint]
+
+
+class AuditCheckpointVerification(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    ok: bool
+    trustedKey: bool = Field(
+        ...,
+        description="Signed by this deployment's key, or a key this tenant has used before. Compare keyId with the one you pinned.",
+    )
+    seq: int | None = Field(None, ge=0)
     reason: str | None = None
 
 
@@ -454,6 +775,11 @@ class Invoice(BaseModel):
     version: int = Field(..., description="Incremented on every state change and every correction.", ge=1)
     document: InvoiceDocument | None = None
     extraction: InvoiceExtraction | None = None
+    paymentRunId: UUID | None = Field(None, description="The payment run currently paying this invoice.")
+    approvals: list[InvoiceApprovalRecord] | None = Field(
+        None, description="Every approval given, oldest first. Present on getInvoice and approveInvoice."
+    )
+    approvalTier: ApprovalTierStatus | None = None
     history: list[InvoiceEvent] | None = Field(
         None, description="Audit entries for this invoice, oldest first. Present on getInvoice only."
     )

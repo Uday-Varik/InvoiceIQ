@@ -9,14 +9,35 @@ export type ActorKind = z.infer<typeof ActorKind>;
 export const Actor = z.object({ "kind": ActorKind, "id": z.string().min(1) }).strict();
 export type Actor = z.infer<typeof Actor>;
 
-export const AuditVerification = z.object({ "ok": z.boolean(), "entries": z.number().int().gte(0), "brokenAt": z.number().int().gte(0).optional(), "reason": z.string().optional() }).strict();
+export const ApproverRole = z.enum(["ap_clerk","ap_manager","controller","cfo"]).describe("Junior to senior; a role covers every role before it.");
+export type ApproverRole = z.infer<typeof ApproverRole>;
+
+export const ApprovalTierStatus = z.object({ "name": z.string(), "role": ApproverRole, "required": z.number().int().gte(1).lte(3) }).strict();
+export type ApprovalTierStatus = z.infer<typeof ApprovalTierStatus>;
+
+export const AuditCheckpoint = z.object({ "v": z.literal(1), "tenantId": z.string().uuid(), "seq": z.number().int().gte(0), "hash": z.string().regex(new RegExp("^[0-9a-f]{64}$")), "createdAt": z.string().datetime({ offset: true }), "keyId": z.string().regex(new RegExp("^[0-9a-f]{16}$")).describe("First 16 hex digits of SHA-256 over the DER public key."), "statement": z.string().max(1000), "signature": z.string().max(200).describe("Base64 Ed25519 signature over `statement` (UTF-8)."), "publicKey": z.string().max(200).describe("Base64 DER (SPKI) Ed25519 public key."), "createdBy": z.string().optional() }).describe("An Ed25519-signed statement that entry `seq` of the tenant's chain has\nhash `hash`. `statement` is the canonical JSON of v, tenantId, seq,\nhash, createdAt and keyId: exactly the signed bytes.\n");
+export type AuditCheckpoint = z.infer<typeof AuditCheckpoint>;
+
+export const AuditCheckpointList = z.object({ "currentKeyId": z.string().regex(new RegExp("^[0-9a-f]{16}$")), "currentPublicKey": z.string(), "items": z.array(AuditCheckpoint) }).strict();
+export type AuditCheckpointList = z.infer<typeof AuditCheckpointList>;
+
+export const AuditCheckpointVerification = z.object({ "ok": z.boolean(), "trustedKey": z.boolean().describe("Signed by this deployment's key, or a key this tenant has used before. Compare keyId with the one you pinned."), "seq": z.number().int().gte(0).optional(), "reason": z.string().optional() }).strict();
+export type AuditCheckpointVerification = z.infer<typeof AuditCheckpointVerification>;
+
+export const AuditVerification = z.object({ "ok": z.boolean(), "entries": z.number().int().gte(0), "brokenAt": z.number().int().gte(0).optional(), "reason": z.string().optional(), "checkpointsChecked": z.number().int().gte(0).describe("Stored checkpoints compared with the chain. A mismatch makes ok false.").optional() }).strict();
 export type AuditVerification = z.infer<typeof AuditVerification>;
+
+export const BankChange = z.object({ "id": z.string().uuid(), "accountLast4": z.string().regex(new RegExp("^[0-9A-Z]{4}$")), "evidenceSha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")), "requestedBy": z.string(), "requestedAt": z.string().datetime({ offset: true }), "verifiedBy": z.union([z.string(), z.null()]), "verifiedAt": z.union([z.string().datetime({ offset: true }), z.null()]), "callbackNote": z.union([z.string(), z.null()]) }).strict();
+export type BankChange = z.infer<typeof BankChange>;
 
 export const BankChangeRequest = z.object({ "ibanOrAccountLast4": z.string().regex(new RegExp("^[0-9A-Z]{4}$")), "evidenceDocumentSha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")) }).strict();
 export type BankChangeRequest = z.infer<typeof BankChangeRequest>;
 
-export const BankChangeStatus = z.object({ "vendorId": z.string().uuid(), "quarantined": z.boolean(), "releasesAt": z.union([z.string().datetime({ offset: true }), z.null()]).optional(), "why": z.enum(["WINDOW_OPEN","UNVERIFIED","SELF_VERIFIED"]).optional() }).strict();
+export const BankChangeStatus = z.object({ "vendorId": z.string().uuid(), "changeId": z.string().uuid(), "accountLast4": z.string().regex(new RegExp("^[0-9A-Z]{4}$")), "quarantined": z.boolean(), "releasesAt": z.union([z.string().datetime({ offset: true }), z.null()]).optional(), "why": z.enum(["WINDOW_OPEN","UNVERIFIED","SELF_VERIFIED"]).optional(), "requestedBy": z.string(), "requestedAt": z.string().datetime({ offset: true }), "verifiedBy": z.union([z.string(), z.null()]), "verifiedAt": z.union([z.string().datetime({ offset: true }), z.null()]) }).strict();
 export type BankChangeStatus = z.infer<typeof BankChangeStatus>;
+
+export const BankChangeVerification = z.object({ "callbackNote": z.string().min(10).max(2000).describe("Who was called, on which number from the existing vendor file, and what they confirmed.") }).strict();
+export type BankChangeVerification = z.infer<typeof BankChangeVerification>;
 
 export const CorrectableField = z.enum(["vendorName","invoiceNumber","invoiceDate","dueDate","currency","total","subtotal","tax","lineItems"]);
 export type CorrectableField = z.infer<typeof CorrectableField>;
@@ -35,6 +56,9 @@ export type FieldChange = z.infer<typeof FieldChange>;
 
 export const Health = z.object({ "status": z.literal("ok"), "service": z.string() }).strict();
 export type Health = z.infer<typeof Health>;
+
+export const InvoiceApprovalRecord = z.object({ "approverId": z.string(), "role": ApproverRole, "approvedAt": z.string().datetime({ offset: true }), "current": z.boolean().describe("Given at the invoice's current version, so it counts toward approval now."), "comment": z.string().max(2000).optional() }).strict();
+export type InvoiceApprovalRecord = z.infer<typeof InvoiceApprovalRecord>;
 
 export const InvoiceDocument = z.object({ "sha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")), "contentType": z.enum(["application/pdf","image/png","image/jpeg"]), "filename": z.string().max(255), "sizeBytes": z.number().int().gte(1) }).strict();
 export type InvoiceDocument = z.infer<typeof InvoiceDocument>;
@@ -57,7 +81,7 @@ export type LineItem = z.infer<typeof LineItem>;
 export const Money = z.object({ "amountMinor": z.string().regex(new RegExp("^-?[0-9]{1,19}$")), "currency": z.string().regex(new RegExp("^[A-Z]{3}$")) }).strict().describe("Integer minor units as a decimal string (never a float) plus ISO 4217 currency.");
 export type Money = z.infer<typeof Money>;
 
-export const Invoice = z.object({ "id": z.string().uuid(), "tenantId": z.string().uuid(), "vendorId": z.string().uuid().optional(), "vendorName": z.string().max(256).optional(), "invoiceNumber": z.string().max(64).optional(), "invoiceDate": z.string().date().optional(), "dueDate": z.string().date().optional(), "total": Money.optional(), "subtotal": Money.optional(), "tax": Money.optional(), "lineItems": z.array(LineItem).describe("Stored lines, in position order. Present on getInvoice and exportInvoices (JSON) only.").optional(), "corrections": z.array(CorrectableField).describe("Fields a human has corrected since extraction.").optional(), "state": InvoiceState, "reasons": z.array(ReasonCode).describe("Reasons for the transition into the current state. Empty unless the state is HOLD, EXCEPTION or REJECTED."), "version": z.number().int().gte(1).describe("Incremented on every state change and every correction."), "document": InvoiceDocument.optional(), "extraction": InvoiceExtraction.optional(), "history": z.array(InvoiceEvent).describe("Audit entries for this invoice, oldest first. Present on getInvoice only.").optional(), "createdAt": z.string().datetime({ offset: true }), "updatedAt": z.string().datetime({ offset: true }) }).strict();
+export const Invoice = z.object({ "id": z.string().uuid(), "tenantId": z.string().uuid(), "vendorId": z.string().uuid().optional(), "vendorName": z.string().max(256).optional(), "invoiceNumber": z.string().max(64).optional(), "invoiceDate": z.string().date().optional(), "dueDate": z.string().date().optional(), "total": Money.optional(), "subtotal": Money.optional(), "tax": Money.optional(), "lineItems": z.array(LineItem).describe("Stored lines, in position order. Present on getInvoice and exportInvoices (JSON) only.").optional(), "corrections": z.array(CorrectableField).describe("Fields a human has corrected since extraction.").optional(), "state": InvoiceState, "reasons": z.array(ReasonCode).describe("Reasons for the transition into the current state. Empty unless the state is HOLD, EXCEPTION or REJECTED."), "version": z.number().int().gte(1).describe("Incremented on every state change and every correction."), "document": InvoiceDocument.optional(), "extraction": InvoiceExtraction.optional(), "paymentRunId": z.string().uuid().describe("The payment run currently paying this invoice.").optional(), "approvals": z.array(InvoiceApprovalRecord).describe("Every approval given, oldest first. Present on getInvoice and approveInvoice.").optional(), "approvalTier": ApprovalTierStatus.optional(), "history": z.array(InvoiceEvent).describe("Audit entries for this invoice, oldest first. Present on getInvoice only.").optional(), "createdAt": z.string().datetime({ offset: true }), "updatedAt": z.string().datetime({ offset: true }) }).strict();
 export type Invoice = z.infer<typeof Invoice>;
 
 export const InvoiceApproval = z.object({ "comment": z.string().max(2000).optional() }).strict();
@@ -96,6 +120,65 @@ export type LifecycleState = z.infer<typeof LifecycleState>;
 export const LifecycleStates = z.object({ "states": z.array(LifecycleState) }).strict();
 export type LifecycleStates = z.infer<typeof LifecycleStates>;
 
+export const Me = z.object({ "userId": z.string(), "tenantId": z.string().uuid(), "roles": z.array(ApproverRole), "authMode": z.enum(["demo","oidc"]), "personas": z.array(z.object({ "id": z.string(), "roles": z.array(ApproverRole) }).strict()).describe("Demo mode only. Send `Authorization: Demo <id>` or the iq_demo_persona cookie to act as one.").optional() }).strict();
+export type Me = z.infer<typeof Me>;
+
+export const PaymentRunItem = z.object({ "invoiceId": z.string().uuid(), "vendorId": z.string().uuid(), "vendorName": z.string(), "accountLast4": z.union([z.string(), z.null()]), "amount": Money, "invoiceNumber": z.union([z.string(), z.null()]), "dueDate": z.union([z.string().date(), z.null()]), "state": InvoiceState }).strict();
+export type PaymentRunItem = z.infer<typeof PaymentRunItem>;
+
+export const PaymentRunStatus = z.enum(["queued","paid","cancelled"]);
+export type PaymentRunStatus = z.infer<typeof PaymentRunStatus>;
+
+export const PaymentRun = z.object({ "id": z.string().uuid(), "currency": z.string().regex(new RegExp("^[A-Z]{3}$")), "status": PaymentRunStatus, "invoiceCount": z.number().int().gte(1), "total": Money, "version": z.number().int().gte(1), "comment": z.string().optional(), "createdBy": z.string(), "createdAt": z.string().datetime({ offset: true }), "closedBy": z.string().optional(), "closedAt": z.string().datetime({ offset: true }).optional(), "closeComment": z.string().optional(), "items": z.array(PaymentRunItem).describe("Present on getPaymentRun and on create, confirm and cancel responses.").optional() }).strict();
+export type PaymentRun = z.infer<typeof PaymentRun>;
+
+export const PaymentRunCancel = z.object({ "expectedVersion": z.number().int().gte(1), "comment": z.string().min(1).max(2000) }).strict();
+export type PaymentRunCancel = z.infer<typeof PaymentRunCancel>;
+
+export const PaymentRunClose = z.object({ "expectedVersion": z.number().int().gte(1), "comment": z.string().max(2000).optional() }).strict();
+export type PaymentRunClose = z.infer<typeof PaymentRunClose>;
+
+export const PaymentRunList = z.object({ "items": z.array(PaymentRun) }).strict();
+export type PaymentRunList = z.infer<typeof PaymentRunList>;
+
+export const PaymentRunRequest = z.object({ "currency": z.string().regex(new RegExp("^[A-Z]{3}$")), "invoiceIds": z.array(z.string().uuid()).min(1).max(500).optional(), "comment": z.string().max(2000).optional() }).strict();
+export type PaymentRunRequest = z.infer<typeof PaymentRunRequest>;
+
+export const PaymentRunResult = z.object({ "run": z.any().superRefine((x, ctx) => {
+    const schemas = [PaymentRun, z.null()];
+    const { errors, failed } = schemas.reduce<{
+      errors: z.core.$ZodIssue[];
+      failed: number;
+    }>(
+      ({ errors, failed }, schema) =>
+        ((result) =>
+          result.error
+            ? {
+                errors: [...errors, ...result.error.issues],
+                failed: failed + 1,
+              }
+            : { errors, failed })(
+          schema.safeParse(x),
+        ),
+      { errors: [], failed: 0 },
+    );
+    const passed = schemas.length - failed;
+    if (passed !== 1) {
+      ctx.addIssue(errors.length ? {
+        path: [],
+        code: "invalid_union",
+        errors: [errors],
+        message: "Invalid input: Should pass single schema. Passed " + passed,
+      } : {
+        path: [],
+        code: "custom",
+        errors: [errors],
+        message: "Invalid input: Should pass single schema. Passed " + passed,
+      });
+    }
+  }), "held": z.array(z.object({ "invoiceId": z.string().uuid(), "reason": ReasonCode }).strict()), "skipped": z.array(z.object({ "invoiceId": z.string().uuid(), "why": z.enum(["CURRENCY_MISMATCH","TOTAL_UNKNOWN","VENDOR_UNKNOWN"]) }).strict()) }).strict();
+export type PaymentRunResult = z.infer<typeof PaymentRunResult>;
+
 export const Problem = z.object({ "type": z.string(), "title": z.string(), "status": z.number().int().gte(100).lte(599), "detail": z.string().optional(), "code": z.string().describe("Machine-readable cause, e.g. a TransitionError such as HUMAN_REQUIRED.").optional() });
 export type Problem = z.infer<typeof Problem>;
 
@@ -122,3 +205,21 @@ export type TransitionEvaluation = z.infer<typeof TransitionEvaluation>;
 
 export const TransitionRequest = z.object({ "from": InvoiceState, "to": InvoiceState, "actor": Actor, "reasons": z.array(ReasonCode).max(18).optional() }).strict();
 export type TransitionRequest = z.infer<typeof TransitionRequest>;
+
+export const VendorPayment = z.object({ "blocked": z.boolean(), "reason": z.enum(["VENDOR_INACTIVE","VENDOR_BANK_CHANGE_QUARANTINE"]).optional(), "why": z.enum(["WINDOW_OPEN","UNVERIFIED","SELF_VERIFIED"]).optional(), "releasesAt": z.union([z.string().datetime({ offset: true }), z.null()]).optional() }).strict();
+export type VendorPayment = z.infer<typeof VendorPayment>;
+
+export const Vendor = z.object({ "id": z.string().uuid(), "name": z.string().max(256), "status": z.enum(["active","inactive"]), "version": z.number().int().gte(1), "bankAccountLast4": z.union([z.string().regex(new RegExp("^[0-9A-Z]{4}$")), z.null()]), "openInvoices": z.number().int().gte(0), "payment": VendorPayment, "createdBy": z.string(), "createdAt": z.string().datetime({ offset: true }), "updatedAt": z.string().datetime({ offset: true }) }).strict();
+export type Vendor = z.infer<typeof Vendor>;
+
+export const VendorCreate = z.object({ "name": z.string().min(1).max(256) }).strict();
+export type VendorCreate = z.infer<typeof VendorCreate>;
+
+export const VendorDetail = z.object({ "id": z.string().uuid(), "name": z.string().max(256), "status": z.enum(["active","inactive"]), "version": z.number().int().gte(1), "bankAccountLast4": z.union([z.string().regex(new RegExp("^[0-9A-Z]{4}$")), z.null()]), "openInvoices": z.number().int().gte(0), "payment": VendorPayment, "createdBy": z.string(), "createdAt": z.string().datetime({ offset: true }), "updatedAt": z.string().datetime({ offset: true }), "bankChanges": z.array(BankChange).describe("Newest first.") }).strict();
+export type VendorDetail = z.infer<typeof VendorDetail>;
+
+export const VendorList = z.object({ "items": z.array(Vendor) }).strict();
+export type VendorList = z.infer<typeof VendorList>;
+
+export const VendorUpdate = z.object({ "expectedVersion": z.number().int().gte(1), "status": z.enum(["active","inactive"]), "comment": z.string().max(2000).optional() }).strict();
+export type VendorUpdate = z.infer<typeof VendorUpdate>;

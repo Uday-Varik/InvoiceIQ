@@ -7,3 +7,7 @@ export * from './audit-ledger.js';
 export * from './matching.js';
 export * from './duplicates.js';
 export * from './bank-change.js';
+export * from './approvals.js';
+export * from './vendors.js';
+export * from './payment-run.js';
+export * from './checkpoint.js';

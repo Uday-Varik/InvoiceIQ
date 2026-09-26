@@ -9,6 +9,7 @@ import { appendAudit, invoiceHistory } from './audit.js';
 import { transition, TransitionRefusedError } from './lifecycle.js';
 import { planCorrection, type CorrectionInput } from './corrections.js';
 import { continueFromValidating, loadPolicy } from './pipeline.js';
+import { approvalsOf, approvalView, recordApproval } from './approvals.js';
 import {
   applyCorrection,
   findByDocument,
@@ -129,10 +130,17 @@ export async function humanTransition(db: Db, principal: Principal, input: Human
     idempotent(tx, principal.tenantId, input.idempotencyKey, hash, async () => {
       const inv = await mustGet(tx, input.invoiceId);
       if (input.to === 'APPROVED') {
-        if (inv.state !== 'PENDING_APPROVAL') {
-          throw new HttpProblem(409, 'Transition refused', `only PENDING_APPROVAL invoices can be approved; this one is ${inv.state}`, 'EDGE_NOT_ALLOWED');
+        try {
+          const policy = await loadPolicy(tx);
+          const updated = await recordApproval(tx, principal, inv, policy, input.comment);
+          return { status: 200, body: toInvoice(updated, { approval: approvalView(updated, await approvalsOf(tx, updated.id), policy) }) };
+        } catch (err) {
+          if (err instanceof TransitionRefusedError) throw refused(err);
+          throw err;
         }
-        checkApprovalAuthority(principal, inv, await loadPolicy(tx));
+      }
+      if (input.to === 'PAYMENT_QUEUED' || input.to === 'PAID') {
+        throw new HttpProblem(409, 'Transition refused', 'payments move only through payment runs (/v1/payment-runs)', 'EDGE_NOT_ALLOWED');
       }
       try {
         let updated = await transition(tx, inv, {
@@ -156,7 +164,11 @@ export async function readInvoice(db: Db, principal: Principal, id: string) {
   return withTenant(db, principal.tenantId, async (tx) => {
     const inv = await getInvoice(tx, id);
     if (!inv) throw new HttpProblem(404, 'Not found', `no invoice ${id}`);
-    return toInvoice(inv, { history: await invoiceHistory(tx, principal.tenantId, id), lineItems: await getLineItems(tx, id) });
+    return toInvoice(inv, {
+      history: await invoiceHistory(tx, principal.tenantId, id),
+      lineItems: await getLineItems(tx, id),
+      approval: approvalView(inv, await approvalsOf(tx, id), await loadPolicy(tx)),
+    });
   });
 }
 

@@ -30,6 +30,8 @@ export interface InvoiceRow {
   subtotal_minor: string | null;
   tax_minor: string | null;
   corrected_fields: string[];
+  vendor_id: string | null;
+  payment_run_id: string | null;
   extraction: StoredExtraction | null;
   created_by: string;
   created_at: Date;
@@ -300,4 +302,23 @@ export async function updateState(
     [id, expectedVersion, to, reasons],
   );
   return res.rowCount === 1;
+}
+
+/** Approved invoices in one currency, oldest due first, locked for a payment run. */
+export async function lockApproved(tx: Tx, currency: string, ids: readonly string[] | undefined, limit: number): Promise<InvoiceRow[]> {
+  const params: unknown[] = [currency, limit];
+  const byId = ids === undefined ? '' : ` AND i.id = ANY($3::uuid[])`;
+  if (ids !== undefined) params.push(ids);
+  const { rows } = await tx.query<InvoiceRow>(
+    `${SELECT_INVOICE} WHERE i.state = 'APPROVED' AND i.currency = $1${byId}
+      ORDER BY i.due_date NULLS LAST, i.created_at, i.id LIMIT $2 FOR UPDATE OF i`,
+    params,
+  );
+  return rows;
+}
+
+/** The invoices a payment run currently holds, locked. */
+export async function lockRunInvoices(tx: Tx, runId: string): Promise<InvoiceRow[]> {
+  const { rows } = await tx.query<InvoiceRow>(`${SELECT_INVOICE} WHERE i.payment_run_id = $1 ORDER BY i.id FOR UPDATE OF i`, [runId]);
+  return rows;
 }

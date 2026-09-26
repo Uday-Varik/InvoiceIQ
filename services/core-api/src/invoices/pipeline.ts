@@ -1,5 +1,8 @@
-import { approvalTierFor, parsePolicy, type Actor, type Policy, type ReasonCode } from '../domain/index.js';
+import { approvalTierFor, type Actor, type Policy, type ReasonCode } from '../domain/index.js';
 import { withTenant, type Db, type Tx } from '../db/pool.js';
+import { loadPolicy } from '../db/policy.js';
+import { ensureVendor, paymentBlocks } from '../vendors/service.js';
+import { linkInvoiceVendor } from '../vendors/store.js';
 import { AiRejectedError, type AiClient, type ExtractionResult } from '../clients/ai-service.js';
 import { appendAudit } from './audit.js';
 import { transition } from './lifecycle.js';
@@ -35,11 +38,7 @@ export interface PipelineDeps {
   readonly ai: AiClient;
 }
 
-export async function loadPolicy(tx: Tx): Promise<Policy> {
-  const { rows } = await tx.query<{ policy: unknown }>('SELECT policy FROM tenant_policies WHERE tenant_id = app_tenant()');
-  if (!rows[0]) throw new Error('tenant has no policy; run the tenant bootstrap');
-  return parsePolicy(rows[0].policy);
-}
+export { loadPolicy };
 
 const MAX_BIGINT = 2n ** 63n - 1n;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -223,6 +222,13 @@ async function routeFromValidating(
       details: { missing, currency: header.currency, ...(totals.length > 0 ? { totals } : {}) },
     });
   }
+  // Link the vendor master (registering a new vendor on first sight), so the
+  // payment controls below and in payment runs know who would be paid.
+  const vendor = header.vendorName === null ? undefined : await ensureVendor(tx, cur.tenant_id, header.vendorName, PIPELINE_ACTOR);
+  if ((vendor?.id ?? null) !== cur.vendor_id) {
+    await linkInvoiceVendor(tx, cur.id, vendor?.id ?? null);
+    cur = { ...cur, vendor_id: vendor?.id ?? null };
+  }
   cur = await transition(tx, cur, { to: 'VALIDATED', actor: PIPELINE_ACTOR });
 
   // Phase 1 has no purchase orders or receipts yet, so every invoice is a non-PO
@@ -230,6 +236,20 @@ async function routeFromValidating(
   // (domain/matching.ts) is wired in once POs exist.
   cur = await transition(tx, cur, { to: 'MATCHING', actor: PIPELINE_ACTOR });
   cur = await transition(tx, cur, { to: 'MATCHED', actor: PIPELINE_ACTOR, details: { mode: 'non_po' } });
+
+  // Hold now rather than let an invoice collect approvals for a vendor that
+  // cannot be paid. Payment runs check again, since blocks can start later.
+  if (vendor !== undefined) {
+    const block = (await paymentBlocks(tx, [vendor.id], policy, new Date())).get(vendor.id);
+    if (block?.blocked) {
+      return transition(tx, cur, {
+        to: 'HOLD',
+        actor: PIPELINE_ACTOR,
+        reasons: [block.reason],
+        details: { vendorId: vendor.id, ...(block.reason === 'VENDOR_BANK_CHANGE_QUARANTINE' ? { why: block.quarantine.why, releasesAt: block.quarantine.releasesAt } : {}) },
+      });
+    }
+  }
 
   const total = header.totalMinor ?? 0n;
   if (approvalTierFor(policy, total) === undefined) {

@@ -1,8 +1,7 @@
 import { createRemoteJWKSet, errors, jwtVerify, type JWTVerifyGetKey } from 'jose';
-import type { ApprovalTier } from '../domain/index.js';
+import { APPROVER_ROLES, roleCovers, type ApproverRole } from '../domain/index.js';
 
-export type ApproverRole = ApprovalTier['approverRole'];
-export const APPROVER_ROLES: readonly ApproverRole[] = ['ap_clerk', 'ap_manager', 'controller', 'cfo'];
+export { APPROVER_ROLES, roleCovers, type ApproverRole };
 
 /** Who is calling. tenantId always comes from a verified token, never from request input. */
 export interface Principal {
@@ -17,18 +16,56 @@ export class AuthError extends Error {
 
 export interface Authenticator {
   readonly mode: 'demo' | 'oidc';
-  authenticate(authorization: string | undefined): Promise<Principal>;
+  /** `cookie` is only read in demo mode, to pick a persona. */
+  authenticate(authorization: string | undefined, cookie?: string): Promise<Principal>;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Public-demo mode: every caller is the same demo user in the demo tenant.
- * There is no login to bypass because there is nothing private in the demo
- * tenant. Config refuses this mode unless AUTH_MODE=demo is set explicitly.
+ * Demo personas, so separation of duties can be shown with one browser: the
+ * clerk uploads, a manager approves, a controller confirms the payment run.
+ */
+export const DEMO_PERSONAS: Readonly<Record<string, readonly ApproverRole[]>> = {
+  'demo-clerk': ['ap_clerk'],
+  'demo-manager': ['ap_manager'],
+  'demo-controller': ['controller'],
+  'demo-cfo': ['cfo'],
+  'demo-deputy-cfo': ['cfo'],
+};
+
+export const DEMO_PERSONA_COOKIE = 'iq_demo_persona';
+
+/** The persona named by `Authorization: Demo <name>` or the persona cookie, if any. */
+export function demoPersona(authorization: string | undefined, cookie: string | undefined): string | undefined {
+  const auth = /^Demo\s+(\S+)\s*$/i.exec(authorization ?? '');
+  if (auth?.[1]) return auth[1];
+  for (const part of (cookie ?? '').split(';')) {
+    const [k, v] = part.trim().split('=', 2);
+    if (k === DEMO_PERSONA_COOKIE && v) return decodeURIComponent(v);
+  }
+  return undefined;
+}
+
+/**
+ * Public-demo mode: every caller is in the demo tenant. There is no login to
+ * bypass because there is nothing private in the demo tenant. A caller with no
+ * persona is `principal`; a persona picks one of DEMO_PERSONAS. Config refuses
+ * this mode unless AUTH_MODE=demo is set explicitly.
  */
 export function demoAuthenticator(principal: Principal): Authenticator {
-  return { mode: 'demo', authenticate: () => Promise.resolve(principal) };
+  return {
+    mode: 'demo',
+    authenticate(authorization, cookie) {
+      const persona = demoPersona(authorization, cookie);
+      if (persona === undefined || persona === principal.userId) return Promise.resolve(principal);
+      const roles = DEMO_PERSONAS[persona];
+      if (!Object.hasOwn(DEMO_PERSONAS, persona) || roles === undefined) {
+        return Promise.reject(new AuthError(`unknown demo persona ${persona.slice(0, 40)}`));
+      }
+      return Promise.resolve({ tenantId: principal.tenantId, userId: persona, roles });
+    },
+  };
 }
 
 export interface OidcOptions {
@@ -76,8 +113,3 @@ export function oidcAuthenticator(opts: OidcOptions): Authenticator {
   };
 }
 
-/** True when any of the caller's roles is at least as senior as `required`. */
-export function roleCovers(roles: readonly ApproverRole[], required: ApproverRole): boolean {
-  const need = APPROVER_ROLES.indexOf(required);
-  return roles.some((r) => APPROVER_ROLES.indexOf(r) >= need);
-}

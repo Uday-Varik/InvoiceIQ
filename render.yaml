@@ -55,6 +55,10 @@ services:
       # because the free plan has no pre-deploy command.
       - key: MIGRATION_DATABASE_URL
         sync: false
+      # Ed25519 private key (PEM or base64 DER) that signs audit checkpoints.
+      # Unset means a new key per boot, so old checkpoints stop verifying.
+      - key: AUDIT_CHECKPOINT_KEY
+        sync: false
       # The public demo: one shared demo tenant, no login. Switch to oidc and set
       # OIDC_ISSUER, OIDC_AUDIENCE and OIDC_JWKS_URL for a real deployment.
       - key: AUTH_MODE
