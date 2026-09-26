@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from ai_service.providers import resolve
 from invoiceiq_data.labels import SplitRecord
 from invoiceiq_data.paths import DATA_DIR
 from invoiceiq_evals.report import compute, to_json, to_text
@@ -32,10 +33,16 @@ def main(argv: list[str] | None = None) -> None:
         help=f"Extraction confidence hold threshold (default: {DEFAULT_HOLD_THRESHOLD})",
     )
     parser.add_argument("--version", default="test-v1", help="Frozen set version (default: test-v1)")
+    parser.add_argument(
+        "--provider",
+        default=None,
+        help="Extraction provider name (default: heuristic). See EXTRACTION_PROVIDER env var.",
+    )
     args = parser.parse_args(argv)
 
+    provider = resolve(args.provider) if args.provider else None
     labels = _load_frozen(args.version)
-    results = evaluate_all(labels, hold_threshold=args.threshold)
+    results = evaluate_all(labels, hold_threshold=args.threshold, provider=provider)
     report = compute(results)
 
     if args.json:

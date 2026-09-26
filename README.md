@@ -10,10 +10,10 @@ bank-detail-change quarantine and a hash-chained audit ledger. Models help with
 extraction and risk signals, but every AI output is structurally limited to
 putting an invoice on HOLD.
 
-> Status: **Phase 6 (eval harness).** On top of Phase 5's OCR and currency
-> work: an offline evaluation harness scores AI signals against the frozen
-> test set. The Terraform has not been applied yet; live model calls come
-> later.
+> Status: **Phase 7 (pluggable providers).** Extraction is now provider-
+> pluggable: a registry selects providers by config (`EXTRACTION_PROVIDER`
+> env var), and the eval harness scores any provider against the frozen test
+> set. The Terraform has not been applied yet; live model calls come later.
 
 ## The problem
 
@@ -164,6 +164,18 @@ Same labels as above. Decisions in [ADR-0019](docs/adr/0019-offline-eval-harness
 | 2 | Runner extracts fields, computes signals, compares AI codes | Verified-in-sandbox | `evals/src/invoiceiq_evals/runner.py` |
 | 3 | Report computes detection rate, outcome accuracy and false-hold rate per category | Verified-in-sandbox | `evals/src/invoiceiq_evals/report.py` |
 | 4 | CLI prints text or JSON report against the frozen set | Verified-in-sandbox | `evals/src/invoiceiq_evals/cli.py` |
+
+## Phase 7 deliverables
+
+Same labels as above. Decisions in [ADR-0020](docs/adr/0020-pluggable-extraction-providers.md).
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | `ExtractionProvider` protocol (renamed from `LLMProvider`, backward-compat alias kept) | Verified-in-sandbox | `services/ai-service/src/ai_service/providers/base.py` |
+| 2 | Provider registry with config-driven selection (`EXTRACTION_PROVIDER` env var) | Verified-in-sandbox | `services/ai-service/src/ai_service/providers/registry.py` |
+| 3 | `EchoProvider` stub for integration tests | Verified-in-sandbox | `services/ai-service/src/ai_service/providers/echo.py` |
+| 4 | Eval harness accepts any provider via `--provider` flag | Verified-in-sandbox | `evals/src/invoiceiq_evals/cli.py` |
+| 5 | Eval report includes provider name for cross-provider comparison | Verified-in-sandbox | `evals/src/invoiceiq_evals/report.py` |
 
 ## Getting started
 

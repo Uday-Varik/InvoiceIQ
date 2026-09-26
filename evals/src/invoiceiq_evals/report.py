@@ -23,6 +23,7 @@ class CategoryMetrics:
 
 @dataclass(frozen=True, slots=True)
 class Report:
+    provider: str
     total_documents: int
     attack_documents: int
     clean_documents: int
@@ -95,7 +96,9 @@ def compute(results: list[EvalResult]) -> Report:
             )
         )
 
+    provider_name = results[0].extraction.provider if results else "unknown"
     return Report(
+        provider=provider_name,
         total_documents=len(results),
         attack_documents=len(attacks),
         clean_documents=len(clean),
@@ -114,6 +117,7 @@ def to_text(report: Report) -> str:
     lines = [
         "Evaluation Report",
         "=================",
+        f"Provider:  {report.provider}",
         f"Documents: {report.total_documents}"
         f" ({report.attack_documents} attacks, {report.clean_documents} clean)",
         f"AI detection rate: {report.detection_rate:.1%}",

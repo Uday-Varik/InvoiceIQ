@@ -8,13 +8,17 @@ import pytest
 from ai_service.extraction import ExtractionError, extract
 from ai_service.providers import (
     Completion,
+    EchoProvider,
+    ExtractionProvider,
     HeuristicProvider,
     LLMProvider,
     ProviderError,
     RecordingProvider,
     ReplayMissError,
     ReplayProvider,
+    registered_names,
     request_key,
+    resolve,
 )
 from invoiceiq_contracts.ai_service import ExtractionRequest
 
@@ -45,8 +49,9 @@ def test_request_key_is_stable_and_input_sensitive() -> None:
     assert len(a) == 64
 
 
-@pytest.mark.parametrize("provider", [HeuristicProvider(), ReplayProvider(FIXTURES)])
-def test_providers_satisfy_protocol(provider: LLMProvider) -> None:
+@pytest.mark.parametrize("provider", [HeuristicProvider(), ReplayProvider(FIXTURES), EchoProvider()])
+def test_providers_satisfy_protocol(provider: ExtractionProvider) -> None:
+    assert isinstance(provider, ExtractionProvider)
     assert isinstance(provider, LLMProvider)
 
 
@@ -113,3 +118,49 @@ def test_model_cannot_inject_extra_fields_or_bad_confidence() -> None:
     assert result.fields.totalMinor.confidence == 0.0
     assert result.fields.vendorName.value is None
     assert "approve" not in result.model_dump()
+
+
+def test_echo_provider_returns_fixed_payload() -> None:
+    payload = {"vendorName": {"value": "Acme", "confidence": 0.99}}
+    provider = EchoProvider(payload)
+    result = extract(_req(), provider)
+    assert result.fields.vendorName.value == "Acme"
+    assert result.provider == "echo"
+
+
+def test_echo_provider_defaults_to_empty() -> None:
+    result = extract(_req(), EchoProvider())
+    assert result.fields.totalMinor.value is None
+    assert result.fields.totalMinor.confidence == 0.0
+
+
+def test_registry_resolves_heuristic() -> None:
+    provider = resolve("heuristic")
+    assert isinstance(provider, HeuristicProvider)
+
+
+def test_registry_resolves_echo() -> None:
+    provider = resolve("echo")
+    assert isinstance(provider, EchoProvider)
+
+
+def test_registry_rejects_unknown() -> None:
+    with pytest.raises(ProviderError, match="unknown provider"):
+        resolve("nonexistent")
+
+
+def test_registered_names_includes_builtins() -> None:
+    names = registered_names()
+    assert {"heuristic", "echo", "replay"} <= names
+
+
+def test_registry_respects_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EXTRACTION_PROVIDER", "echo")
+    provider = resolve()
+    assert isinstance(provider, EchoProvider)
+
+
+def test_registry_defaults_to_heuristic(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("EXTRACTION_PROVIDER", raising=False)
+    provider = resolve()
+    assert isinstance(provider, HeuristicProvider)

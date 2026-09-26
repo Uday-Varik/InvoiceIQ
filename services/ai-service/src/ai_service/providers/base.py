@@ -1,8 +1,10 @@
-"""LLM provider abstraction (ADR-0006).
+"""Extraction provider abstraction (ADR-0006, ADR-0020).
 
-Every model call goes through `LLMProvider.complete`. Requests are keyed by a
-stable hash so a recording made once can be replayed byte-for-byte in tests and
-CI without network access or API keys.
+Every extraction call goes through ``ExtractionProvider.complete``.  Requests
+are keyed by a stable hash so a recording made once can be replayed
+byte-for-byte in tests and CI without network access or API keys.
+
+``LLMProvider`` is kept as a backward-compatible alias.
 """
 
 from __future__ import annotations
@@ -25,10 +27,13 @@ class Completion:
 
 
 @runtime_checkable
-class LLMProvider(Protocol):
+class ExtractionProvider(Protocol):
     name: str
 
     def complete(self, *, task: str, prompt: str) -> Completion: ...
+
+
+LLMProvider = ExtractionProvider
 
 
 def request_key(*, task: str, prompt: str) -> str:

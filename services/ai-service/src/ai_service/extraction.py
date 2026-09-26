@@ -7,7 +7,7 @@ import json
 from pydantic import ValidationError
 
 from ai_service.documents import DocumentError, decode, read_document
-from ai_service.providers import LLMProvider, ProviderError
+from ai_service.providers import ExtractionProvider, ProviderError
 from invoiceiq_contracts.ai_service import (
     DocumentExtractionRequest,
     ExtractedField,
@@ -74,7 +74,7 @@ def _line_items(raw: object) -> list[ExtractedLineItem]:
     return [i for i in items if i is not None]
 
 
-def extract(request: ExtractionRequest, provider: LLMProvider) -> ExtractionResult:
+def extract(request: ExtractionRequest, provider: ExtractionProvider) -> ExtractionResult:
     completion = provider.complete(task=TASK, prompt=request.text)
     try:
         payload = json.loads(completion.text)
@@ -98,7 +98,7 @@ def extract(request: ExtractionRequest, provider: LLMProvider) -> ExtractionResu
 OCR_MAX_CONFIDENCE = 0.85
 
 
-def extract_document(request: DocumentExtractionRequest, provider: LLMProvider) -> ExtractionResult:
+def extract_document(request: DocumentExtractionRequest, provider: ExtractionProvider) -> ExtractionResult:
     """Extract from document bytes. No readable text means every field is unknown, not guessed."""
     data = decode(request.contentBase64, request.documentSha256)
     doc = read_document(data, request.contentType.value)
