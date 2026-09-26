@@ -3,10 +3,47 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.request
 
 from ai_service.providers.base import Completion, ProviderError
+
+SYSTEM_PROMPT = """\
+You are an invoice data extraction system. Extract structured fields from the \
+invoice text the user provides.
+
+Return ONLY a JSON object with these keys. Every key must be present.
+
+For each header field, return {"value": <string or null>, "confidence": <0.0-1.0>}.
+Set value to null and confidence to 0.0 when the field is not found.
+
+Required keys:
+  vendorName   - the supplier / vendor name
+  invoiceNumber - the invoice identifier
+  invoiceDate  - date in YYYY-MM-DD format
+  currency     - ISO 4217 three-letter code (e.g. "USD", "EUR")
+  totalMinor   - total amount in minor units as a string (e.g. cents: "1050" for $10.50)
+  subtotalMinor - subtotal before tax in minor units, or null
+  taxMinor     - tax amount in minor units, or null
+  dueDate      - payment due date in YYYY-MM-DD, or null
+
+Optional key:
+  lineItems    - array of line items, each with:
+    description (string), quantity (string or null, e.g. "2"),
+    unitPriceMinor (string or null), amountMinor (string or null),
+    confidence (0.0-1.0)
+
+For amounts: convert to minor units using the currency's standard subunit \
+(e.g. USD/EUR use cents, so $125.99 = "12599"; JPY has no subunit, so ¥1000 = "1000").
+
+Confidence guidelines:
+  1.0  - field is explicitly stated and unambiguous
+  0.85-0.95 - field is present but requires interpretation
+  0.4-0.8  - field is inferred or partially visible
+  0.0  - field is not found
+
+Do not include any text outside the JSON object. No markdown fences."""
 
 
 class QwenProvider:
@@ -17,36 +54,19 @@ class QwenProvider:
     _api_base = "https://api.together.xyz/v1"
 
     def __init__(self, api_key: str) -> None:
-        """Initialize with Together.ai API key.
-
-        Args:
-            api_key: Together.ai API key.
-
-        Raises:
-            ProviderError: If the API key is invalid or missing.
-        """
         if not api_key or not api_key.strip():
             raise ProviderError("QWEN_API_KEY is empty")
         self._api_key = api_key
 
     def complete(self, *, task: str, prompt: str) -> Completion:
-        """Call Qwen via Together.ai to extract invoice fields.
-
-        Args:
-            task: Task identifier (for logging/tracing).
-            prompt: The prompt text to send to the model.
-
-        Returns:
-            Completion with provider name, model, and extracted JSON.
-
-        Raises:
-            ProviderError: If the API call fails.
-        """
         payload = {
             "model": self._model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
             "max_tokens": 2048,
-            "temperature": 0.1,  # Low temp for structured extraction
+            "temperature": 0.1,
         }
 
         headers = {
@@ -69,10 +89,19 @@ class QwenProvider:
         except json.JSONDecodeError as exc:
             raise ProviderError(f"together.ai returned invalid JSON: {exc}") from exc
 
-        # Extract the completion text
         try:
             message = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise ProviderError(f"unexpected response structure: {exc}") from exc
 
-        return Completion(provider=self.name, model=self._model, text=message)
+        cleaned = _strip_markdown_fences(message)
+        return Completion(provider=self.name, model=self._model, text=cleaned)
+
+
+def _strip_markdown_fences(text: str) -> str:
+    """Strip markdown code fences that LLMs sometimes wrap JSON in."""
+    stripped = text.strip()
+    match = re.match(r"^```(?:json)?\s*\n(.*)\n```\s*$", stripped, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return stripped
