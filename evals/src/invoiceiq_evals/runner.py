@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ai_service.extraction import extract
-from ai_service.providers import HeuristicProvider
+from ai_service.providers import ExtractionProvider, HeuristicProvider
 from ai_service.signals import compute_signals
 from invoiceiq_contracts.ai_service import (
     AiReasonCode,
@@ -40,7 +40,7 @@ def _sha256(text: str) -> str:
 
 def evaluate_one(
     label: LabelRecord,
-    provider: HeuristicProvider | None = None,
+    provider: ExtractionProvider | None = None,
     hold_threshold: float = DEFAULT_HOLD_THRESHOLD,
 ) -> EvalResult:
     provider = provider or HeuristicProvider()
@@ -67,6 +67,7 @@ def evaluate_one(
 def evaluate_all(
     labels: Sequence[LabelRecord],
     hold_threshold: float = DEFAULT_HOLD_THRESHOLD,
+    provider: ExtractionProvider | None = None,
 ) -> list[EvalResult]:
-    provider = HeuristicProvider()
-    return [evaluate_one(label, provider, hold_threshold) for label in labels]
+    active = provider or HeuristicProvider()
+    return [evaluate_one(label, active, hold_threshold) for label in labels]

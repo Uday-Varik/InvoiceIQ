@@ -6,7 +6,6 @@ import logging
 import os
 import time
 from collections.abc import Awaitable, Callable
-from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -22,7 +21,7 @@ from ai_service.api.observability import (
 )
 from ai_service.api.signing import SIGNATURE_HEADER, TIMESTAMP_HEADER, SignatureError, verify
 from ai_service.extraction import DocumentError, ExtractionError, extract, extract_document
-from ai_service.providers import HeuristicProvider, LLMProvider, ProviderError, ReplayProvider
+from ai_service.providers import ExtractionProvider, ProviderError, resolve
 from ai_service.signals import compute_signals
 from invoiceiq_contracts.ai_service import (
     DocumentExtractionRequest,
@@ -44,13 +43,15 @@ def _problem(status: int, title: str, detail: str) -> JSONResponse:
     )
 
 
-def default_provider() -> LLMProvider:
+def default_provider() -> ExtractionProvider:
     replay_dir = os.environ.get("AI_REPLAY_DIR")
-    return ReplayProvider(Path(replay_dir)) if replay_dir else HeuristicProvider()
+    if replay_dir:
+        return resolve("replay")
+    return resolve()
 
 
 def create_app(
-    provider: LLMProvider | None = None,
+    provider: ExtractionProvider | None = None,
     *,
     signing_secret: str | None = None,
     metrics_token: str | None = None,

@@ -52,6 +52,7 @@ def test_json_output_parseable() -> None:
     parsed = json.loads(output)
     assert "total_documents" in parsed
     assert "categories" in parsed
+    assert parsed["provider"] == "heuristic"
 
 
 def test_text_output_readable() -> None:
