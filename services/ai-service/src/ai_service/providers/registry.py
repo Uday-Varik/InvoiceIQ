@@ -16,6 +16,7 @@ from pathlib import Path
 from ai_service.providers.base import ExtractionProvider, ProviderError
 from ai_service.providers.echo import EchoProvider
 from ai_service.providers.heuristic import HeuristicProvider
+from ai_service.providers.qwen import QwenProvider
 from ai_service.providers.replay import ReplayProvider
 
 ProviderFactory = Callable[[], ExtractionProvider]
@@ -46,9 +47,17 @@ def _replay() -> ExtractionProvider:
     return ReplayProvider(Path(replay_dir))
 
 
+def _qwen() -> ExtractionProvider:
+    api_key = os.environ.get("QWEN_API_KEY", "")
+    if not api_key:
+        raise ProviderError("EXTRACTION_PROVIDER=qwen requires QWEN_API_KEY to be set")
+    return QwenProvider(api_key)
+
+
 register("heuristic", _heuristic)
 register("echo", _echo)
 register("replay", _replay)
+register("qwen", _qwen)
 
 
 def resolve(name: str | None = None) -> ExtractionProvider:
