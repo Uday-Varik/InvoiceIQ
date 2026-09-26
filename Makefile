@@ -5,7 +5,7 @@ SHELL := /bin/bash
 
 PNPM ?= pnpm
 UV ?= uv
-PY_SRC := services/ai-service/src services/ai-service/tests data/src data/tests packages/contracts/scripts tests/guardrails
+PY_SRC := services/ai-service/src services/ai-service/tests data/src data/tests evals/src evals/tests packages/contracts/scripts tests/guardrails
 
 .PHONY: install install-ts install-py check check-ts check-py lint-ts typecheck-ts test-ts openapi-lint \
         contracts-verify contracts-verify-py lint-py typecheck-py test-py arch-py data-check contracts data fmt clean \
@@ -62,7 +62,7 @@ data-check:
 	$(UV) run --frozen invoiceiq-data check
 
 test-py:
-	$(UV) run --frozen pytest services/ai-service/tests data/tests tests/guardrails
+	$(UV) run --frozen pytest services/ai-service/tests data/tests evals/tests tests/guardrails
 
 ## ---- local stack ----------------------------------------------------------
 # core-api's Postgres integration tests run inside `make check` whenever

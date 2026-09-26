@@ -115,6 +115,27 @@ describe('README Phase 5 table', () => {
   });
 });
 
+describe('README Phase 6 table', () => {
+  const phase6 = tableAfter(readme, '## Phase 6 deliverables');
+
+  it('lists 4 numbered deliverables, all run in the sandbox', () => {
+    expect(phase6.map((r) => r[0])).toEqual(Array.from({ length: 4 }, (_, i) => String(i + 1)));
+    for (const row of phase6) expect(row[2], row[1]).toBe('Verified-in-sandbox');
+  });
+
+  it('points every row at a path that exists', () => {
+    for (const row of phase6) {
+      const path = /`([^`]+)`/.exec(row[3] ?? '')?.[1];
+      expect(path, row[1]).toBeDefined();
+      expect(existsSync(join(ROOT, path!)), path).toBe(true);
+    }
+  });
+
+  it('links the ADR that records the Phase 6 decisions', () => {
+    expect(readme).toContain('docs/adr/0019-');
+  });
+});
+
 describe('README Phase 1 table', () => {
   const phase1 = tableAfter(readme, '## Phase 1 deliverables');
 

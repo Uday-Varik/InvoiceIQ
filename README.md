@@ -10,11 +10,10 @@ bank-detail-change quarantine and a hash-chained audit ledger. Models help with
 extraction and risk signals, but every AI output is structurally limited to
 putting an invoice on HOLD.
 
-> Status: **Phase 5 (follow-ups).** On top of Phase 4's operations work:
-> scanned PDFs and PNG or JPEG photos are read with OCR, and every amount uses
-> its currency's own decimal places (yen with none, dinars with three), from
-> extraction through the forms, exports and payment files. The Terraform has
-> not been applied yet; live model calls come later.
+> Status: **Phase 6 (eval harness).** On top of Phase 5's OCR and currency
+> work: an offline evaluation harness scores AI signals against the frozen
+> test set. The Terraform has not been applied yet; live model calls come
+> later.
 
 ## The problem
 
@@ -155,6 +154,17 @@ Same labels as above. Decisions in [ADR-0018](docs/adr/0018-ocr-and-currency-exp
 | 5 | OCR for PNG, JPEG and scanned PDFs with a pixel cap, timeout and no shell | Verified-in-sandbox | `services/ai-service/src/ai_service/documents.py` |
 | 6 | Smoke script reads a scanned yen invoice through the whole stack | Verified-in-sandbox | `scripts/smoke.sh` |
 
+## Phase 6 deliverables
+
+Same labels as above. Decisions in [ADR-0019](docs/adr/0019-offline-eval-harness.md).
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | Renderer turns each label into synthetic invoice text | Verified-in-sandbox | `evals/src/invoiceiq_evals/renderer.py` |
+| 2 | Runner extracts fields, computes signals, compares AI codes | Verified-in-sandbox | `evals/src/invoiceiq_evals/runner.py` |
+| 3 | Report computes detection rate, outcome accuracy and false-hold rate per category | Verified-in-sandbox | `evals/src/invoiceiq_evals/report.py` |
+| 4 | CLI prints text or JSON report against the frozen set | Verified-in-sandbox | `evals/src/invoiceiq_evals/cli.py` |
+
 ## Getting started
 
 ```bash
@@ -181,7 +191,7 @@ services/core-api        Fastify API + pure domain model
 services/ai-service      FastAPI extraction and signals
 packages/contracts       OpenAPI specs, generated TS/Zod/Pydantic, reason catalog
 data/                    Synthetic labels, red-team taxonomy, splits, frozen sets
-evals/                   Evaluation harness (Phase 2)
+evals/                   Offline evaluation harness for AI signals
 infra/                   Local DB bootstrap, Terraform for the free tiers, alerts and dashboard
 scripts/                 End-to-end smoke test
 docs/                    ADRs, C4, threat model, runbooks, domain model
@@ -198,6 +208,7 @@ tests/guardrails         Cross-cutting drift and architecture tests
 | 3 | Approvals workflow, payment runs, external anchoring of the audit chain (done) |
 | 4 | Hosting on serverless free tiers, Terraform, observability (done) |
 | 5 | Follow-ups: OCR for scans, currencies without two decimals (done) |
+| 6 | Offline evaluation harness for AI signals (done) |
 
 ## License
 

@@ -1,6 +1,6 @@
 # uv workspace root (virtual: no [project]). Python members share one lockfile.
 [tool.uv.workspace]
-members = ["packages/contracts", "services/ai-service", "data"]
+members = ["packages/contracts", "services/ai-service", "data", "evals"]
 
 [dependency-groups]
 dev = [
@@ -27,7 +27,7 @@ python_version = "3.11"
 strict = true
 warn_unreachable = true
 plugins = ["pydantic.mypy"]
-mypy_path = ["packages/contracts/generated/python", "services/ai-service/src", "data/src"]
+mypy_path = ["packages/contracts/generated/python", "services/ai-service/src", "data/src", "evals/src"]
 explicit_package_bases = true
 exclude = ["tests/guardrails/fixtures"]
 
@@ -35,4 +35,4 @@ exclude = ["tests/guardrails/fixtures"]
 addopts = "-q --import-mode=importlib"
 
 [tool.ruff.lint.isort]
-known-first-party = ["ai_service", "invoiceiq_contracts", "invoiceiq_data"]
+known-first-party = ["ai_service", "invoiceiq_contracts", "invoiceiq_data", "invoiceiq_evals"]
