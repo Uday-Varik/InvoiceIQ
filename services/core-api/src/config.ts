@@ -71,6 +71,9 @@ const EnvSchema = z
     BUILD_VERSION: z.string().min(1).max(64).default('0.0.0'),
     BUILD_COMMIT: z.string().min(1).max(64).optional(),
     RENDER_GIT_COMMIT: z.string().min(1).max(64).optional(),
+
+    /** Allowed CORS origin(s). Comma-separated for multiple. Unset disables CORS headers. */
+    CORS_ORIGIN: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.AUTH_MODE === 'oidc') {
