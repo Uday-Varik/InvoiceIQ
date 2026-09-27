@@ -1,6 +1,6 @@
 import { randomBytes, createHmac, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { Authenticator, Principal } from './auth.js';
+import type { Authenticator } from './auth.js';
 import { AuthError, type ApproverRole } from './auth.js';
 
 const SESSION_COOKIE = 'iq_session';
