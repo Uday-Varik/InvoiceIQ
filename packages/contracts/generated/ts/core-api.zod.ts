@@ -120,7 +120,7 @@ export type LifecycleState = z.infer<typeof LifecycleState>;
 export const LifecycleStates = z.object({ "states": z.array(LifecycleState) }).strict();
 export type LifecycleStates = z.infer<typeof LifecycleStates>;
 
-export const Me = z.object({ "userId": z.string(), "tenantId": z.string().uuid(), "roles": z.array(ApproverRole), "authMode": z.enum(["demo","oidc"]), "personas": z.array(z.object({ "id": z.string(), "roles": z.array(ApproverRole) }).strict()).describe("Demo mode only. Send `Authorization: Demo <id>` or the iq_demo_persona cookie to act as one.").optional() }).strict();
+export const Me = z.object({ "userId": z.string(), "tenantId": z.string().uuid(), "roles": z.array(ApproverRole), "authMode": z.enum(["demo","oidc","github"]), "personas": z.array(z.object({ "id": z.string(), "roles": z.array(ApproverRole) }).strict()).describe("Demo mode only. Send `Authorization: Demo <id>` or the iq_demo_persona cookie to act as one.").optional() }).strict();
 export type Me = z.infer<typeof Me>;
 
 export const PaymentRunItem = z.object({ "invoiceId": z.string().uuid(), "vendorId": z.string().uuid(), "vendorName": z.string(), "accountLast4": z.union([z.string(), z.null()]), "amount": Money, "invoiceNumber": z.union([z.string(), z.null()]), "dueDate": z.union([z.string().date(), z.null()]), "state": InvoiceState }).strict();

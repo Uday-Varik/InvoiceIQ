@@ -836,7 +836,7 @@ export type components = {
         };
         readonly Me: {
             /** @enum {string} */
-            readonly authMode: "demo" | "oidc";
+            readonly authMode: "demo" | "oidc" | "github";
             /** @description Demo mode only. Send `Authorization: Demo <id>` or the iq_demo_persona cookie to act as one. */
             readonly personas?: readonly {
                 readonly id: string;
