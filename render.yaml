@@ -38,6 +38,9 @@ services:
         sync: false
       - key: EXTRACTION_PROVIDER
         value: qwen
+      # Optional: another OpenRouter model slug (default qwen/qwen3-235b-a22b).
+      - key: OPENROUTER_MODEL
+        sync: false
 
   - type: web
     name: invoiceiq-core-api

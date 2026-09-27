@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError, approveInvoice, rejectInvoice, uploadInvoice } from '../lib/api';
-import { actionsFor, confidenceLevel, formatMoney, IN_FLIGHT } from '../lib/format';
+import { actionsFor, confidenceLevel, formatElapsed, formatMoney, IN_FLIGHT, PIPELINE_STEPS, pipelineStep, progressHint } from '../lib/format';
 import { waitForBackend, type BackendStatus } from '../lib/wake';
 
 describe('formatMoney', () => {
@@ -30,6 +30,34 @@ describe('review rules', () => {
 
   it('bands confidence the way the hold threshold does', () => {
     expect([0.95, 0.8, 0.4].map(confidenceLevel)).toEqual(['high', 'medium', 'low']);
+  });
+});
+
+describe('pipeline progress', () => {
+  it('shows a step for every state the page polls in, and none once a person has the invoice', () => {
+    for (const s of IN_FLIGHT) expect(pipelineStep(s)).toBeGreaterThan(0);
+    for (const s of ['PENDING_APPROVAL', 'HOLD', 'EXCEPTION', 'APPROVED'] as const) expect(pipelineStep(s)).toBeUndefined();
+  });
+
+  it('is reading until the extraction lands, then checking', () => {
+    expect(PIPELINE_STEPS[pipelineStep('RECEIVED') ?? -1]).toBe('Reading the invoice with AI');
+    expect(PIPELINE_STEPS[pipelineStep('EXTRACTING') ?? -1]).toBe('Reading the invoice with AI');
+    expect(PIPELINE_STEPS[pipelineStep('VALIDATING') ?? -1]).toBe('Checking totals and rules');
+  });
+
+  it.each([
+    [-5_000, '0 s'],
+    [12_400, '12 s'],
+    [65_000, '1 min 5 s'],
+    [4_000_000, 'over an hour'],
+  ])('formats %d ms as %s', (ms, out) => {
+    expect(formatElapsed(ms)).toBe(out);
+  });
+
+  it('says nothing for a normal wait, then sets expectations', () => {
+    expect(progressHint(8_000)).toBeUndefined();
+    expect(progressHint(30_000)).toMatch(/up to a minute/);
+    expect(progressHint(180_000)).toMatch(/on hold for a person/);
   });
 });
 

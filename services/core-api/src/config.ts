@@ -37,7 +37,9 @@ const EnvSchema = z
 
     AI_SERVICE_URL: z.string().url(),
     AI_SIGNING_SECRET: z.string().min(32, 'AI_SIGNING_SECRET must be at least 32 characters'),
-    AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(60_000),
+    // Long enough for a many-line invoice (ai-service gives up on the model at 90 s),
+    // and still inside the 120 s outbox lease.
+    AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(100_000),
 
     OUTBOX_POLL_MS: z.coerce.number().int().min(250).max(600_000).default(5_000),
     OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(8),

@@ -56,13 +56,21 @@ def _line_item(raw: object) -> ExtractedLineItem | None:
         return None if v is None else str(v)
 
     try:
-        return ExtractedLineItem(
-            description=str(raw.get("description", "")).strip()[:500],
-            quantity=text("quantity"),
-            unitPriceMinor=text("unitPriceMinor"),
-            amountMinor=text("amountMinor"),
-            confidence=float(raw.get("confidence", 0.0)),
-        )
+        values = {
+            "description": str(raw.get("description", "")).strip()[:500],
+            "quantity": text("quantity"),
+            "unitPriceMinor": text("unitPriceMinor"),
+            "amountMinor": text("amountMinor"),
+            "confidence": float(raw.get("confidence", 0.0)),
+        }
+        try:
+            return ExtractedLineItem(**values)
+        except ValidationError as exc:
+            # A unit price that is not a whole number of minor units (822.50 / 40) is
+            # left out, not rounded; the line's amount is what the totals check needs.
+            if {err["loc"][:1] for err in exc.errors()} != {("unitPriceMinor",)}:
+                raise
+            return ExtractedLineItem(**{**values, "unitPriceMinor": None})
     except (TypeError, ValueError, ValidationError):
         return None
 
