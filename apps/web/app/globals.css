@@ -43,8 +43,35 @@ a {
   color: var(--accent);
 }
 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 code {
   font-size: 0.85em;
+}
+
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 16px;
+  z-index: 100;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: var(--accent-text);
+  border-radius: var(--radius);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.skip-link:focus {
+  top: 8px;
 }
 
 .topbar {
@@ -54,6 +81,24 @@ code {
   padding: 14px 24px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
+  flex-wrap: wrap;
+}
+
+.nav-links {
+  display: flex;
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex-wrap: wrap;
+}
+
+.nav-links a {
+  font-size: 0.85rem;
+}
+
+.demo-notice {
+  margin-left: auto;
 }
 
 .brand {
@@ -154,6 +199,11 @@ h2 {
 .dropzone-title {
   font-weight: 600;
   margin: 0 0 4px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .table {
@@ -549,4 +599,56 @@ a.btn {
 .vendor h3,
 .correction h3 {
   margin-top: 1.25rem;
+}
+
+/* ---- Mobile ------------------------------------------------------------ */
+
+@media (max-width: 600px) {
+  .topbar {
+    padding: 10px 16px;
+    gap: 8px;
+  }
+
+  .nav-links {
+    gap: 10px;
+    width: 100%;
+  }
+
+  .demo-notice {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .container {
+    padding: 16px 16px 48px;
+  }
+
+  h1 {
+    font-size: 1.3rem;
+  }
+
+  .cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dropzone {
+    padding: 32px 16px;
+  }
+
+  .doc-frame {
+    height: 50vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: var(--accent);
+    opacity: 0.6;
+  }
 }
