@@ -1,4 +1,4 @@
-"""Qwen provider via Together.ai API."""
+"""Qwen provider via OpenRouter API."""
 
 from __future__ import annotations
 
@@ -47,15 +47,15 @@ Do not include any text outside the JSON object. No markdown fences."""
 
 
 class QwenProvider:
-    """Qwen extraction via Together.ai."""
+    """Qwen extraction via OpenRouter API."""
 
     name = "qwen"
-    _model = "qwen/qwen3.8-27b:free"
-    _api_base = "https://api.together.xyz/v1"
+    _model = "qwen/qwen3-235b-a22b"
+    _api_base = "https://openrouter.ai/api/v1"
 
     def __init__(self, api_key: str) -> None:
         if not api_key or not api_key.strip():
-            raise ProviderError("QWEN_API_KEY is empty")
+            raise ProviderError("OPENROUTER_API_KEY is empty")
         self._api_key = api_key
 
     def complete(self, *, task: str, prompt: str) -> Completion:
@@ -85,9 +85,9 @@ class QwenProvider:
             with urllib.request.urlopen(req, timeout=60) as response:  # noqa: S310
                 data = json.loads(response.read().decode("utf-8"))
         except (urllib.error.HTTPError, urllib.error.URLError) as exc:
-            raise ProviderError(f"together.ai API error: {exc}") from exc
+            raise ProviderError(f"OpenRouter API error: {exc}") from exc
         except json.JSONDecodeError as exc:
-            raise ProviderError(f"together.ai returned invalid JSON: {exc}") from exc
+            raise ProviderError(f"OpenRouter returned invalid JSON: {exc}") from exc
 
         try:
             message = data["choices"][0]["message"]["content"]
