@@ -132,6 +132,7 @@ export async function startRuntime(config: Config): Promise<Runtime> {
     maxUploadBytes: config.MAX_UPLOAD_BYTES,
     checkpointSigner: signer,
     deps: { db, worker: { kick: () => worker.kick() } },
+    ...(config.CORS_ORIGIN ? { corsOrigin: config.CORS_ORIGIN } : {}),
   });
   if (signer.ephemeral) app.log.warn({ keyId: signer.keyId }, 'AUDIT_CHECKPOINT_KEY is not set; audit checkpoints are signed with a key that changes on every restart');
   if (production && !config.METRICS_TOKEN) app.log.warn('METRICS_TOKEN is not set; /metrics is disabled');

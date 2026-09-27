@@ -1,3 +1,4 @@
+import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyServerOptions } from 'fastify';
 import {
@@ -99,6 +100,8 @@ export interface AppOptions {
   readonly maxUploadBytes?: number;
   /** Signs audit checkpoints. Defaults to a key generated for this process. */
   readonly checkpointSigner?: CheckpointSigner;
+  /** Allowed CORS origin(s). Comma-separated string enables CORS for those origins. */
+  readonly corsOrigin?: string;
 }
 
 export const DEMO_PRINCIPAL: Principal = { tenantId: DEMO_TENANT_ID, userId: 'demo-user', roles: ['cfo'] };
@@ -159,6 +162,10 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
       ? { readiness: () => checkReadiness({ db: deps.db, expectedMigrations, ...(opts.aiPing ? { aiPing: opts.aiPing } : {}) }) }
       : {}),
   });
+  if (opts.corsOrigin) {
+    const origins = opts.corsOrigin.split(',').map((s) => s.trim());
+    void app.register(cors, { origin: origins, credentials: true });
+  }
   void app.register(multipart, { limits: { fileSize: maxUploadBytes, files: 1, fields: 4, fieldSize: 1024, parts: 5 } });
 
   app.addHook('onRequest', async (req) => {
