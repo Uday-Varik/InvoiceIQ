@@ -16,7 +16,10 @@ const config: NextConfig = {
     proxyTimeout: 90_000,
   },
   async rewrites() {
-    return [{ source: '/api/core/:path*', destination: `${coreApi}/:path*` }];
+    return [
+      { source: '/api/core/:path*', destination: `${coreApi}/:path*` },
+      { source: '/auth/:path*', destination: `${coreApi}/auth/:path*` },
+    ];
   },
   async headers() {
     return [

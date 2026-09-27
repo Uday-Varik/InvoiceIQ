@@ -101,6 +101,54 @@ code {
   margin-left: auto;
 }
 
+.auth-notice {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  font: inherit;
+}
+
+.btn-link:hover {
+  color: var(--text);
+}
+
+.login-page {
+  max-width: 400px;
+  margin: 4rem auto;
+  text-align: center;
+}
+
+.github-login-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  margin-top: 1.5rem;
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.github-login-btn:hover {
+  opacity: 0.85;
+}
+
 .brand {
   font-weight: 700;
   color: var(--text);

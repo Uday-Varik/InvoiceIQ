@@ -471,6 +471,7 @@ class ApprovalTierStatus(BaseModel):
 class AuthMode(StrEnum):
     demo = "demo"
     oidc = "oidc"
+    github = "github"
 
 
 class Persona(BaseModel):

@@ -1826,7 +1826,7 @@ components:
             $ref: '#/components/schemas/ApproverRole'
         authMode:
           type: string
-          enum: [demo, oidc]
+          enum: [demo, oidc, github]
         personas:
           type: array
           description: 'Demo mode only. Send `Authorization: Demo <id>` or the iq_demo_persona cookie to act as one.'

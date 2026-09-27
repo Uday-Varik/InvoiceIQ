@@ -27,13 +27,21 @@ const EnvSchema = z
     /** Owner role. When set, migrations run on boot (free tiers have no pre-deploy hook). */
     MIGRATION_DATABASE_URL: z.string().min(1).optional(),
 
-    AUTH_MODE: z.enum(['oidc', 'demo']).default('oidc'),
+    AUTH_MODE: z.enum(['oidc', 'demo', 'github']).default('oidc'),
     OIDC_ISSUER: z.string().url().optional(),
     OIDC_AUDIENCE: z.string().min(1).optional(),
     OIDC_JWKS_URL: z.string().url().optional(),
     OIDC_TENANT_CLAIM: z.string().min(1).default('tenant_id'),
     OIDC_ROLES_CLAIM: z.string().min(1).default('roles'),
     DEMO_TENANT_NAME: z.string().min(1).max(200).default('InvoiceIQ demo'),
+
+    GITHUB_CLIENT_ID: z.string().min(1).optional(),
+    GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
+    SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters').optional(),
+    /** Where to redirect after login. Defaults to /. */
+    GITHUB_CALLBACK_URL: z.string().url().optional(),
+    /** Default role for GitHub-authenticated users. */
+    GITHUB_DEFAULT_ROLE: z.enum(['ap_clerk', 'ap_manager', 'controller', 'cfo']).default('cfo'),
 
     AI_SERVICE_URL: z.string().url(),
     AI_SIGNING_SECRET: z.string().min(32, 'AI_SIGNING_SECRET must be at least 32 characters'),
@@ -83,11 +91,16 @@ const EnvSchema = z
         if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required when AUTH_MODE=oidc` });
       }
     }
+    if (env.AUTH_MODE === 'github') {
+      for (const key of ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'SESSION_SECRET'] as const) {
+        if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required when AUTH_MODE=github` });
+      }
+    }
     if (env.APP_DB_PASSWORD && !env.MIGRATION_DATABASE_URL) {
       ctx.addIssue({ code: 'custom', path: ['APP_DB_PASSWORD'], message: 'APP_DB_PASSWORD is applied by the migrator and needs MIGRATION_DATABASE_URL' });
     }
-    if (env.AUTH_MODE === 'demo' && !env.MIGRATION_DATABASE_URL) {
-      ctx.addIssue({ code: 'custom', path: ['MIGRATION_DATABASE_URL'], message: 'demo mode bootstraps its tenant and needs MIGRATION_DATABASE_URL' });
+    if ((env.AUTH_MODE === 'demo' || env.AUTH_MODE === 'github') && !env.MIGRATION_DATABASE_URL) {
+      ctx.addIssue({ code: 'custom', path: ['MIGRATION_DATABASE_URL'], message: `${env.AUTH_MODE} mode bootstraps its tenant and needs MIGRATION_DATABASE_URL` });
     }
   });
 

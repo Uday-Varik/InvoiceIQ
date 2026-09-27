@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { AuthNotice } from '../components/auth-notice';
 import { BackendProvider } from '../components/backend';
 import { MeProvider } from '../components/me';
 import './globals.css';
@@ -45,7 +46,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </li>
             </ul>
           </nav>
-          <span className="muted small demo-notice">Public demo: shared tenant</span>
+          <AuthNotice />
         </header>
         <main id="main-content" className="container">
           <BackendProvider>
