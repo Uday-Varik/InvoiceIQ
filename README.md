@@ -10,10 +10,9 @@ bank-detail-change quarantine and a hash-chained audit ledger. Models help with
 extraction and risk signals, but every AI output is structurally limited to
 putting an invoice on HOLD.
 
-> Status: **Phase 7 (pluggable providers).** Extraction is now provider-
-> pluggable: a registry selects providers by config (`EXTRACTION_PROVIDER`
-> env var), and the eval harness scores any provider against the frozen test
-> set. The Terraform has not been applied yet; live model calls come later.
+> Status: **Deployed and live** (2026-09-27). All 9 phases merged. Qwen
+> extraction via OpenRouter is running on the free tier (Vercel + Render +
+> Neon). Auth is demo-mode; OIDC wired but untested against a real IdP.
 
 ## The problem
 
@@ -177,6 +176,33 @@ Same labels as above. Decisions in [ADR-0020](docs/adr/0020-pluggable-extraction
 | 4 | Eval harness accepts any provider via `--provider` flag | Verified-in-sandbox | `evals/src/invoiceiq_evals/cli.py` |
 | 5 | Eval report includes provider name for cross-provider comparison | Verified-in-sandbox | `evals/src/invoiceiq_evals/report.py` |
 
+## Phase 8 deliverables
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | `QwenProvider` calling Qwen3 via OpenRouter for real extraction | Verified-in-sandbox | `services/ai-service/src/ai_service/providers/qwen.py` |
+| 2 | Structured prompt template with `{value, confidence}` JSON output | Verified-in-sandbox | `services/ai-service/src/ai_service/providers/qwen.py` |
+| 3 | Markdown fence stripping for LLM responses | Verified-in-sandbox | `services/ai-service/src/ai_service/providers/qwen.py` |
+| 4 | 16 tests: prompt construction, fence stripping, HTTP integration | Verified-in-sandbox | `services/ai-service/tests/test_qwen.py` |
+| 5 | Heuristic baseline eval result for cross-provider comparison | Verified-in-sandbox | `evals/baseline-heuristic.json` |
+
+## Phase 9 deliverables
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | Security headers: CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy | Verified-in-sandbox | `apps/web/next.config.ts` |
+| 2 | Accessibility: semantic landmarks, ARIA labels, skip-nav link, focus-visible outlines | Verified-in-sandbox | `apps/web/app/layout.tsx` |
+| 3 | Mobile responsiveness: flex-wrap topbar, 600 px breakpoint, horizontal table scroll | Verified-in-sandbox | `apps/web/app/globals.css` |
+| 4 | Error handling: App Router `error.tsx` with retry, `not-found.tsx` with navigation | Verified-in-sandbox | `apps/web/app/error.tsx` |
+
+## Post-phase fixes (merged)
+
+| PR | What | Where |
+| --- | --- | --- |
+| #12 | CORS support for core-api (preflight + allowed origins) | `services/core-api/` |
+| #13 | Switch Qwen from Together.ai to OpenRouter | `services/ai-service/src/ai_service/providers/qwen.py` |
+| #14 | Extraction progress UI, disable reasoning for speed, throughput routing | `services/ai-service/`, `apps/web/` |
+
 ## Getting started
 
 ```bash
@@ -212,15 +238,23 @@ tests/guardrails         Cross-cutting drift and architecture tests
 
 ## Roadmap
 
-| Phase | Focus |
-| --- | --- |
-| 0 | Foundations: domain model, contracts, guardrails, data tooling, docs |
-| 1 | Persistence with RLS, queue and outbox, invoice intake, review queue UI |
-| 2 | Real extraction behind record/replay, evaluation harness on the frozen set |
-| 3 | Approvals workflow, payment runs, external anchoring of the audit chain (done) |
-| 4 | Hosting on serverless free tiers, Terraform, observability (done) |
-| 5 | Follow-ups: OCR for scans, currencies without two decimals (done) |
-| 6 | Offline evaluation harness for AI signals (done) |
+| Phase | Focus | Status |
+| --- | --- | --- |
+| 0 | Foundations: domain model, contracts, guardrails, data tooling, docs | Done (PR #1) |
+| 1 | Persistence with RLS, queue and outbox, invoice intake, review queue UI | Done (PR #3) |
+| 2 | Line items, filtered dashboard, edit-before-approve, export | Done (PR #4) |
+| 3 | Approvals workflow, payment runs, external anchoring of the audit chain | Done (PR #5) |
+| 4 | Hosting on serverless free tiers, Terraform, observability | Done (PR #6) |
+| 5 | OCR for scans, currencies without two decimals | Done (PR #7) |
+| 6 | Offline evaluation harness for AI signals | Done (PR #8) |
+| 7 | Pluggable extraction providers | Done (PR #9) |
+| 8 | Qwen extraction prompt template and tests | Done (PR #10) |
+| 9 | Frontend hardening: security, accessibility, mobile | Done (PR #11) |
+| — | **What's next** | — |
+| 10 | Real auth: test OIDC against an identity provider (Auth0, Clerk, etc.) | Planned |
+| 11 | Line-item extraction accuracy improvements and eval scoring | Planned |
+| 12 | Production hardening: persistent Ed25519 key, Grafana scrape, alert routing | Planned |
+| 13 | Multi-tenant onboarding: tenant provisioning API, admin UI | Planned |
 
 ## License
 
