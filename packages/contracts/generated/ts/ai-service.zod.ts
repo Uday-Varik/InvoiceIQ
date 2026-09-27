@@ -18,7 +18,10 @@ export type ExtractedLineItem = z.infer<typeof ExtractedLineItem>;
 export const ExtractionRequest = z.object({ "tenantId": z.string().uuid(), "documentSha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")), "text": z.string().min(1).max(200000) }).strict();
 export type ExtractionRequest = z.infer<typeof ExtractionRequest>;
 
-export const ExtractionResult = z.object({ "documentSha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")), "provider": z.string(), "fields": z.object({ "vendorName": ExtractedField, "invoiceNumber": ExtractedField, "invoiceDate": ExtractedField, "currency": ExtractedField, "totalMinor": ExtractedField, "subtotalMinor": ExtractedField, "taxMinor": ExtractedField, "dueDate": ExtractedField }).strict(), "lineItems": z.array(ExtractedLineItem).max(200).describe("Lines of the invoice body in document order. Empty when none were recognised.") }).strict();
+export const RiskFlag = z.object({ "flag": z.enum(["anomaly_suspected","document_tampering","semantic_duplicate"]).describe("The class of risk detected by the provider."), "score": z.number().gte(0).lte(1).describe("Provider confidence that this risk is present (0 = not present, 1 = certain)."), "evidence": z.string().max(500).describe("Brief explanation of what triggered this flag.") }).strict();
+export type RiskFlag = z.infer<typeof RiskFlag>;
+
+export const ExtractionResult = z.object({ "documentSha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")), "provider": z.string(), "fields": z.object({ "vendorName": ExtractedField, "invoiceNumber": ExtractedField, "invoiceDate": ExtractedField, "currency": ExtractedField, "totalMinor": ExtractedField, "subtotalMinor": ExtractedField, "taxMinor": ExtractedField, "dueDate": ExtractedField }).strict(), "lineItems": z.array(ExtractedLineItem).max(200).describe("Lines of the invoice body in document order. Empty when none were recognised."), "riskFlags": z.array(RiskFlag).max(10).describe("Provider-reported risk indicators. Empty or absent when the provider finds nothing suspicious. These become HOLD signals in compute_signals; the provider can flag risk but cannot approve or release.").optional() }).strict();
 export type ExtractionResult = z.infer<typeof ExtractionResult>;
 
 export const Health = z.object({ "status": z.literal("ok"), "service": z.string() }).strict();

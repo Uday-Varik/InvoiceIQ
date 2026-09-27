@@ -203,6 +203,15 @@ export type ReasonCodeDefinition = z.infer<typeof ReasonCodeDefinition>;
 export const ReasonCodeList = z.object({ "reasonCodes": z.array(ReasonCodeDefinition) }).strict();
 export type ReasonCodeList = z.infer<typeof ReasonCodeList>;
 
+export const Tenant = z.object({ "id": z.string().uuid(), "name": z.string(), "createdAt": z.string().datetime({ offset: true }) }).strict();
+export type Tenant = z.infer<typeof Tenant>;
+
+export const TenantCreate = z.object({ "name": z.string().min(1).max(200), "baseCurrency": z.string().regex(new RegExp("^[A-Z]{3}$")).default("USD") }).strict();
+export type TenantCreate = z.infer<typeof TenantCreate>;
+
+export const TenantList = z.object({ "items": z.array(Tenant) }).strict();
+export type TenantList = z.infer<typeof TenantList>;
+
 export const TransitionError = z.enum(["TERMINAL_STATE","EDGE_NOT_ALLOWED","AI_MAY_ONLY_HOLD","AI_REASON_OUTSIDE_HOLD","HUMAN_REQUIRED","REASON_REQUIRED","REASON_OUTCOME_MISMATCH"]);
 export type TransitionError = z.infer<typeof TransitionError>;
 

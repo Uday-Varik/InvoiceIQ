@@ -95,3 +95,21 @@ variable "trust_proxy_hops" {
   type        = number
   default     = 1
 }
+
+variable "extraction_provider" {
+  description = "AI extraction provider: heuristic (offline) or qwen (via OpenRouter)."
+  type        = string
+  default     = "heuristic"
+
+  validation {
+    condition     = contains(["heuristic", "qwen"], var.extraction_provider)
+    error_message = "extraction_provider must be heuristic or qwen."
+  }
+}
+
+variable "openrouter_api_key" {
+  description = "OpenRouter API key for the Qwen provider. Required when extraction_provider is qwen."
+  type        = string
+  default     = null
+  sensitive   = true
+}

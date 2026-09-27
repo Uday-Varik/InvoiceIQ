@@ -15,6 +15,8 @@ from invoiceiq_contracts.ai_service import (
     ExtractionRequest,
     ExtractionResult,
     Fields,
+    Flag,
+    RiskFlag,
 )
 
 TASK = "extract_invoice_fields"
@@ -82,6 +84,33 @@ def _line_items(raw: object) -> list[ExtractedLineItem]:
     return [i for i in items if i is not None]
 
 
+_FLAG_VALUES = frozenset(f.value for f in Flag)
+MAX_RISK_FLAGS = 10
+
+
+def _risk_flag(raw: object) -> RiskFlag | None:
+    if not isinstance(raw, dict):
+        return None
+    flag = raw.get("flag")
+    if not isinstance(flag, str) or flag not in _FLAG_VALUES:
+        return None
+    try:
+        return RiskFlag(
+            flag=Flag(flag),
+            score=float(raw.get("score", 0.0)),
+            evidence=str(raw.get("evidence", ""))[:500],
+        )
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+
+def _risk_flags(raw: object) -> list[RiskFlag]:
+    if not isinstance(raw, list):
+        return []
+    flags = [_risk_flag(r) for r in raw[:MAX_RISK_FLAGS]]
+    return [f for f in flags if f is not None]
+
+
 def extract(request: ExtractionRequest, provider: ExtractionProvider) -> ExtractionResult:
     completion = provider.complete(task=TASK, prompt=request.text)
     try:
@@ -98,6 +127,7 @@ def extract(request: ExtractionRequest, provider: ExtractionProvider) -> Extract
         provider=completion.provider,
         fields=fields,
         lineItems=_line_items(payload.get("lineItems")),
+        riskFlags=_risk_flags(payload.get("riskFlags")) or None,
     )
 
 

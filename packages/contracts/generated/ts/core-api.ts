@@ -59,6 +59,41 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/v1/admin/tenants": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /** List tenants (admin only) */
+        readonly get: operations["listTenants"];
+        readonly put?: never;
+        /** Provision a new tenant with a default policy */
+        readonly post: operations["createTenant"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/admin/tenants/{tenantId}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /** Get a single tenant */
+        readonly get: operations["getTenant"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/v1/audit/checkpoints": {
         readonly parameters: {
             readonly query?: never;
@@ -969,6 +1004,21 @@ export type components = {
             readonly count: number;
             readonly state: components["schemas"]["InvoiceState"];
         };
+        readonly Tenant: {
+            /** Format: date-time */
+            readonly createdAt: string;
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+        };
+        readonly TenantCreate: {
+            /** @default USD */
+            readonly baseCurrency: string;
+            readonly name: string;
+        };
+        readonly TenantList: {
+            readonly items: readonly components["schemas"]["Tenant"][];
+        };
         /** @enum {string} */
         readonly TransitionError: "TERMINAL_STATE" | "EDGE_NOT_ALLOWED" | "AI_MAY_ONLY_HOLD" | "AI_REASON_OUTSIDE_HOLD" | "HUMAN_REQUIRED" | "REASON_REQUIRED" | "REASON_OUTCOME_MISMATCH";
         readonly TransitionEvaluation: {
@@ -1147,6 +1197,82 @@ export interface operations {
                     readonly "application/json": components["schemas"]["Readiness"];
                 };
             };
+        };
+    };
+    readonly listTenants: {
+        readonly parameters: {
+            readonly query?: {
+                readonly limit?: components["parameters"]["Limit"];
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Tenants */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["TenantList"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 403: components["responses"]["Problem"];
+        };
+    };
+    readonly createTenant: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["TenantCreate"];
+            };
+        };
+        readonly responses: {
+            /** @description Tenant created */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Tenant"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 403: components["responses"]["Problem"];
+            readonly 409: components["responses"]["Problem"];
+        };
+    };
+    readonly getTenant: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly tenantId: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Tenant */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Tenant"];
+                };
+            };
+            readonly 401: components["responses"]["Problem"];
+            readonly 403: components["responses"]["Problem"];
+            readonly 404: components["responses"]["Problem"];
         };
     };
     readonly listAuditCheckpoints: {

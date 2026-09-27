@@ -428,3 +428,50 @@ def test_provider_that_omits_the_new_fields_gets_zero_confidence() -> None:
 def test_provider_line_items_are_capped() -> None:
     lines = [{"description": f"l{n}", "amountMinor": "1", "confidence": 0.5} for n in range(500)]
     assert len(_static({"lineItems": lines}).lineItems) == MAX_LINE_ITEMS
+
+
+# ---- risk flags ---------------------------------------------------------------
+
+
+def test_provider_risk_flags_are_parsed() -> None:
+    result = _static(
+        {
+            "riskFlags": [
+                {"flag": "anomaly_suspected", "score": 0.9, "evidence": "urgency language"},
+                {"flag": "document_tampering", "score": 0.7, "evidence": "metadata mismatch"},
+            ]
+        }
+    )
+    assert result.riskFlags is not None
+    assert len(result.riskFlags) == 2
+    assert result.riskFlags[0].flag.value == "anomaly_suspected"
+    assert result.riskFlags[0].score == 0.9
+    assert result.riskFlags[1].flag.value == "document_tampering"
+
+
+def test_invalid_risk_flags_are_dropped() -> None:
+    result = _static(
+        {
+            "riskFlags": [
+                {"flag": "anomaly_suspected", "score": 0.9, "evidence": "valid"},
+                {"flag": "made_up_flag", "score": 0.8, "evidence": "invalid flag"},
+                "not a dict",
+                {"flag": "document_tampering", "score": 2.0, "evidence": "score out of range"},
+            ]
+        }
+    )
+    assert result.riskFlags is not None
+    assert len(result.riskFlags) == 1
+    assert result.riskFlags[0].flag.value == "anomaly_suspected"
+
+
+def test_empty_risk_flags_become_none() -> None:
+    assert _static({"riskFlags": []}).riskFlags is None
+
+
+def test_missing_risk_flags_stay_none() -> None:
+    assert _static({}).riskFlags is None
+
+
+def test_non_list_risk_flags_become_none() -> None:
+    assert _static({"riskFlags": "not a list"}).riskFlags is None

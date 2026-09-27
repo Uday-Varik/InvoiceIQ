@@ -1,0 +1,34 @@
+# Prometheus scrape configuration for InvoiceIQ.
+# For Grafana Cloud: paste these jobs into your hosted metrics agent config.
+# For self-hosted: include this file or copy the jobs into prometheus.yml.
+#
+# Replace ${CORE_API_URL}, ${AI_SERVICE_URL} and ${METRICS_TOKEN} with the
+# values from `terraform output`. METRICS_TOKEN is sensitive: store it in
+# the agent's secrets, not in a checked-in file.
+
+scrape_configs:
+  - job_name: invoiceiq-core-api
+    scrape_interval: 30s
+    scheme: https
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials: "${METRICS_TOKEN}"
+    static_configs:
+      - targets:
+          - "${CORE_API_URL}"
+        labels:
+          service: core-api
+
+  - job_name: invoiceiq-ai-service
+    scrape_interval: 30s
+    scheme: https
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials: "${METRICS_TOKEN}"
+    static_configs:
+      - targets:
+          - "${AI_SERVICE_URL}"
+        labels:
+          service: ai-service
