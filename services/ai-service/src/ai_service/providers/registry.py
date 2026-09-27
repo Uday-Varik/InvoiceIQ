@@ -16,7 +16,7 @@ from pathlib import Path
 from ai_service.providers.base import ExtractionProvider, ProviderError
 from ai_service.providers.echo import EchoProvider
 from ai_service.providers.heuristic import HeuristicProvider
-from ai_service.providers.qwen import QwenProvider
+from ai_service.providers.qwen import DEFAULT_MODEL, QwenProvider
 from ai_service.providers.replay import ReplayProvider
 
 ProviderFactory = Callable[[], ExtractionProvider]
@@ -51,7 +51,7 @@ def _qwen() -> ExtractionProvider:
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
         raise ProviderError("EXTRACTION_PROVIDER=qwen requires OPENROUTER_API_KEY to be set")
-    return QwenProvider(api_key)
+    return QwenProvider(api_key, model=os.environ.get("OPENROUTER_MODEL") or DEFAULT_MODEL)
 
 
 register("heuristic", _heuristic)

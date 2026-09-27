@@ -379,6 +379,35 @@ def test_provider_lines_that_break_the_contract_are_dropped() -> None:
     assert [i.description for i in result.lineItems] == ["ok"]
 
 
+def test_a_fractional_unit_price_is_left_out_but_the_line_is_kept() -> None:
+    # 822.50 / 40 is 2056.25 cents: not a whole number, so the model's unit price goes.
+    [item] = _static(
+        {
+            "lineItems": [
+                {
+                    "description": "Safety gloves",
+                    "quantity": "40",
+                    "unitPriceMinor": "2056.25",
+                    "amountMinor": "82250",
+                    "confidence": 0.9,
+                }
+            ]
+        }
+    ).lineItems
+    assert (item.description, item.quantity, item.unitPriceMinor, item.amountMinor, item.confidence) == (
+        "Safety gloves",
+        "40",
+        None,
+        "82250",
+        0.9,
+    )
+
+
+def test_a_bad_unit_price_does_not_rescue_a_line_with_a_bad_amount() -> None:
+    lines = [{"description": "x", "unitPriceMinor": "1.5", "amountMinor": "12.50", "confidence": 0.9}]
+    assert _static({"lineItems": lines}).lineItems == []
+
+
 def test_numeric_provider_values_are_carried_as_strings() -> None:
     [item] = _static(
         {"lineItems": [{"description": "x", "quantity": 2, "unitPriceMinor": 5, "amountMinor": 10}]}

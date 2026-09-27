@@ -114,7 +114,7 @@ export interface HttpAiClientOptions {
 export function httpAiClient(opts: HttpAiClientOptions): AiClient {
   const base = opts.baseUrl.replace(/\/+$/, '');
   const doFetch = opts.fetch ?? fetch;
-  const timeoutMs = opts.timeoutMs ?? 60_000;
+  const timeoutMs = opts.timeoutMs ?? 100_000;
   const now = opts.now ?? (() => Math.floor(Date.now() / 1000));
 
   async function post<T>(operation: AiOperation, path: string, payload: unknown, schema: z.ZodType<T>): Promise<T> {

@@ -6,12 +6,15 @@ import json
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
+from typing import ClassVar
 
 import pytest
 
 from ai_service.extraction import extract
 from ai_service.providers.base import ProviderError
 from ai_service.providers.qwen import (
+    DEFAULT_MODEL,
+    MAX_OUTPUT_TOKENS,
     SYSTEM_PROMPT,
     QwenProvider,
     _strip_markdown_fences,
@@ -97,10 +100,12 @@ def test_strip_fences_with_whitespace() -> None:
 
 class _MockOpenRouterHandler(BaseHTTPRequestHandler):
     response_body: str = ""
+    last_request: ClassVar[dict[str, object]] = {}
 
     def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length))
+        self.__class__.last_request = body
         assert body["model"] == "qwen/qwen3-235b-a22b"
         assert len(body["messages"]) == 2
         assert body["messages"][0]["role"] == "system"
@@ -196,6 +201,33 @@ def test_qwen_sends_system_and_user_messages(mock_openrouter_server: str) -> Non
     provider.complete(task="extract_invoice_fields", prompt="test invoice text")
 
 
+def test_qwen_turns_off_thinking_and_routes_for_speed(mock_openrouter_server: str) -> None:
+    _MockOpenRouterHandler.response_body = "{}"
+    provider = QwenProvider("tok_test")
+    provider._api_base = mock_openrouter_server
+    provider.complete(task="extract_invoice_fields", prompt="x")
+
+    sent = _MockOpenRouterHandler.last_request
+    assert sent["reasoning"] == {"enabled": False}
+    assert sent["provider"] == {"sort": "throughput"}
+    assert sent["max_tokens"] == MAX_OUTPUT_TOKENS
+
+
+def test_qwen_drops_a_leading_think_block(mock_openrouter_server: str) -> None:
+    fenced = '```json\n{"vendorName": {"value": "A", "confidence": 1}}\n```'
+    _MockOpenRouterHandler.response_body = f"<think>\n\n</think>\n\n{fenced}"
+    provider = QwenProvider("tok_test")
+    provider._api_base = mock_openrouter_server
+    completion = provider.complete(task="extract_invoice_fields", prompt="x")
+    assert completion.text == '{"vendorName": {"value": "A", "confidence": 1}}'
+
+
+def test_system_prompt_forbids_computed_unit_prices() -> None:
+    assert "never calculate" in SYSTEM_PROMPT
+    assert "EVERY line item" in SYSTEM_PROMPT
+    assert SYSTEM_PROMPT.rstrip().endswith("/no_think")
+
+
 def test_qwen_registered_in_registry() -> None:
     from ai_service.providers import registered_names
 
@@ -214,5 +246,17 @@ def test_qwen_registry_resolves_with_key(monkeypatch: pytest.MonkeyPatch) -> Non
     from ai_service.providers import resolve
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "tok_test_12345")
+    monkeypatch.delenv("OPENROUTER_MODEL", raising=False)
     provider = resolve("qwen")
     assert isinstance(provider, QwenProvider)
+    assert provider._model == DEFAULT_MODEL
+
+
+def test_qwen_model_can_be_swapped_by_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ai_service.providers import resolve
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "tok_test_12345")
+    monkeypatch.setenv("OPENROUTER_MODEL", "qwen/qwen3-30b-a3b")
+    provider = resolve("qwen")
+    assert isinstance(provider, QwenProvider)
+    assert provider._model == "qwen/qwen3-30b-a3b"
