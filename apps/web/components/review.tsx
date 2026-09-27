@@ -81,9 +81,9 @@ export function InvoiceReview({ id }: { id: string }) {
     <div className="review">
       <section className="review-doc">
         {invoice.document?.contentType === 'application/pdf' ? (
-          <iframe src={documentUrl(invoice.id)} title="Invoice document" className="doc-frame" />
+          <iframe src={documentUrl(invoice.id)} title="Invoice document" className="doc-frame" loading="lazy" />
         ) : (
-          <img src={documentUrl(invoice.id)} alt="Invoice document" className="doc-image" />
+          <img src={documentUrl(invoice.id)} alt={`Scanned invoice ${invoice.invoiceNumber ?? ''}`} className="doc-image" loading="lazy" />
         )}
       </section>
       <section className="review-panel">
@@ -321,7 +321,7 @@ function Actions({ invoice, onChange }: { invoice: Invoice; onChange: (inv: Invo
         </p>
       )}
       {actions.includes('approve') && blocker && <p className="warn small">{blocker}</p>}
-      <textarea placeholder="Comment (optional, kept in the audit log)" value={comment} maxLength={2000} onChange={(e) => setComment(e.target.value)} />
+      <textarea aria-label="Decision comment" placeholder="Comment (optional, kept in the audit log)" value={comment} maxLength={2000} onChange={(e) => setComment(e.target.value)} />
       {rejecting && (
         <fieldset className="reject-reasons">
           <legend>Reject because</legend>

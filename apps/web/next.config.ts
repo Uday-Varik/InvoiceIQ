@@ -26,6 +26,23 @@ const config: NextConfig = {
           { key: 'x-content-type-options', value: 'nosniff' },
           { key: 'referrer-policy', value: 'strict-origin-when-cross-origin' },
           { key: 'x-frame-options', value: 'SAMEORIGIN' },
+          { key: 'permissions-policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+          { key: 'x-dns-prefetch-control', value: 'off' },
+          {
+            key: 'content-security-policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' blob: data:",
+              "font-src 'self'",
+              "connect-src 'self'",
+              "frame-src 'self'",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+            ].join('; '),
+          },
         ],
       },
     ];
