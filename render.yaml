@@ -33,6 +33,11 @@ services:
     envVars:
       - fromGroup: invoiceiq-shared
       # Deliberately no DATABASE_URL (ADR-0007).
+      # OpenRouter API key for Qwen extraction.
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: EXTRACTION_PROVIDER
+        value: qwen
 
   - type: web
     name: invoiceiq-core-api

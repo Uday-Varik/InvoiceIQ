@@ -48,9 +48,9 @@ def _replay() -> ExtractionProvider:
 
 
 def _qwen() -> ExtractionProvider:
-    api_key = os.environ.get("QWEN_API_KEY", "")
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
-        raise ProviderError("EXTRACTION_PROVIDER=qwen requires QWEN_API_KEY to be set")
+        raise ProviderError("EXTRACTION_PROVIDER=qwen requires OPENROUTER_API_KEY to be set")
     return QwenProvider(api_key)
 
 

@@ -29,12 +29,12 @@ def _req(text: str = INVOICE_TEXT) -> ExtractionRequest:
 
 
 def test_empty_api_key_raises() -> None:
-    with pytest.raises(ProviderError, match="QWEN_API_KEY is empty"):
+    with pytest.raises(ProviderError, match="OPENROUTER_API_KEY is empty"):
         QwenProvider("")
 
 
 def test_whitespace_api_key_raises() -> None:
-    with pytest.raises(ProviderError, match="QWEN_API_KEY is empty"):
+    with pytest.raises(ProviderError, match="OPENROUTER_API_KEY is empty"):
         QwenProvider("   ")
 
 
@@ -95,14 +95,13 @@ def test_strip_fences_with_whitespace() -> None:
 # --- integration with a mock HTTP server ---
 
 
-class _MockTogetherHandler(BaseHTTPRequestHandler):
+class _MockOpenRouterHandler(BaseHTTPRequestHandler):
     response_body: str = ""
 
     def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length))
-        # Verify the request structure
-        assert body["model"] == "qwen/qwen3.8-27b:free"
+        assert body["model"] == "qwen/qwen3-235b-a22b"
         assert len(body["messages"]) == 2
         assert body["messages"][0]["role"] == "system"
         assert body["messages"][1]["role"] == "user"
@@ -123,8 +122,8 @@ class _MockTogetherHandler(BaseHTTPRequestHandler):
 
 
 @pytest.fixture
-def mock_together_server() -> Iterator[str]:
-    server = HTTPServer(("127.0.0.1", 0), _MockTogetherHandler)
+def mock_openrouter_server() -> Iterator[str]:
+    server = HTTPServer(("127.0.0.1", 0), _MockOpenRouterHandler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     port = server.server_address[1]
@@ -132,7 +131,7 @@ def mock_together_server() -> Iterator[str]:
     server.shutdown()
 
 
-def test_qwen_extracts_valid_json(mock_together_server: str) -> None:
+def test_qwen_extracts_valid_json(mock_openrouter_server: str) -> None:
     extraction_json = json.dumps(
         {
             "vendorName": {"value": "ACME Industrial Supply", "confidence": 0.95},
@@ -145,10 +144,10 @@ def test_qwen_extracts_valid_json(mock_together_server: str) -> None:
             "dueDate": {"value": None, "confidence": 0.0},
         }
     )
-    _MockTogetherHandler.response_body = extraction_json
+    _MockOpenRouterHandler.response_body = extraction_json
 
     provider = QwenProvider("tok_test")
-    provider._api_base = mock_together_server
+    provider._api_base = mock_openrouter_server
     result = extract(_req(), provider)
 
     assert result.fields.vendorName.value == "ACME Industrial Supply"
@@ -158,7 +157,7 @@ def test_qwen_extracts_valid_json(mock_together_server: str) -> None:
     assert result.provider == "qwen"
 
 
-def test_qwen_handles_markdown_wrapped_json(mock_together_server: str) -> None:
+def test_qwen_handles_markdown_wrapped_json(mock_openrouter_server: str) -> None:
     extraction_json = (
         "```json\n"
         + json.dumps(
@@ -175,25 +174,25 @@ def test_qwen_handles_markdown_wrapped_json(mock_together_server: str) -> None:
         )
         + "\n```"
     )
-    _MockTogetherHandler.response_body = extraction_json
+    _MockOpenRouterHandler.response_body = extraction_json
 
     provider = QwenProvider("tok_test")
-    provider._api_base = mock_together_server
+    provider._api_base = mock_openrouter_server
     result = extract(_req(), provider)
 
     assert result.fields.vendorName.value == "Test Corp"
     assert result.fields.currency.value == "EUR"
 
 
-def test_qwen_sends_system_and_user_messages(mock_together_server: str) -> None:
-    _MockTogetherHandler.response_body = json.dumps(
+def test_qwen_sends_system_and_user_messages(mock_openrouter_server: str) -> None:
+    _MockOpenRouterHandler.response_body = json.dumps(
         {
             "vendorName": {"value": None, "confidence": 0.0},
         }
     )
 
     provider = QwenProvider("tok_test")
-    provider._api_base = mock_together_server
+    provider._api_base = mock_openrouter_server
     provider.complete(task="extract_invoice_fields", prompt="test invoice text")
 
 
@@ -206,14 +205,14 @@ def test_qwen_registered_in_registry() -> None:
 def test_qwen_registry_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     from ai_service.providers import resolve
 
-    monkeypatch.delenv("QWEN_API_KEY", raising=False)
-    with pytest.raises(ProviderError, match="QWEN_API_KEY"):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    with pytest.raises(ProviderError, match="OPENROUTER_API_KEY"):
         resolve("qwen")
 
 
 def test_qwen_registry_resolves_with_key(monkeypatch: pytest.MonkeyPatch) -> None:
     from ai_service.providers import resolve
 
-    monkeypatch.setenv("QWEN_API_KEY", "tok_test_12345")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "tok_test_12345")
     provider = resolve("qwen")
     assert isinstance(provider, QwenProvider)
