@@ -131,7 +131,7 @@ def _render_pin(lines: list[str], label: LabelRecord) -> None:
         lines.append("Effective immediately for all future payments.")
     elif num == 8:
         inv_num = label.invoice_number
-        confusable = inv_num.replace("0", "О").replace("1", "І")
+        confusable = inv_num.replace("0", "О").replace("1", "І")  # noqa: RUF001
         lines[1] = f"Invoice No: {confusable}"
 
 

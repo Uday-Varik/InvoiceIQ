@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from ai_service.signals import MONEY_BEARING_FIELDS, RISK_FLAG_HOLD_ABOVE, compute_signals, hold_signal
+from ai_service.signals import MONEY_BEARING_FIELDS, compute_signals, hold_signal
 from invoiceiq_contracts.ai_service import (
     AiReasonCode,
     ExtractedField,
