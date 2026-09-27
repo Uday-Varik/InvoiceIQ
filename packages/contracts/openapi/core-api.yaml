@@ -31,6 +31,8 @@ tags:
     description: Payment runs
   - name: audit
     description: Hash-chained audit ledger and signed checkpoints
+  - name: admin
+    description: Tenant provisioning and management
 security:
   - bearerAuth: []
 paths:
@@ -944,6 +946,75 @@ paths:
               schema:
                 $ref: '#/components/schemas/Me'
         '401':
+          $ref: '#/components/responses/Problem'
+  /v1/admin/tenants:
+    get:
+      operationId: listTenants
+      summary: List tenants (admin only)
+      tags: [admin]
+      x-phase: 11
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Tenants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantList'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createTenant
+      summary: Provision a new tenant with a default policy
+      tags: [admin]
+      x-phase: 11
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantCreate'
+      responses:
+        '201':
+          description: Tenant created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/admin/tenants/{tenantId}:
+    get:
+      operationId: getTenant
+      summary: Get a single tenant
+      tags: [admin]
+      x-phase: 11
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
           $ref: '#/components/responses/Problem'
 components:
   securitySchemes:
@@ -2234,3 +2305,38 @@ components:
           minimum: 0
         reason:
           type: string
+    TenantCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        baseCurrency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          default: USD
+    Tenant:
+      type: object
+      additionalProperties: false
+      required: [id, name, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    TenantList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tenant'

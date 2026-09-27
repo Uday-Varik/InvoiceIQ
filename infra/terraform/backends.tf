@@ -36,11 +36,17 @@ resource "render_web_service" "ai" {
     }
   }
 
-  env_vars = {
-    AI_SIGNING_SECRET = { value = random_password.ai_signing_secret.result }
-    METRICS_TOKEN     = { value = random_password.metrics_token.result }
-    LOG_LEVEL         = { value = "info" }
-  }
+  env_vars = merge(
+    {
+      AI_SIGNING_SECRET   = { value = random_password.ai_signing_secret.result }
+      METRICS_TOKEN       = { value = random_password.metrics_token.result }
+      EXTRACTION_PROVIDER = { value = var.extraction_provider }
+      LOG_LEVEL           = { value = "info" }
+    },
+    var.openrouter_api_key != null ? {
+      OPENROUTER_API_KEY = { value = var.openrouter_api_key }
+    } : {},
+  )
 }
 
 # core-api: the only service with database credentials and the only one that
