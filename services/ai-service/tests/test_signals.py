@@ -101,13 +101,22 @@ def _extraction_with_flags(*flags: RiskFlag) -> ExtractionResult:
     fields = {
         name: ExtractedField(value="x", confidence=0.99)
         for name in (
-            "vendorName", "invoiceNumber", "invoiceDate", "currency",
-            "totalMinor", "subtotalMinor", "taxMinor", "dueDate",
+            "vendorName",
+            "invoiceNumber",
+            "invoiceDate",
+            "currency",
+            "totalMinor",
+            "subtotalMinor",
+            "taxMinor",
+            "dueDate",
         )
     }
     return ExtractionResult(
-        documentSha256=SHA, provider="test", fields=Fields(**fields),
-        lineItems=[], riskFlags=list(flags) or None,
+        documentSha256=SHA,
+        provider="test",
+        fields=Fields(**fields),
+        lineItems=[],
+        riskFlags=list(flags) or None,
     )
 
 
