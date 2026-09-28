@@ -39,6 +39,7 @@ export const ExtractionResultSchema = z
       })
       .strict(),
     lineItems: z.array(LineItem).max(200).default([]),
+    riskFlags: z.array(z.object({ flag: z.string(), score: z.number(), evidence: z.string() }).strict()).max(10).nullable().optional(),
   })
   .strict();
 

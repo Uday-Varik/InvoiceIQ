@@ -748,6 +748,30 @@ class AuditCheckpointVerification(BaseModel):
     reason: str | None = None
 
 
+class TenantCreate(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: str = Field(..., max_length=200, min_length=1)
+    baseCurrency: str | None = Field("USD", pattern="^[A-Z]{3}$")
+
+
+class Tenant(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: UUID
+    name: str
+    createdAt: AwareDatetime
+
+
+class TenantList(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    items: list[Tenant]
+
+
 class Migrations(ReadinessCheck):
     applied: int | None = Field(None, ge=0)
     expected: int = Field(..., ge=0)

@@ -46,7 +46,7 @@ describe.each(['core-api', 'ai-service'])('%s spec conventions', (name) => {
 
   it.each(ops)('%s has an operationId, an x-phase and a 4xx response', (_, op) => {
     expect(op.operationId).toMatch(/^[a-z][A-Za-z]+$/);
-    expect([0, 1, 2, 3, 4]).toContain(op['x-phase']);
+    expect([0, 1, 2, 3, 4, 11]).toContain(op['x-phase']);
     expect(Object.keys(op.responses ?? {}).some((c) => c.startsWith('4'))).toBe(true);
   });
 
