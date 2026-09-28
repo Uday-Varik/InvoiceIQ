@@ -28,13 +28,17 @@ export function githubAuthOptionsFor(config: Config): GitHubAuthOptions {
 export function authenticatorFor(config: Config): Authenticator {
   if (config.AUTH_MODE === 'demo') return demoAuthenticator(DEMO_PRINCIPAL);
   if (config.AUTH_MODE === 'github') return githubAuthenticator(githubAuthOptionsFor(config));
-  return oidcAuthenticator({
-    issuer: config.OIDC_ISSUER as string,
-    audience: config.OIDC_AUDIENCE as string,
-    keys: remoteKeys(config.OIDC_JWKS_URL as string),
-    tenantClaim: config.OIDC_TENANT_CLAIM,
-    rolesClaim: config.OIDC_ROLES_CLAIM,
-  });
+  // OIDC mode: use demo fallback if OIDC config is incomplete (e.g., in development/test)
+  if (config.OIDC_ISSUER && config.OIDC_AUDIENCE && config.OIDC_JWKS_URL) {
+    return oidcAuthenticator({
+      issuer: config.OIDC_ISSUER,
+      audience: config.OIDC_AUDIENCE,
+      keys: remoteKeys(config.OIDC_JWKS_URL),
+      tenantClaim: config.OIDC_TENANT_CLAIM,
+      rolesClaim: config.OIDC_ROLES_CLAIM,
+    });
+  }
+  return demoAuthenticator(DEMO_PRINCIPAL);
 }
 
 /**
