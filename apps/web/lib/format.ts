@@ -28,6 +28,40 @@ export const IN_FLIGHT: ReadonlySet<InvoiceState> = new Set<InvoiceState>([
   'MATCHED',
 ]);
 
+/** What the review page shows while the pipeline has the invoice. The upload is done once there is an invoice. */
+export const PIPELINE_STEPS = ['Uploaded', 'Reading the invoice with AI', 'Checking totals and rules'] as const;
+
+/** Index into PIPELINE_STEPS of the step in progress, or undefined once a person has the invoice. */
+export function pipelineStep(state: InvoiceState): number | undefined {
+  switch (state) {
+    case 'RECEIVED':
+    case 'EXTRACTING':
+      return 1;
+    case 'EXTRACTED':
+    case 'VALIDATING':
+    case 'VALIDATED':
+    case 'MATCHING':
+    case 'MATCHED':
+      return 2;
+    default:
+      return undefined;
+  }
+}
+
+export function formatElapsed(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s} s`;
+  if (s < 3600) return `${Math.floor(s / 60)} min ${s % 60} s`;
+  return 'over an hour';
+}
+
+/** Set expectations once the wait is longer than a one-page invoice normally takes. */
+export function progressHint(elapsedMs: number): string | undefined {
+  if (elapsedMs > 120_000) return 'This is taking longer than usual. The pipeline retries on its own, and puts the invoice on hold for a person if extraction keeps failing.';
+  if (elapsedMs > 20_000) return 'Long invoices, or a service waking up after being idle, can take up to a minute.';
+  return undefined;
+}
+
 export type ReviewAction = 'approve' | 'reject' | 'sendToApproval';
 
 /** What a reviewer can do from each state. The server's gate is the authority; this only hides dead buttons. */

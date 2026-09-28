@@ -1,15 +1,13 @@
 export default function LoginPage() {
   return (
-    <div className="login-page">
+    <section className="login-page">
       <h1>Sign in to InvoiceIQ</h1>
-      <p className="muted">
-        Accounts-payable automation with a payment-safety control layer.
-      </p>
+      <p className="muted">Authenticate with your GitHub account to access invoice management.</p>
       <a href="/auth/github" className="github-login-btn">
         <GitHubIcon />
         Sign in with GitHub
       </a>
-    </div>
+    </section>
   );
 }
 

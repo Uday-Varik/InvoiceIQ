@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { httpAiClient, type AiClient } from './clients/ai-service.js';
 import { demoAuthenticator, oidcAuthenticator, remoteKeys, type Authenticator } from './auth/auth.js';
+import { githubAuthenticator, registerGitHubAuthRoutes, type GitHubAuthOptions } from './auth/github.js';
 import { parseCheckpointKey, type Config } from './config.js';
 import { checkpointSigner } from './audit/checkpoints.js';
 import { bootstrapTenant, DEMO_TENANT_ID } from './db/bootstrap.js';
@@ -13,15 +14,31 @@ import { setAppRolePassword } from './db/app-role.js';
 import { createCoreMetrics, type CoreMetrics } from './observability/catalog.js';
 import { RateLimiter } from './observability/rate-limit.js';
 
+export function githubAuthOptionsFor(config: Config): GitHubAuthOptions {
+  return {
+    clientId: config.GITHUB_CLIENT_ID as string,
+    clientSecret: config.GITHUB_CLIENT_SECRET as string,
+    sessionSecret: config.SESSION_SECRET as string,
+    callbackUrl: config.GITHUB_CALLBACK_URL,
+    defaultRole: config.GITHUB_DEFAULT_ROLE,
+    tenantId: DEMO_TENANT_ID,
+  };
+}
+
 export function authenticatorFor(config: Config): Authenticator {
   if (config.AUTH_MODE === 'demo') return demoAuthenticator(DEMO_PRINCIPAL);
-  return oidcAuthenticator({
-    issuer: config.OIDC_ISSUER as string,
-    audience: config.OIDC_AUDIENCE as string,
-    keys: remoteKeys(config.OIDC_JWKS_URL as string),
-    tenantClaim: config.OIDC_TENANT_CLAIM,
-    rolesClaim: config.OIDC_ROLES_CLAIM,
-  });
+  if (config.AUTH_MODE === 'github') return githubAuthenticator(githubAuthOptionsFor(config));
+  // OIDC mode: use demo fallback if OIDC config is incomplete (e.g., in development/test)
+  if (config.OIDC_ISSUER && config.OIDC_AUDIENCE && config.OIDC_JWKS_URL) {
+    return oidcAuthenticator({
+      issuer: config.OIDC_ISSUER,
+      audience: config.OIDC_AUDIENCE,
+      keys: remoteKeys(config.OIDC_JWKS_URL),
+      tenantClaim: config.OIDC_TENANT_CLAIM,
+      rolesClaim: config.OIDC_ROLES_CLAIM,
+    });
+  }
+  return demoAuthenticator(DEMO_PRINCIPAL);
 }
 
 /**
@@ -107,7 +124,7 @@ export async function startRuntime(config: Config): Promise<Runtime> {
   if (config.MIGRATION_DATABASE_URL) {
     await migrate(config.MIGRATION_DATABASE_URL);
     if (config.APP_DB_PASSWORD) await setAppRolePassword(config.MIGRATION_DATABASE_URL, config.APP_DB_PASSWORD);
-    if (config.AUTH_MODE === 'demo') {
+    if (config.AUTH_MODE === 'demo' || config.AUTH_MODE === 'github') {
       await bootstrapTenant(config.MIGRATION_DATABASE_URL, { id: DEMO_TENANT_ID, name: config.DEMO_TENANT_NAME });
     }
   }
@@ -134,6 +151,7 @@ export async function startRuntime(config: Config): Promise<Runtime> {
     deps: { db, worker: { kick: () => worker.kick() } },
     ...(config.CORS_ORIGIN ? { corsOrigin: config.CORS_ORIGIN } : {}),
   });
+  if (config.AUTH_MODE === 'github') registerGitHubAuthRoutes(app, githubAuthOptionsFor(config));
   if (signer.ephemeral) app.log.warn({ keyId: signer.keyId }, 'AUDIT_CHECKPOINT_KEY is not set; audit checkpoints are signed with a key that changes on every restart');
   if (production && !config.METRICS_TOKEN) app.log.warn('METRICS_TOKEN is not set; /metrics is disabled');
   metrics.registry.addCollector(outboxCollector(db, metrics));

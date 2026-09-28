@@ -23,6 +23,7 @@ import { personaLabel } from '../lib/personas';
 import { useBackend } from './backend';
 import { useMe } from './me';
 import { CorrectionFormPanel } from './correction-form';
+import { PipelineProgress } from './pipeline-progress';
 
 const FIELD_LABELS: Array<[keyof NonNullable<Invoice['extraction']>['fields'], string]> = [
   ['vendorName', 'Vendor'],
@@ -89,10 +90,18 @@ export function InvoiceReview({ id }: { id: string }) {
       <section className="review-panel">
         <div className="review-head">
           <span className={`pill pill-${invoice.state.toLowerCase()}`}>{STATE_LABEL[invoice.state]}</span>
-          {busyPipeline && <span className="muted small">Extracting and validating…</span>}
         </div>
         <h1 className="title">{invoice.invoiceNumber ?? invoice.document?.filename ?? 'Invoice'}</h1>
-        <p className="total">{invoice.total ? formatMoney(invoice.total.amountMinor, invoice.total.currency) : 'Total not extracted'}</p>
+        <p className="total">
+          {invoice.total ? (
+            formatMoney(invoice.total.amountMinor, invoice.total.currency)
+          ) : busyPipeline ? (
+            <span className="skeleton skeleton-total" aria-hidden="true" />
+          ) : (
+            'Total not extracted'
+          )}
+        </p>
+        <PipelineProgress invoice={invoice} />
         {invoice.corrections && invoice.corrections.length > 0 && (
           <p className="small">
             <span className="badge">edited</span> A reviewer corrected the {invoice.corrections.map((c) => CORRECTION_LABEL[c] ?? c).join(', ')}.
@@ -144,8 +153,24 @@ export function InvoiceReview({ id }: { id: string }) {
               ))}
             </tbody>
           </table>
+        ) : busyPipeline ? (
+          <table className="table fields" aria-busy="true">
+            <tbody>
+              {FIELD_LABELS.map(([key, label]) => (
+                <tr key={key}>
+                  <th>{label}</th>
+                  <td>
+                    <span className="skeleton" aria-hidden="true" />
+                  </td>
+                  <td className="num">
+                    <span className="skeleton skeleton-short" aria-hidden="true" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         ) : (
-          <p className="muted">{busyPipeline ? 'Waiting for extraction…' : 'Nothing was extracted from this document.'}</p>
+          <p className="muted">Nothing was extracted from this document.</p>
         )}
         {invoice.extraction && <p className="muted small">Extracted by {invoice.extraction.provider}. Confidence below 80% puts the invoice on hold.</p>}
 

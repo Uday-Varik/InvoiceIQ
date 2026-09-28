@@ -379,6 +379,35 @@ def test_provider_lines_that_break_the_contract_are_dropped() -> None:
     assert [i.description for i in result.lineItems] == ["ok"]
 
 
+def test_a_fractional_unit_price_is_left_out_but_the_line_is_kept() -> None:
+    # 822.50 / 40 is 2056.25 cents: not a whole number, so the model's unit price goes.
+    [item] = _static(
+        {
+            "lineItems": [
+                {
+                    "description": "Safety gloves",
+                    "quantity": "40",
+                    "unitPriceMinor": "2056.25",
+                    "amountMinor": "82250",
+                    "confidence": 0.9,
+                }
+            ]
+        }
+    ).lineItems
+    assert (item.description, item.quantity, item.unitPriceMinor, item.amountMinor, item.confidence) == (
+        "Safety gloves",
+        "40",
+        None,
+        "82250",
+        0.9,
+    )
+
+
+def test_a_bad_unit_price_does_not_rescue_a_line_with_a_bad_amount() -> None:
+    lines = [{"description": "x", "unitPriceMinor": "1.5", "amountMinor": "12.50", "confidence": 0.9}]
+    assert _static({"lineItems": lines}).lineItems == []
+
+
 def test_numeric_provider_values_are_carried_as_strings() -> None:
     [item] = _static(
         {"lineItems": [{"description": "x", "quantity": 2, "unitPriceMinor": 5, "amountMinor": 10}]}
@@ -399,3 +428,50 @@ def test_provider_that_omits_the_new_fields_gets_zero_confidence() -> None:
 def test_provider_line_items_are_capped() -> None:
     lines = [{"description": f"l{n}", "amountMinor": "1", "confidence": 0.5} for n in range(500)]
     assert len(_static({"lineItems": lines}).lineItems) == MAX_LINE_ITEMS
+
+
+# ---- risk flags ---------------------------------------------------------------
+
+
+def test_provider_risk_flags_are_parsed() -> None:
+    result = _static(
+        {
+            "riskFlags": [
+                {"flag": "anomaly_suspected", "score": 0.9, "evidence": "urgency language"},
+                {"flag": "document_tampering", "score": 0.7, "evidence": "metadata mismatch"},
+            ]
+        }
+    )
+    assert result.riskFlags is not None
+    assert len(result.riskFlags) == 2
+    assert result.riskFlags[0].flag.value == "anomaly_suspected"
+    assert result.riskFlags[0].score == 0.9
+    assert result.riskFlags[1].flag.value == "document_tampering"
+
+
+def test_invalid_risk_flags_are_dropped() -> None:
+    result = _static(
+        {
+            "riskFlags": [
+                {"flag": "anomaly_suspected", "score": 0.9, "evidence": "valid"},
+                {"flag": "made_up_flag", "score": 0.8, "evidence": "invalid flag"},
+                "not a dict",
+                {"flag": "document_tampering", "score": 2.0, "evidence": "score out of range"},
+            ]
+        }
+    )
+    assert result.riskFlags is not None
+    assert len(result.riskFlags) == 1
+    assert result.riskFlags[0].flag.value == "anomaly_suspected"
+
+
+def test_empty_risk_flags_become_none() -> None:
+    assert _static({"riskFlags": []}).riskFlags is None
+
+
+def test_missing_risk_flags_stay_none() -> None:
+    assert _static({}).riskFlags is None
+
+
+def test_non_list_risk_flags_become_none() -> None:
+    assert _static({"riskFlags": "not a list"}).riskFlags is None

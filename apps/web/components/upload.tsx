@@ -57,7 +57,18 @@ export function UploadDropzone() {
         onDrop={onDrop}
       >
         <input ref={input} type="file" accept={ACCEPT} hidden onChange={(e) => void send(e.target.files?.[0])} />
-        <p className="dropzone-title">{busy ? 'Uploading…' : backend === 'ready' ? 'Drop an invoice here, or click to choose' : 'Waiting for the API…'}</p>
+        <p className="dropzone-title">
+          {busy ? (
+            <span className="dropzone-busy" role="status">
+              <span className="spinner" aria-hidden="true" />
+              Uploading…
+            </span>
+          ) : backend === 'ready' ? (
+            'Drop an invoice here, or click to choose'
+          ) : (
+            'Waiting for the API…'
+          )}
+        </p>
         <p className="muted">PDF, PNG or JPEG, up to 10 MB. PDFs with a text layer extract best.</p>
       </div>
       {error && (

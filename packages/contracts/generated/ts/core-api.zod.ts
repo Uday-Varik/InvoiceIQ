@@ -120,7 +120,7 @@ export type LifecycleState = z.infer<typeof LifecycleState>;
 export const LifecycleStates = z.object({ "states": z.array(LifecycleState) }).strict();
 export type LifecycleStates = z.infer<typeof LifecycleStates>;
 
-export const Me = z.object({ "userId": z.string(), "tenantId": z.string().uuid(), "roles": z.array(ApproverRole), "authMode": z.enum(["demo","oidc"]), "personas": z.array(z.object({ "id": z.string(), "roles": z.array(ApproverRole) }).strict()).describe("Demo mode only. Send `Authorization: Demo <id>` or the iq_demo_persona cookie to act as one.").optional() }).strict();
+export const Me = z.object({ "userId": z.string(), "tenantId": z.string().uuid(), "roles": z.array(ApproverRole), "authMode": z.enum(["demo","oidc","github"]), "personas": z.array(z.object({ "id": z.string(), "roles": z.array(ApproverRole) }).strict()).describe("Demo mode only. Send `Authorization: Demo <id>` or the iq_demo_persona cookie to act as one.").optional() }).strict();
 export type Me = z.infer<typeof Me>;
 
 export const PaymentRunItem = z.object({ "invoiceId": z.string().uuid(), "vendorId": z.string().uuid(), "vendorName": z.string(), "accountLast4": z.union([z.string(), z.null()]), "amount": Money, "invoiceNumber": z.union([z.string(), z.null()]), "dueDate": z.union([z.string().date(), z.null()]), "state": InvoiceState }).strict();
@@ -202,6 +202,15 @@ export type ReasonCodeDefinition = z.infer<typeof ReasonCodeDefinition>;
 
 export const ReasonCodeList = z.object({ "reasonCodes": z.array(ReasonCodeDefinition) }).strict();
 export type ReasonCodeList = z.infer<typeof ReasonCodeList>;
+
+export const Tenant = z.object({ "id": z.string().uuid(), "name": z.string(), "createdAt": z.string().datetime({ offset: true }) }).strict();
+export type Tenant = z.infer<typeof Tenant>;
+
+export const TenantCreate = z.object({ "name": z.string().min(1).max(200), "baseCurrency": z.string().regex(new RegExp("^[A-Z]{3}$")).default("USD") }).strict();
+export type TenantCreate = z.infer<typeof TenantCreate>;
+
+export const TenantList = z.object({ "items": z.array(Tenant) }).strict();
+export type TenantList = z.infer<typeof TenantList>;
 
 export const TransitionError = z.enum(["TERMINAL_STATE","EDGE_NOT_ALLOWED","AI_MAY_ONLY_HOLD","AI_REASON_OUTSIDE_HOLD","HUMAN_REQUIRED","REASON_REQUIRED","REASON_OUTCOME_MISMATCH"]);
 export type TransitionError = z.infer<typeof TransitionError>;

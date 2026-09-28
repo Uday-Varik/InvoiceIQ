@@ -15,8 +15,8 @@ export class AuthError extends Error {
 }
 
 export interface Authenticator {
-  readonly mode: 'demo' | 'oidc';
-  /** `cookie` is only read in demo mode, to pick a persona. */
+  readonly mode: 'demo' | 'oidc' | 'github';
+  /** `cookie` is only read in demo and github modes. */
   authenticate(authorization: string | undefined, cookie?: string): Promise<Principal>;
 }
 

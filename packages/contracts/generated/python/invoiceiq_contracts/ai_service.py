@@ -84,6 +84,30 @@ class ExtractedLineItem(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0)
 
 
+class Flag(StrEnum):
+    """
+    The class of risk detected by the provider.
+    """
+
+    anomaly_suspected = "anomaly_suspected"
+    document_tampering = "document_tampering"
+    semantic_duplicate = "semantic_duplicate"
+
+
+class RiskFlag(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    flag: Flag = Field(..., description="The class of risk detected by the provider.")
+    score: float = Field(
+        ...,
+        description="Provider confidence that this risk is present (0 = not present, 1 = certain).",
+        ge=0.0,
+        le=1.0,
+    )
+    evidence: str = Field(..., description="Brief explanation of what triggered this flag.", max_length=500)
+
+
 class Fields(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -109,6 +133,11 @@ class ExtractionResult(BaseModel):
         ...,
         description="Lines of the invoice body in document order. Empty when none were recognised.",
         max_length=200,
+    )
+    riskFlags: list[RiskFlag] | None = Field(
+        None,
+        description="Provider-reported risk indicators. Empty or absent when the provider finds nothing suspicious. These become HOLD signals in compute_signals; the provider can flag risk but cannot approve or release.",
+        max_length=10,
     )
 
 

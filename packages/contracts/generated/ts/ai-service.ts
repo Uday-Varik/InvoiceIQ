@@ -146,6 +146,8 @@ export type components = {
             /** @description Lines of the invoice body in document order. Empty when none were recognised. */
             readonly lineItems: readonly components["schemas"]["ExtractedLineItem"][];
             readonly provider: string;
+            /** @description Provider-reported risk indicators. Empty or absent when the provider finds nothing suspicious. These become HOLD signals in compute_signals; the provider can flag risk but cannot approve or release. */
+            readonly riskFlags?: readonly components["schemas"]["RiskFlag"][];
         };
         readonly Health: {
             readonly service: string;
@@ -157,6 +159,17 @@ export type components = {
             readonly status: number;
             readonly title: string;
             readonly type: string;
+        };
+        readonly RiskFlag: {
+            /** @description Brief explanation of what triggered this flag. */
+            readonly evidence: string;
+            /**
+             * @description The class of risk detected by the provider.
+             * @enum {string}
+             */
+            readonly flag: "anomaly_suspected" | "document_tampering" | "semantic_duplicate";
+            /** @description Provider confidence that this risk is present (0 = not present, 1 = certain). */
+            readonly score: number;
         };
         readonly Signal: {
             readonly evidence: string;
