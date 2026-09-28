@@ -11,6 +11,7 @@ export interface GitHubAuthOptions {
   readonly clientSecret: string;
   readonly sessionSecret: string;
   readonly callbackUrl?: string | undefined;
+  readonly frontendUrl?: string | undefined;
   readonly defaultRole: ApproverRole;
   readonly tenantId: string;
 }
@@ -95,19 +96,26 @@ async function fetchGitHubUser(accessToken: string): Promise<{ id: number; login
   return body;
 }
 
+function requestOrigin(req: FastifyRequest): string {
+  const proto = req.protocol;
+  const host = req.hostname;
+  return `${proto}://${host}`;
+}
+
 export function registerGitHubAuthRoutes(app: FastifyInstance, opts: GitHubAuthOptions): void {
   const secure = process.env['NODE_ENV'] === 'production';
   const cookieOpts = `Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
   const sessionMaxAge = 7 * 24 * 60 * 60;
 
-  app.get('/auth/github', async (_req, reply) => {
+  app.get('/auth/github', async (req, reply) => {
     const state = randomBytes(24).toString('base64url');
     void reply.header('set-cookie', `${STATE_COOKIE}=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure ? '; Secure' : ''}`);
+    const callbackUrl = opts.callbackUrl ?? `${requestOrigin(req)}/auth/github/callback`;
     const params = new URLSearchParams({
       client_id: opts.clientId,
       scope: 'read:user',
       state,
-      ...(opts.callbackUrl ? { redirect_uri: opts.callbackUrl } : {}),
+      redirect_uri: callbackUrl,
     });
     return reply.redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
   });
@@ -143,7 +151,8 @@ export function registerGitHubAuthRoutes(app: FastifyInstance, opts: GitHubAuthO
       const session = sign(payload, opts.sessionSecret);
 
       void reply.header('set-cookie', `${SESSION_COOKIE}=${session}; ${cookieOpts}; Max-Age=${sessionMaxAge}`);
-      return reply.redirect('/');
+      const postLoginUrl = opts.frontendUrl ?? '/';
+      return reply.redirect(postLoginUrl);
     },
   );
 

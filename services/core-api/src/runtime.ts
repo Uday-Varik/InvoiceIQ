@@ -20,6 +20,7 @@ export function githubAuthOptionsFor(config: Config): GitHubAuthOptions {
     clientSecret: config.GITHUB_CLIENT_SECRET as string,
     sessionSecret: config.SESSION_SECRET as string,
     callbackUrl: config.GITHUB_CALLBACK_URL,
+    frontendUrl: config.FRONTEND_URL,
     defaultRole: config.GITHUB_DEFAULT_ROLE,
     tenantId: DEMO_TENANT_ID,
   };

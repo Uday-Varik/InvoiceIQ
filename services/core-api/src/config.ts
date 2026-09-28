@@ -38,8 +38,10 @@ const EnvSchema = z
     GITHUB_CLIENT_ID: z.string().min(1).optional(),
     GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
     SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters').optional(),
-    /** Where to redirect after login. Defaults to /. */
+    /** Override for the OAuth redirect_uri. When unset, derived from the request origin. */
     GITHUB_CALLBACK_URL: z.string().url().optional(),
+    /** Frontend origin to redirect to after login (e.g. https://myapp.vercel.app). Defaults to /. */
+    FRONTEND_URL: z.string().url().optional(),
     /** Default role for GitHub-authenticated users. */
     GITHUB_DEFAULT_ROLE: z.enum(['ap_clerk', 'ap_manager', 'controller', 'cfo']).default('cfo'),
 
