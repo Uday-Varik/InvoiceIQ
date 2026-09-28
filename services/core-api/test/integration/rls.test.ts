@@ -66,6 +66,7 @@ describeDb('row-level security (real Postgres, app role)', () => {
         'payment_run_items',
         'payment_runs',
         'tenant_policies',
+        'tenant_users',
         'tenants',
         'vendor_bank_changes',
         'vendors',
