@@ -20,6 +20,7 @@ import { tenantChain } from '../invoices/audit.js';
 import { checkpointFindings, checkpointSigner, type CheckpointSigner } from '../audit/checkpoints.js';
 import { verifyChain } from '../domain/index.js';
 import { registerControlsRoutes } from './controls-routes.js';
+import { registerAdminRoutes, type AdminContext } from './admin-http.js';
 import { CORRECTION_BODY_SCHEMA, type CorrectionInput } from '../invoices/corrections.js';
 import { exportFilename, toCsv } from '../invoices/export.js';
 import { FILTER_QUERY_PROPERTIES, parseFilter, type RawFilterQuery } from '../invoices/filters.js';
@@ -73,6 +74,9 @@ export const IMPLEMENTED_ROUTES = [
   'GET /v1/audit/checkpoints',
   'POST /v1/audit/checkpoints',
   'POST /v1/audit/checkpoints/verify',
+  'GET /v1/admin/tenants',
+  'POST /v1/admin/tenants',
+  'GET /v1/admin/tenants/{tenantId}',
 ] as const;
 
 export interface AppDeps {
@@ -102,6 +106,8 @@ export interface AppOptions {
   readonly checkpointSigner?: CheckpointSigner;
   /** Allowed CORS origin(s). Comma-separated string enables CORS for those origins. */
   readonly corsOrigin?: string;
+  /** Admin context for tenant management routes. When set, admin routes are registered. */
+  readonly admin?: AdminContext;
 }
 
 export const DEMO_PRINCIPAL: Principal = { tenantId: DEMO_TENANT_ID, userId: 'demo-user', roles: ['cfo'] };
@@ -263,6 +269,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
 
   registerInvoiceRoutes(app, needDeps);
   registerControlsRoutes(app, { db: needDeps, principalOf, signer, auth });
+  if (opts.admin) registerAdminRoutes(app, opts.admin);
   return app;
 }
 

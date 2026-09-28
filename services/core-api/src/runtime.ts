@@ -7,14 +7,17 @@ import { checkpointSigner } from './audit/checkpoints.js';
 import { bootstrapTenant, DEMO_TENANT_ID } from './db/bootstrap.js';
 import { migrate } from './db/migrate.js';
 import { createPool, type Db } from './db/pool.js';
+import pg from 'pg';
 import { buildApp, DEMO_PRINCIPAL } from './http/app.js';
+import type { AdminContext } from './http/admin-http.js';
+import { HttpProblem } from './http/problem.js';
 import { holdForManualReview, processReceived } from './invoices/pipeline.js';
 import { OutboxWorker, type OutboxEvent, type OutboxOutcome, type WorkerLogger } from './outbox/worker.js';
 import { setAppRolePassword } from './db/app-role.js';
 import { createCoreMetrics, type CoreMetrics } from './observability/catalog.js';
 import { RateLimiter } from './observability/rate-limit.js';
 
-export function githubAuthOptionsFor(config: Config): GitHubAuthOptions {
+export function githubAuthOptionsFor(config: Config, ownerPool?: pg.Pool): GitHubAuthOptions {
   return {
     clientId: config.GITHUB_CLIENT_ID as string,
     clientSecret: config.GITHUB_CLIENT_SECRET as string,
@@ -23,6 +26,7 @@ export function githubAuthOptionsFor(config: Config): GitHubAuthOptions {
     frontendUrl: config.FRONTEND_URL,
     defaultRole: config.GITHUB_DEFAULT_ROLE,
     tenantId: DEMO_TENANT_ID,
+    ownerPool,
   };
 }
 
@@ -131,9 +135,23 @@ export async function startRuntime(config: Config): Promise<Runtime> {
   }
 
   const db = createPool(config.DATABASE_URL);
+  const ownerPool = config.MIGRATION_DATABASE_URL ? new pg.Pool({ connectionString: config.MIGRATION_DATABASE_URL, max: 3 }) : undefined;
   const key = config.AUDIT_CHECKPOINT_KEY ? parseCheckpointKey(config.AUDIT_CHECKPOINT_KEY) : undefined;
   const signer = checkpointSigner(key);
   const production = config.NODE_ENV === 'production';
+
+  const requireAdmin = (req: { principal: { roles: readonly string[] } | null }) => {
+    const p = req.principal;
+    if (!p) throw new HttpProblem(401, 'Unauthorized', 'no authenticated principal');
+    if (!p.roles.includes('cfo') && !p.roles.includes('controller')) {
+      throw new HttpProblem(403, 'Forbidden', 'admin access requires cfo or controller role');
+    }
+  };
+  const principalOf = (req: { principal: { tenantId: string; userId: string; roles: readonly string[] } | null }) => {
+    if (!req.principal) throw new HttpProblem(401, 'Unauthorized', 'no authenticated principal');
+    return req.principal as { tenantId: string; userId: string; roles: readonly string[] };
+  };
+
   const app = buildApp({
     logger: true,
     logLevel: config.LOG_LEVEL,
@@ -151,8 +169,18 @@ export async function startRuntime(config: Config): Promise<Runtime> {
     checkpointSigner: signer,
     deps: { db, worker: { kick: () => worker.kick() } },
     ...(config.CORS_ORIGIN ? { corsOrigin: config.CORS_ORIGIN } : {}),
+    ...(ownerPool && config.MIGRATION_DATABASE_URL
+      ? {
+          admin: {
+            ownerConnectionString: config.MIGRATION_DATABASE_URL,
+            ownerPool,
+            principalOf: principalOf as AdminContext['principalOf'],
+            requireAdmin: requireAdmin as AdminContext['requireAdmin'],
+          },
+        }
+      : {}),
   });
-  if (config.AUTH_MODE === 'github') registerGitHubAuthRoutes(app, githubAuthOptionsFor(config));
+  if (config.AUTH_MODE === 'github') registerGitHubAuthRoutes(app, githubAuthOptionsFor(config, ownerPool));
   if (signer.ephemeral) app.log.warn({ keyId: signer.keyId }, 'AUDIT_CHECKPOINT_KEY is not set; audit checkpoints are signed with a key that changes on every restart');
   if (production && !config.METRICS_TOKEN) app.log.warn('METRICS_TOKEN is not set; /metrics is disabled');
   metrics.registry.addCollector(outboxCollector(db, metrics));
@@ -167,6 +195,7 @@ export async function startRuntime(config: Config): Promise<Runtime> {
       await app.close();
       await worker.stop();
       await db.end();
+      if (ownerPool) await ownerPool.end();
     },
   };
 }

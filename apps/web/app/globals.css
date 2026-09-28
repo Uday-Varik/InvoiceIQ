@@ -832,6 +832,305 @@ a.btn {
   }
 }
 
+/* ---- Phase 12: admin & onboarding ---------------------------------------- */
+
+.admin-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-back {
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.admin-back:hover {
+  text-decoration: underline;
+}
+
+.admin-create-form,
+.admin-add-user-form {
+  padding: 20px;
+  margin-bottom: 16px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.form-field input,
+.form-field select {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  transition: border-color 0.15s;
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.form-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding-top: 28px;
+}
+
+.form-checkbox input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.admin-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-empty {
+  padding: 48px 24px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.tenant-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.tenant-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.tenant-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.tenant-card-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--accent);
+  flex: none;
+}
+
+.tenant-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tenant-card-name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.tenant-card-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.tenant-card-arrow {
+  color: var(--muted);
+  flex: none;
+}
+
+/* Onboarding */
+
+.onboarding {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 80vh;
+  padding: 48px 16px;
+}
+
+.onboarding-card {
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+}
+
+.onboarding-logo {
+  margin-bottom: 20px;
+}
+
+.onboarding-title {
+  font-size: 1.8rem;
+  margin: 0 0 4px;
+}
+
+.onboarding-subtitle {
+  margin: 12px 0 24px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.onboarding-form {
+  text-align: left;
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.onboarding-input {
+  width: 100%;
+  padding: 12px 14px !important;
+  font-size: 1rem !important;
+  border-radius: 10px !important;
+}
+
+.onboarding-submit {
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+  margin-top: 8px;
+}
+
+.onboarding-btn-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.onboarding-btn-loading .spinner {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border-color: rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+}
+
+.onboarding-features {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.onboarding-feature {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.onboarding-feature svg {
+  flex: none;
+}
+
+.onboarding-tenants {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.onboarding-tenant-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+
+.onboarding-tenant-btn:hover {
+  border-color: var(--accent);
+}
+
+.onboarding-tenant-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--accent);
+  flex: none;
+}
+
+.onboarding-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 20px 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.onboarding-divider::before,
+.onboarding-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.onboarding-spinner {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spinner {
     animation: none;

@@ -44,6 +44,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <li>
                 <Link href="/lifecycle">Lifecycle</Link>
               </li>
+              <li>
+                <Link href="/admin">Admin</Link>
+              </li>
             </ul>
           </nav>
           <AuthNotice />
