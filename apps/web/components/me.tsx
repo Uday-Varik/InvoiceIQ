@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { getMe, type Me } from '../lib/api';
+import { ApiError, getMe, type Me } from '../lib/api';
 import { personaCookie, personaOptions, roleLabel } from '../lib/personas';
 import { useBackend } from './backend';
 
@@ -19,7 +19,13 @@ export function MeProvider({ children }: { children: ReactNode }) {
     if (backend !== 'ready') return;
     getMe()
       .then(setMe)
-      .catch(() => setMe(undefined));
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 401 && !window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+          return;
+        }
+        setMe(undefined);
+      });
   }, [backend]);
   return (
     <MeContext.Provider value={me}>
