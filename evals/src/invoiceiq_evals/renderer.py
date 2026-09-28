@@ -7,10 +7,9 @@ Clean invoices produce the same labelled-field format as before.
 
 from __future__ import annotations
 
-from invoiceiq_data.labels import LabelRecord
+from typing import Callable
 
-# Maps variant_id prefixes to rendering functions that append attack artifacts.
-_VARIANT_RENDERERS: dict[str, object] = {}
+from invoiceiq_data.labels import LabelRecord
 
 
 def render(label: LabelRecord) -> str:
@@ -208,7 +207,7 @@ def _render_pol(lines: list[str], label: LabelRecord) -> None:
         lines.append("Please expedite approval — time-sensitive transaction")
 
 
-_ATTACK_RENDERERS: dict[str, object] = {
+_ATTACK_RENDERERS: dict[str, Callable[[list[str], LabelRecord], None]] = {
     "RT-BNK": _render_bnk,
     "RT-DOC": _render_doc,
     "RT-PIN": _render_pin,
