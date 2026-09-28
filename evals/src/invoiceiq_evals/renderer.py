@@ -7,7 +7,7 @@ Clean invoices produce the same labelled-field format as before.
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from invoiceiq_data.labels import LabelRecord
 
