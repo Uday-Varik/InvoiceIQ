@@ -189,6 +189,10 @@ describe('edit before approve: form', () => {
         { description: 'Gloves', quantity: '', unitPrice: '', amount: '600.00' },
       ],
       comment: '',
+      paymentTerms: '',
+      poNumber: '',
+      vendorAddress: '',
+      vendorTaxId: '',
     });
   });
 
