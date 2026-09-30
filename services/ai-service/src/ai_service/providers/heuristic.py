@@ -45,9 +45,7 @@ _STRICT: dict[str, re.Pattern[str]] = {
         r"^\s*(?:p\.?o\.?\s*(?:no\.?|number|#)?|purchase\s+order(?:\s+(?:no\.?|number|#))?)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-/]*)\s*$",
         re.I | re.M,
     ),
-    "vendorAddress": re.compile(
-        r"^\s*(?:vendor\s+)?address\s*[:#]\s*(.+?)\s*$", re.I | re.M
-    ),
+    "vendorAddress": re.compile(r"^\s*(?:vendor\s+)?address\s*[:#]\s*(.+?)\s*$", re.I | re.M),
     "vendorTaxId": re.compile(
         r"^\s*(?:tax\s*(?:id|identification|number|no\.?)|(?:vat|gst|ein|tin|abn)\s*(?:no\.?|number|#)?)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-/.]*)\s*$",
         re.I | re.M,
@@ -284,9 +282,7 @@ def _loose_currency(text: str) -> tuple[str, float] | None:
 
 
 def _loose_payment_terms(text: str) -> tuple[str, float] | None:
-    m = re.search(
-        r"\b(?:payment\s+terms?|terms?)\s*[:#]\s*(.+?)(?:\n|$)", text, re.I | re.M
-    )
+    m = re.search(r"\b(?:payment\s+terms?|terms?)\s*[:#]\s*(.+?)(?:\n|$)", text, re.I | re.M)
     if m:
         value = m.group(1).strip()
         if value and len(value) <= 100:
@@ -296,8 +292,7 @@ def _loose_payment_terms(text: str) -> tuple[str, float] | None:
 
 def _loose_po_number(text: str) -> tuple[str, float] | None:
     m = re.search(
-        r"\b(?:p\.?o\.?|purchase\s+order)\s*(?:no\.?|number|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-/]*)",
-        text, re.I
+        r"\b(?:p\.?o\.?|purchase\s+order)\s*(?:no\.?|number|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-/]*)", text, re.I
     )
     if m:
         value = m.group(1).strip()
@@ -307,9 +302,7 @@ def _loose_po_number(text: str) -> tuple[str, float] | None:
 
 
 def _loose_vendor_address(text: str) -> tuple[str, float] | None:
-    m = re.search(
-        r"\b(?:vendor\s+)?address\s*[:#]\s*(.+?)(?:\n|$)", text, re.I | re.M
-    )
+    m = re.search(r"\b(?:vendor\s+)?address\s*[:#]\s*(.+?)(?:\n|$)", text, re.I | re.M)
     if m:
         value = m.group(1).strip()
         if value and len(value) <= 500:
@@ -320,7 +313,8 @@ def _loose_vendor_address(text: str) -> tuple[str, float] | None:
 def _loose_vendor_tax_id(text: str) -> tuple[str, float] | None:
     m = re.search(
         r"\b(?:tax\s*(?:id|identification|number|no\.?)|(?:vat|gst|ein|tin|abn)\s*(?:no\.?|number|#)?)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-/.]*)",
-        text, re.I
+        text,
+        re.I,
     )
     if m:
         value = m.group(1).strip()

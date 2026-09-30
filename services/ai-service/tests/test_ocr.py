@@ -81,7 +81,8 @@ def test_scans_are_read_with_ocr(name: str, content_type: str) -> None:
 @pytest.mark.parametrize(("name", "content_type"), SCANS)
 def test_ocr_confidence_is_capped_but_clears_the_hold_threshold(name: str, content_type: str) -> None:
     result = _extract(name, content_type)
-    confidences = [getattr(result.fields, n).confidence for n in type(result.fields).model_fields]
+    field_names = type(result.fields).model_fields
+    confidences = [f.confidence for n in field_names if (f := getattr(result.fields, n)) is not None]
     confidences += [li.confidence for li in result.lineItems]
     assert max(confidences) <= OCR_MAX_CONFIDENCE
     assert result.fields.totalMinor.confidence == OCR_MAX_CONFIDENCE >= 0.8
@@ -104,7 +105,8 @@ def test_without_ocr_tools_scans_yield_no_text(
     monkeypatch.setattr(shutil, "which", lambda _name: None)
     result = _extract(name, content_type)
     assert result.provider == "heuristic:no-text-layer"
-    assert all(getattr(result.fields, n).value is None for n in type(result.fields).model_fields)
+    field_names = type(result.fields).model_fields
+    assert all((f := getattr(result.fields, n)) is None or f.value is None for n in field_names)
 
 
 @pytest.mark.parametrize(("name", "content_type"), SCANS[:2])
