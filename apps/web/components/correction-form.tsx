@@ -74,6 +74,10 @@ export function CorrectionFormPanel({ invoice, onSaved, onCancel }: { invoice: I
         {input('total', 'Total', { inputMode: 'decimal', placeholder: zero })}
         {input('subtotal', 'Subtotal (optional)', { inputMode: 'decimal', placeholder: zero })}
         {input('tax', 'Tax (optional)', { inputMode: 'decimal', placeholder: zero })}
+        {input('paymentTerms', 'Payment terms (optional)', { maxLength: 100 })}
+        {input('poNumber', 'PO number (optional)', { maxLength: 64 })}
+        {input('vendorAddress', 'Vendor address (optional)', { maxLength: 500 })}
+        {input('vendorTaxId', 'Tax ID (optional)', { maxLength: 64 })}
       </div>
 
       <h3>Line items</h3>

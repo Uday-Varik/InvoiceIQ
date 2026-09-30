@@ -34,6 +34,10 @@ const FIELD_LABELS: Array<[keyof NonNullable<Invoice['extraction']>['fields'], s
   ['subtotalMinor', 'Subtotal (minor units)'],
   ['taxMinor', 'Tax (minor units)'],
   ['dueDate', 'Due date'],
+  ['paymentTerms', 'Payment terms'],
+  ['poNumber', 'PO number'],
+  ['vendorAddress', 'Vendor address'],
+  ['vendorTaxId', 'Tax ID'],
 ];
 
 const CORRECTION_LABEL: Record<string, string> = {
@@ -45,6 +49,10 @@ const CORRECTION_LABEL: Record<string, string> = {
   total: 'total',
   subtotal: 'subtotal',
   tax: 'tax',
+  paymentTerms: 'payment terms',
+  poNumber: 'PO number',
+  vendorAddress: 'vendor address',
+  vendorTaxId: 'tax ID',
   lineItems: 'line items',
 };
 

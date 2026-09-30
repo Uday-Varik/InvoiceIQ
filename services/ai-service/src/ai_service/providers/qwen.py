@@ -34,6 +34,10 @@ Header keys:
   subtotalMinor - subtotal before tax in minor units, or null
   taxMinor     - tax amount in minor units, or null
   dueDate      - payment due date in YYYY-MM-DD, or null
+  paymentTerms - payment terms (e.g. "Net 30", "2/10 Net 30"), or null
+  poNumber     - purchase order number, or null
+  vendorAddress - vendor address, or null
+  vendorTaxId  - vendor tax ID / VAT / GST / EIN number, or null
 
 lineItems - an array with one entry for EVERY line item row on the invoice, in the \
 order printed. Do not skip, merge or summarise rows; use [] only when the invoice \

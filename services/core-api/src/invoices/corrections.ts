@@ -22,6 +22,10 @@ export const CORRECTABLE_FIELDS = [
   'total',
   'subtotal',
   'tax',
+  'paymentTerms',
+  'poNumber',
+  'vendorAddress',
+  'vendorTaxId',
   'lineItems',
 ] as const;
 export type CorrectableField = (typeof CORRECTABLE_FIELDS)[number];
@@ -45,6 +49,10 @@ export interface CorrectionInput {
   readonly totalMinor?: string;
   readonly subtotalMinor?: string | null;
   readonly taxMinor?: string | null;
+  readonly paymentTerms?: string | null;
+  readonly poNumber?: string | null;
+  readonly vendorAddress?: string | null;
+  readonly vendorTaxId?: string | null;
   readonly lineItems?: readonly LineItemBody[];
   readonly comment?: string;
 }
@@ -79,6 +87,10 @@ export const CORRECTION_BODY_SCHEMA = {
     totalMinor: MINOR,
     subtotalMinor: NULLABLE_MINOR,
     taxMinor: NULLABLE_MINOR,
+    paymentTerms: { type: ['string', 'null'], maxLength: 100 },
+    poNumber: { type: ['string', 'null'], maxLength: 64 },
+    vendorAddress: { type: ['string', 'null'], maxLength: 500 },
+    vendorTaxId: { type: ['string', 'null'], maxLength: 64 },
     lineItems: {
       type: 'array',
       maxItems: MAX_LINE_ITEMS,

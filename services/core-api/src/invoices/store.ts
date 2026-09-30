@@ -29,6 +29,10 @@ export interface InvoiceRow {
   due_date: string | null;
   subtotal_minor: string | null;
   tax_minor: string | null;
+  payment_terms: string | null;
+  po_number: string | null;
+  vendor_address: string | null;
+  vendor_tax_id: string | null;
   corrected_fields: string[];
   vendor_id: string | null;
   payment_run_id: string | null;
@@ -202,6 +206,10 @@ export interface ExtractedHeader {
   readonly subtotalMinor: bigint | null;
   readonly taxMinor: bigint | null;
   readonly dueDate: string | null;
+  readonly paymentTerms: string | null;
+  readonly poNumber: string | null;
+  readonly vendorAddress: string | null;
+  readonly vendorTaxId: string | null;
 }
 
 const minorText = (v: bigint | null) => (v === null ? null : v.toString());
@@ -210,7 +218,9 @@ export async function saveExtraction(tx: Tx, id: string, header: ExtractedHeader
   await tx.query(
     `UPDATE invoices
         SET vendor_name = $2, invoice_number = $3, invoice_date = $4, currency = $5, total_minor = $6,
-            subtotal_minor = $7, tax_minor = $8, due_date = $9, extraction = $10, updated_at = now()
+            subtotal_minor = $7, tax_minor = $8, due_date = $9, extraction = $10,
+            payment_terms = $11, po_number = $12, vendor_address = $13, vendor_tax_id = $14,
+            updated_at = now()
       WHERE id = $1`,
     [
       id,
@@ -223,6 +233,10 @@ export async function saveExtraction(tx: Tx, id: string, header: ExtractedHeader
       minorText(header.taxMinor),
       header.dueDate,
       JSON.stringify(extraction),
+      header.paymentTerms,
+      header.poNumber,
+      header.vendorAddress,
+      header.vendorTaxId,
     ],
   );
 }
@@ -239,6 +253,10 @@ export function headerOf(row: InvoiceRow): ExtractedHeader {
     subtotalMinor: big(row.subtotal_minor),
     taxMinor: big(row.tax_minor),
     dueDate: row.due_date,
+    paymentTerms: row.payment_terms,
+    poNumber: row.po_number,
+    vendorAddress: row.vendor_address,
+    vendorTaxId: row.vendor_tax_id,
   };
 }
 
@@ -252,6 +270,10 @@ export interface HeaderUpdate {
   total_minor?: string;
   subtotal_minor?: string | null;
   tax_minor?: string | null;
+  payment_terms?: string | null;
+  po_number?: string | null;
+  vendor_address?: string | null;
+  vendor_tax_id?: string | null;
 }
 
 const UPDATABLE: ReadonlyArray<keyof HeaderUpdate> = [
@@ -263,6 +285,10 @@ const UPDATABLE: ReadonlyArray<keyof HeaderUpdate> = [
   'total_minor',
   'subtotal_minor',
   'tax_minor',
+  'payment_terms',
+  'po_number',
+  'vendor_address',
+  'vendor_tax_id',
 ];
 
 /**

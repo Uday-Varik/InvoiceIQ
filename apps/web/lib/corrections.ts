@@ -30,6 +30,10 @@ export interface CorrectionForm {
   total: string;
   subtotal: string;
   tax: string;
+  paymentTerms: string;
+  poNumber: string;
+  vendorAddress: string;
+  vendorTaxId: string;
   lines: LineForm[];
   comment: string;
 }
@@ -50,6 +54,10 @@ export function formFromInvoice(inv: Invoice): CorrectionForm {
     total: minorToInput(inv.total?.amountMinor, currencyOf(inv)),
     subtotal: minorToInput(inv.subtotal?.amountMinor, currencyOf(inv)),
     tax: minorToInput(inv.tax?.amountMinor, currencyOf(inv)),
+    paymentTerms: inv.paymentTerms ?? '',
+    poNumber: inv.poNumber ?? '',
+    vendorAddress: inv.vendorAddress ?? '',
+    vendorTaxId: inv.vendorTaxId ?? '',
     lines: (inv.lineItems ?? []).map((l) => ({
       description: l.description,
       quantity: l.quantity ?? '',
@@ -166,6 +174,22 @@ export function buildCorrection(inv: Invoice, form: CorrectionForm): BuildResult
     if (!m.ok) errors[field] = m.error;
     else set(key, field, m.minor, before);
   }
+
+  const paymentTerms = form.paymentTerms.trim();
+  if (paymentTerms.length > 100) errors.paymentTerms = 'At most 100 characters';
+  else set('paymentTerms', 'paymentTerms', paymentTerms || null, inv.paymentTerms ?? null);
+
+  const poNumber = form.poNumber.trim();
+  if (poNumber.length > 64) errors.poNumber = 'At most 64 characters';
+  else set('poNumber', 'poNumber', poNumber || null, inv.poNumber ?? null);
+
+  const vendorAddress = form.vendorAddress.trim();
+  if (vendorAddress.length > 500) errors.vendorAddress = 'At most 500 characters';
+  else set('vendorAddress', 'vendorAddress', vendorAddress || null, inv.vendorAddress ?? null);
+
+  const vendorTaxId = form.vendorTaxId.trim();
+  if (vendorTaxId.length > 64) errors.vendorTaxId = 'At most 64 characters';
+  else set('vendorTaxId', 'vendorTaxId', vendorTaxId || null, inv.vendorTaxId ?? null);
 
   const lineErrors: Record<number, string> = {};
   const lines = form.lines.map((l, i) => lineBody(l, i, lineErrors, currency));
