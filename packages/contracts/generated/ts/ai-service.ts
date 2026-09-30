@@ -138,10 +138,14 @@ export type components = {
                 readonly dueDate: components["schemas"]["ExtractedField"];
                 readonly invoiceDate: components["schemas"]["ExtractedField"];
                 readonly invoiceNumber: components["schemas"]["ExtractedField"];
+                readonly paymentTerms?: components["schemas"]["ExtractedField"];
+                readonly poNumber?: components["schemas"]["ExtractedField"];
                 readonly subtotalMinor: components["schemas"]["ExtractedField"];
                 readonly taxMinor: components["schemas"]["ExtractedField"];
                 readonly totalMinor: components["schemas"]["ExtractedField"];
+                readonly vendorAddress?: components["schemas"]["ExtractedField"];
                 readonly vendorName: components["schemas"]["ExtractedField"];
+                readonly vendorTaxId?: components["schemas"]["ExtractedField"];
             };
             /** @description Lines of the invoice body in document order. Empty when none were recognised. */
             readonly lineItems: readonly components["schemas"]["ExtractedLineItem"][];

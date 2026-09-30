@@ -120,6 +120,10 @@ class Fields(BaseModel):
     subtotalMinor: ExtractedField
     taxMinor: ExtractedField
     dueDate: ExtractedField
+    paymentTerms: ExtractedField | None = None
+    poNumber: ExtractedField | None = None
+    vendorAddress: ExtractedField | None = None
+    vendorTaxId: ExtractedField | None = None
 
 
 class ExtractionResult(BaseModel):

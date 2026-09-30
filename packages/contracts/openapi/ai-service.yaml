@@ -326,6 +326,14 @@ components:
               $ref: '#/components/schemas/ExtractedField'
             dueDate:
               $ref: '#/components/schemas/ExtractedField'
+            paymentTerms:
+              $ref: '#/components/schemas/ExtractedField'
+            poNumber:
+              $ref: '#/components/schemas/ExtractedField'
+            vendorAddress:
+              $ref: '#/components/schemas/ExtractedField'
+            vendorTaxId:
+              $ref: '#/components/schemas/ExtractedField'
         lineItems:
           type: array
           maxItems: 200

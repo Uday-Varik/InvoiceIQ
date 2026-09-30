@@ -73,8 +73,9 @@ def test_image_without_ocr_returns_unknown_fields(monkeypatch: pytest.MonkeyPatc
     png = (DOCS / "scanned-invoice.png").read_bytes()
     result = extract_document(_request(png, "image/png"), HeuristicProvider())
     assert result.provider == "heuristic:no-text-layer"
-    assert all(getattr(result.fields, n).value is None for n in type(result.fields).model_fields)
-    assert all(getattr(result.fields, n).confidence == 0.0 for n in type(result.fields).model_fields)
+    field_names = type(result.fields).model_fields
+    assert all((f := getattr(result.fields, n)) is None or f.value is None for n in field_names)
+    assert all((f := getattr(result.fields, n)) is None or f.confidence == 0.0 for n in field_names)
 
 
 def test_sha_mismatch_is_refused() -> None:

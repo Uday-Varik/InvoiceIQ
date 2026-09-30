@@ -674,7 +674,7 @@ export type components = {
             readonly callbackNote: string;
         };
         /** @enum {string} */
-        readonly CorrectableField: "vendorName" | "invoiceNumber" | "invoiceDate" | "dueDate" | "currency" | "total" | "subtotal" | "tax" | "lineItems";
+        readonly CorrectableField: "vendorName" | "invoiceNumber" | "invoiceDate" | "dueDate" | "currency" | "total" | "subtotal" | "tax" | "paymentTerms" | "poNumber" | "vendorAddress" | "vendorTaxId" | "lineItems";
         readonly CurrencyTotal: {
             readonly amountMinor: string;
             readonly count: number;
@@ -726,6 +726,8 @@ export type components = {
              * @description The payment run currently paying this invoice.
              */
             readonly paymentRunId?: string;
+            readonly paymentTerms?: string;
+            readonly poNumber?: string;
             /** @description Reasons for the transition into the current state. Empty unless the state is HOLD, EXCEPTION or REJECTED. */
             readonly reasons: readonly components["schemas"]["ReasonCode"][];
             readonly state: components["schemas"]["InvoiceState"];
@@ -736,9 +738,11 @@ export type components = {
             readonly total?: components["schemas"]["Money"];
             /** Format: date-time */
             readonly updatedAt: string;
+            readonly vendorAddress?: string;
             /** Format: uuid */
             readonly vendorId?: string;
             readonly vendorName?: string;
+            readonly vendorTaxId?: string;
             /** @description Incremented on every state change and every correction. */
             readonly version: number;
         };
@@ -764,10 +768,14 @@ export type components = {
             readonly invoiceDate?: string;
             readonly invoiceNumber?: string;
             readonly lineItems?: readonly components["schemas"]["LineItemInput"][];
+            readonly paymentTerms?: string | null;
+            readonly poNumber?: string | null;
             readonly subtotalMinor?: string | null;
             readonly taxMinor?: string | null;
             readonly totalMinor?: string;
+            readonly vendorAddress?: string | null;
             readonly vendorName?: string;
+            readonly vendorTaxId?: string | null;
         };
         readonly InvoiceDocument: {
             /** @enum {string} */
@@ -806,10 +814,14 @@ export type components = {
                 readonly dueDate?: components["schemas"]["ExtractedField"];
                 readonly invoiceDate: components["schemas"]["ExtractedField"];
                 readonly invoiceNumber: components["schemas"]["ExtractedField"];
+                readonly paymentTerms?: components["schemas"]["ExtractedField"];
+                readonly poNumber?: components["schemas"]["ExtractedField"];
                 readonly subtotalMinor?: components["schemas"]["ExtractedField"];
                 readonly taxMinor?: components["schemas"]["ExtractedField"];
                 readonly totalMinor: components["schemas"]["ExtractedField"];
+                readonly vendorAddress?: components["schemas"]["ExtractedField"];
                 readonly vendorName: components["schemas"]["ExtractedField"];
+                readonly vendorTaxId?: components["schemas"]["ExtractedField"];
             };
             readonly lineItems?: readonly components["schemas"]["ExtractedLineItem"][];
             readonly provider: string;

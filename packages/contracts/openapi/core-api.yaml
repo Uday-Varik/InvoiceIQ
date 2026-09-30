@@ -1432,6 +1432,14 @@ components:
               $ref: '#/components/schemas/ExtractedField'
             dueDate:
               $ref: '#/components/schemas/ExtractedField'
+            paymentTerms:
+              $ref: '#/components/schemas/ExtractedField'
+            poNumber:
+              $ref: '#/components/schemas/ExtractedField'
+            vendorAddress:
+              $ref: '#/components/schemas/ExtractedField'
+            vendorTaxId:
+              $ref: '#/components/schemas/ExtractedField'
         lineItems:
           type: array
           maxItems: 200
@@ -1504,7 +1512,7 @@ components:
           pattern: '^-?[0-9]{1,18}$'
     CorrectableField:
       type: string
-      enum: [vendorName, invoiceNumber, invoiceDate, dueDate, currency, total, subtotal, tax, lineItems]
+      enum: [vendorName, invoiceNumber, invoiceDate, dueDate, currency, total, subtotal, tax, paymentTerms, poNumber, vendorAddress, vendorTaxId, lineItems]
     FieldChange:
       type: object
       additionalProperties: false
@@ -1553,6 +1561,26 @@ components:
             - string
             - 'null'
           pattern: '^-?[0-9]{1,18}$'
+        paymentTerms:
+          type:
+            - string
+            - 'null'
+          maxLength: 100
+        poNumber:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        vendorAddress:
+          type:
+            - string
+            - 'null'
+          maxLength: 500
+        vendorTaxId:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
         lineItems:
           type: array
           maxItems: 200
@@ -1619,6 +1647,18 @@ components:
         dueDate:
           type: string
           format: date
+        paymentTerms:
+          type: string
+          maxLength: 100
+        poNumber:
+          type: string
+          maxLength: 64
+        vendorAddress:
+          type: string
+          maxLength: 500
+        vendorTaxId:
+          type: string
+          maxLength: 64
         total:
           $ref: '#/components/schemas/Money'
         subtotal:

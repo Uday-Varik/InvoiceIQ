@@ -40,6 +40,16 @@ _STRICT: dict[str, re.Pattern[str]] = {
     "invoiceDate": re.compile(r"^\s*(?:invoice\s*)?date\s*[:#]\s*(\d{4}-\d{2}-\d{2})\s*$", re.I | re.M),
     "currency": re.compile(r"^\s*(?i:currency)\s*[:#]\s*([A-Z]{3})\s*$", re.M),
     "dueDate": re.compile(r"^\s*due\s*date\s*[:#]\s*(\d{4}-\d{2}-\d{2})\s*$", re.I | re.M),
+    "paymentTerms": re.compile(r"^\s*(?:payment\s+terms?|terms?)\s*[:#]\s*(.+?)\s*$", re.I | re.M),
+    "poNumber": re.compile(
+        r"^\s*(?:p\.?o\.?\s*(?:no\.?|number|#)?|purchase\s+order(?:\s+(?:no\.?|number|#))?)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-/]*)\s*$",
+        re.I | re.M,
+    ),
+    "vendorAddress": re.compile(r"^\s*(?:vendor\s+)?address\s*[:#]\s*(.+?)\s*$", re.I | re.M),
+    "vendorTaxId": re.compile(
+        r"^\s*(?:tax\s*(?:id|identification|number|no\.?)|(?:vat|gst|ein|tin|abn)\s*(?:no\.?|number|#)?)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-/.]*)\s*$",
+        re.I | re.M,
+    ),
 }
 # Output key for each pattern name (amounts are reported in minor units).
 _KEYS = {"total": "totalMinor", "subtotal": "subtotalMinor", "tax": "taxMinor"}
@@ -271,6 +281,48 @@ def _loose_currency(text: str) -> tuple[str, float] | None:
     return None
 
 
+def _loose_payment_terms(text: str) -> tuple[str, float] | None:
+    m = re.search(r"\b(?:payment\s+terms?|terms?)\s*[:#]\s*(.+?)(?:\n|$)", text, re.I | re.M)
+    if m:
+        value = m.group(1).strip()
+        if value and len(value) <= 100:
+            return value[:100], 0.75
+    return None
+
+
+def _loose_po_number(text: str) -> tuple[str, float] | None:
+    m = re.search(
+        r"\b(?:p\.?o\.?|purchase\s+order)\s*(?:no\.?|number|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-/]*)", text, re.I
+    )
+    if m:
+        value = m.group(1).strip()
+        if value and len(value) <= 64:
+            return value[:64], 0.7
+    return None
+
+
+def _loose_vendor_address(text: str) -> tuple[str, float] | None:
+    m = re.search(r"\b(?:vendor\s+)?address\s*[:#]\s*(.+?)(?:\n|$)", text, re.I | re.M)
+    if m:
+        value = m.group(1).strip()
+        if value and len(value) <= 500:
+            return value[:500], 0.7
+    return None
+
+
+def _loose_vendor_tax_id(text: str) -> tuple[str, float] | None:
+    m = re.search(
+        r"\b(?:tax\s*(?:id|identification|number|no\.?)|(?:vat|gst|ein|tin|abn)\s*(?:no\.?|number|#)?)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-/.]*)",
+        text,
+        re.I,
+    )
+    if m:
+        value = m.group(1).strip()
+        if value and len(value) <= 64:
+            return value[:64], 0.65
+    return None
+
+
 def _loose_subtotal(text: str, e: int) -> tuple[str, float] | None:
     m = _patterns(e).loose_subtotal.search(text)
     return (_to_minor(m.group(1), e), 0.8) if m else None
@@ -384,6 +436,10 @@ _LOOSE: dict[str, Callable[[str], tuple[str, float] | None]] = {
     "invoiceDate": _loose_date,
     "currency": _loose_currency,
     "dueDate": _loose_due_date,
+    "paymentTerms": _loose_payment_terms,
+    "poNumber": _loose_po_number,
+    "vendorAddress": _loose_vendor_address,
+    "vendorTaxId": _loose_vendor_tax_id,
 }
 _LOOSE_AMOUNT: dict[str, Callable[[str, int], tuple[str, float] | None]] = {
     "total": _loose_total,
@@ -392,6 +448,7 @@ _LOOSE_AMOUNT: dict[str, Callable[[str, int], tuple[str, float] | None]] = {
 }
 _FIELD_ORDER = (
     "vendorName", "invoiceNumber", "invoiceDate", "currency", "total", "subtotal", "tax", "dueDate",
+    "paymentTerms", "poNumber", "vendorAddress", "vendorTaxId",
 )  # fmt: skip
 
 

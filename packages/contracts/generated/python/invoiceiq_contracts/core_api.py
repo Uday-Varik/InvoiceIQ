@@ -246,6 +246,10 @@ class Fields(BaseModel):
     subtotalMinor: ExtractedField | None = None
     taxMinor: ExtractedField | None = None
     dueDate: ExtractedField | None = None
+    paymentTerms: ExtractedField | None = None
+    poNumber: ExtractedField | None = None
+    vendorAddress: ExtractedField | None = None
+    vendorTaxId: ExtractedField | None = None
 
 
 class ExtractedLineItem(BaseModel):
@@ -293,6 +297,10 @@ class CorrectableField(StrEnum):
     total = "total"
     subtotal = "subtotal"
     tax = "tax"
+    paymentTerms = "paymentTerms"
+    poNumber = "poNumber"
+    vendorAddress = "vendorAddress"
+    vendorTaxId = "vendorTaxId"
     lineItems = "lineItems"
 
 
@@ -317,6 +325,10 @@ class InvoiceCorrection(BaseModel):
     totalMinor: str | None = Field(None, pattern="^-?[0-9]{1,18}$")
     subtotalMinor: str | None = Field(None, pattern="^-?[0-9]{1,18}$")
     taxMinor: str | None = Field(None, pattern="^-?[0-9]{1,18}$")
+    paymentTerms: str | None = Field(None, max_length=100)
+    poNumber: str | None = Field(None, max_length=64)
+    vendorAddress: str | None = Field(None, max_length=500)
+    vendorTaxId: str | None = Field(None, max_length=64)
     lineItems: list[LineItemInput] | None = Field(None, max_length=200)
     comment: str | None = Field(None, max_length=2000)
 
@@ -819,6 +831,10 @@ class Invoice(BaseModel):
     invoiceNumber: str | None = Field(None, max_length=64)
     invoiceDate: date | None = None
     dueDate: date | None = None
+    paymentTerms: str | None = Field(None, max_length=100)
+    poNumber: str | None = Field(None, max_length=64)
+    vendorAddress: str | None = Field(None, max_length=500)
+    vendorTaxId: str | None = Field(None, max_length=64)
     total: Money | None = None
     subtotal: Money | None = None
     tax: Money | None = None

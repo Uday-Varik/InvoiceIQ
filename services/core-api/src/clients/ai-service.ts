@@ -36,6 +36,10 @@ export const ExtractionResultSchema = z
         subtotalMinor: LaterField,
         taxMinor: LaterField,
         dueDate: LaterField,
+        paymentTerms: LaterField,
+        poNumber: LaterField,
+        vendorAddress: LaterField,
+        vendorTaxId: LaterField,
       })
       .strict(),
     lineItems: z.array(LineItem).max(200).default([]),
