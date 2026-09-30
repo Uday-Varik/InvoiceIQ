@@ -16,6 +16,10 @@ export const GOOD_FIELDS: StubFields = {
   subtotalMinor: { value: null, confidence: 0 },
   taxMinor: { value: null, confidence: 0 },
   dueDate: { value: null, confidence: 0 },
+  paymentTerms: { value: null, confidence: 0 },
+  poNumber: { value: null, confidence: 0 },
+  vendorAddress: { value: null, confidence: 0 },
+  vendorTaxId: { value: null, confidence: 0 },
 };
 
 /** The two body lines of the sample invoice; they add up to GOOD_FIELDS.totalMinor. */

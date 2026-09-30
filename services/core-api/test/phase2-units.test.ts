@@ -33,6 +33,10 @@ function row(over: Partial<InvoiceRow> = {}): InvoiceRow {
     due_date: null,
     subtotal_minor: null,
     tax_minor: null,
+    payment_terms: null,
+    po_number: null,
+    vendor_address: null,
+    vendor_tax_id: null,
     corrected_fields: [],
     vendor_id: null,
     payment_run_id: null,
@@ -383,6 +387,10 @@ describe('pipeline: checkTotals', () => {
     subtotalMinor: null,
     taxMinor: null,
     dueDate: null,
+    paymentTerms: null,
+    poNumber: null,
+    vendorAddress: null,
+    vendorTaxId: null,
     ...over,
   });
   const l = (amount: string | null): LineItemInput => ({ description: 'x', quantity: null, unitPriceMinor: null, amountMinor: amount });
@@ -447,6 +455,10 @@ describe('pipeline: headerFrom and linesFrom (Phase 2 fields)', () => {
       subtotalMinor: field(null),
       taxMinor: field(null),
       dueDate: field(null),
+      paymentTerms: field(null),
+      poNumber: field(null),
+      vendorAddress: field(null),
+      vendorTaxId: field(null),
       ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, field(v)])),
     },
     lineItems,
@@ -506,6 +518,10 @@ describe('store: headerOf', () => {
       subtotalMinor: 100000n,
       taxMinor: 23450n,
       dueDate: '2026-04-13',
+      paymentTerms: null,
+      poNumber: null,
+      vendorAddress: null,
+      vendorTaxId: null,
     });
   });
 

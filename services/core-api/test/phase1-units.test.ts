@@ -70,6 +70,10 @@ describe('extraction header normalisation', () => {
       subtotalMinor: field(null),
       taxMinor: field(null),
       dueDate: field(null),
+      paymentTerms: field(null),
+      poNumber: field(null),
+      vendorAddress: field(null),
+      vendorTaxId: field(null),
       ...Object.fromEntries(Object.entries(over).map(([k, v]) => [k, field(v)])),
     },
     lineItems: [],
@@ -85,6 +89,10 @@ describe('extraction header normalisation', () => {
       subtotalMinor: null,
       taxMinor: null,
       dueDate: null,
+      paymentTerms: null,
+      poNumber: null,
+      vendorAddress: null,
+      vendorTaxId: null,
     });
   });
 
