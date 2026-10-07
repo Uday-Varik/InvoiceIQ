@@ -5,7 +5,7 @@ import { parse } from 'yaml';
 export const ROOT = join(import.meta.dirname, '..', '..');
 
 export function read(rel: string): string {
-  return readFileSync(join(ROOT, rel), 'utf8');
+  return readFileSync(join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 }
 
 export function readYaml<T = unknown>(rel: string): T {

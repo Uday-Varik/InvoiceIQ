@@ -20,7 +20,18 @@ export function renderCatalog(): string {
     ),
     currencyExponents: { default: DEFAULT_EXPONENT, ...CURRENCY_EXPONENTS },
   };
-  return `${JSON.stringify(catalog, null, 2)}\n`;
+  let json = JSON.stringify(catalog, null, 2);
+  let eol = '\n';
+  try {
+    const existing = readFileSync(CATALOG_PATH, 'utf8');
+    if (existing.includes('\r\n')) {
+      eol = '\r\n';
+      json = json.replace(/\n/g, '\r\n');
+    }
+  } catch {
+    // catalog file doesn't exist yet (new checkout), use LF
+  }
+  return `${json}${eol}`;
 }
 
 export const CATALOG_PATH = join(import.meta.dirname, '..', '..', '..', 'packages', 'contracts', 'catalog', 'reason-codes.json');
