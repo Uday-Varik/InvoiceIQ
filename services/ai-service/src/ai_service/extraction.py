@@ -29,6 +29,10 @@ FIELD_NAMES = (
     "subtotalMinor",
     "taxMinor",
     "dueDate",
+    "paymentTerms",
+    "poNumber",
+    "vendorAddress",
+    "vendorTaxId",
 )
 MAX_LINE_ITEMS = 200
 
