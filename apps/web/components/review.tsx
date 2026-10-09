@@ -38,9 +38,9 @@ const FIELD_LABELS: Array<[keyof NonNullable<Invoice['extraction']>['fields'], s
   ['invoiceNumber', 'Invoice number'],
   ['invoiceDate', 'Invoice date'],
   ['currency', 'Currency'],
-  ['totalMinor', 'Total (minor units)'],
-  ['subtotalMinor', 'Subtotal (minor units)'],
-  ['taxMinor', 'Tax (minor units)'],
+  ['totalMinor', 'Total'],
+  ['subtotalMinor', 'Subtotal'],
+  ['taxMinor', 'Tax'],
   ['dueDate', 'Due date'],
   ['paymentTerms', 'Payment terms'],
   ['poNumber', 'PO number'],
@@ -140,6 +140,8 @@ export function InvoiceReview({ id }: { id: string }) {
           </Card>
         )}
 
+        {!editing && <Actions invoice={invoice} onChange={setInvoice} />}
+
         <InvoiceDetails invoice={invoice} />
 
         {editing ? (
@@ -170,7 +172,7 @@ export function InvoiceReview({ id }: { id: string }) {
               <Table>
                 <tbody>
                   {FIELD_LABELS.map(([key, label]) => (
-                    <FieldRow key={key} label={label} field={invoice.extraction?.fields[key]} />
+                    <FieldRow key={key} label={label} fieldKey={key} field={invoice.extraction?.fields[key]} currency={invoice.extraction?.fields.currency?.value ?? undefined} />
                   ))}
                 </tbody>
               </Table>
@@ -186,8 +188,6 @@ export function InvoiceReview({ id }: { id: string }) {
             </p>
           )}
         </div>
-
-        {!editing && <Actions invoice={invoice} onChange={setInvoice} />}
 
         <div className="space-y-3">
           <h2 className={sectionTitleClass}>History</h2>
@@ -270,13 +270,13 @@ function InvoiceDetails({ invoice }: { invoice: Invoice }) {
             {invoice.subtotal && (
               <TableRow>
                 <TableHead className="w-40 normal-case tracking-normal text-foreground">Subtotal</TableHead>
-                <TableCell className="text-right tabular-nums">{formatMoney(invoice.subtotal.amountMinor, invoice.subtotal.currency)}</TableCell>
+                <TableCell className="whitespace-nowrap text-right tabular-nums">{formatMoney(invoice.subtotal.amountMinor, invoice.subtotal.currency)}</TableCell>
               </TableRow>
             )}
             {invoice.tax && (
               <TableRow>
                 <TableHead className="w-40 normal-case tracking-normal text-foreground">Tax</TableHead>
-                <TableCell className="text-right tabular-nums">{formatMoney(invoice.tax.amountMinor, invoice.tax.currency)}</TableCell>
+                <TableCell className="whitespace-nowrap text-right tabular-nums">{formatMoney(invoice.tax.amountMinor, invoice.tax.currency)}</TableCell>
               </TableRow>
             )}
           </tbody>
@@ -300,8 +300,8 @@ function InvoiceDetails({ invoice }: { invoice: Invoice }) {
                   <TableCell className="text-muted-foreground">{l.position}</TableCell>
                   <TableCell>{l.description}</TableCell>
                   <TableCell className="text-right tabular-nums">{l.quantity ?? '—'}</TableCell>
-                  <TableCell className="text-right tabular-nums">{money(l.unitPriceMinor)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{money(l.amountMinor)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums">{money(l.unitPriceMinor)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right tabular-nums">{money(l.amountMinor)}</TableCell>
                 </TableRow>
               ))}
             </tbody>
@@ -312,23 +312,27 @@ function InvoiceDetails({ invoice }: { invoice: Invoice }) {
   );
 }
 
-const CONFIDENCE_TONE: Record<'high' | 'medium' | 'low', string> = {
-  high: 'text-emerald-700 dark:text-emerald-300',
-  medium: 'text-amber-700 dark:text-amber-300',
-  low: 'text-rose-700 dark:text-rose-300',
+const CONFIDENCE_TONE: Record<'high' | 'medium' | 'low', 'success' | 'exception' | 'hold'> = {
+  high: 'success',
+  medium: 'exception',
+  low: 'hold',
 };
 
-function FieldRow({ label, field }: { label: string; field: ExtractedField | undefined }) {
+const MINOR_FIELDS = new Set(['totalMinor', 'subtotalMinor', 'taxMinor']);
+
+function FieldRow({ label, field, fieldKey, currency }: { label: string; field: ExtractedField | undefined; fieldKey: string; currency: string | undefined }) {
   const confidence = field?.confidence ?? 0;
   const level = confidenceLevel(confidence);
+  const value =
+    field?.value && MINOR_FIELDS.has(fieldKey) && currency && /^\d+$/.test(field.value) ? formatMoney(field.value, currency) : field?.value;
   return (
     <TableRow>
       <TableHead className="w-44 normal-case tracking-normal text-muted-foreground">{label}</TableHead>
-      <TableCell>{field?.value ?? <span className="text-muted-foreground">Not on document</span>}</TableCell>
+      <TableCell className="break-words">{value ?? <span className="text-muted-foreground">Not on document</span>}</TableCell>
       <TableCell className="text-right">
-        <span className={cn('text-xs font-medium tabular-nums', CONFIDENCE_TONE[level])} title={`confidence ${confidence}`}>
+        <Badge tone={CONFIDENCE_TONE[level]} title={`Confidence ${Math.round(confidence * 100)}%`} aria-label={`Confidence ${Math.round(confidence * 100)} percent`}>
           {Math.round(confidence * 100)}%
-        </span>
+        </Badge>
       </TableCell>
     </TableRow>
   );
@@ -367,7 +371,7 @@ function Actions({ invoice, onChange }: { invoice: Invoice; onChange: (inv: Invo
   const note = comment.trim() || undefined;
   return (
     <Card className="space-y-4 p-5">
-      <h2 className={sectionTitleClass}>Decision</h2>
+      <h2 className={cn(sectionTitleClass, 'm-0')}>Decision</h2>
       {progress && (
         <p className="text-sm">
           <strong>{progress.text}</strong> for the {invoice.approvalTier?.name} tier
