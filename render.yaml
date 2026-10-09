@@ -22,6 +22,7 @@ services:
     region: oregon
     dockerfilePath: ./services/ai-service/Dockerfile
     dockerContext: .
+    startCommand: /home/render/runner.sh
     healthCheckPath: /healthz
     autoDeploy: true
     buildFilter:
@@ -49,6 +50,7 @@ services:
     region: oregon
     dockerfilePath: ./services/core-api/Dockerfile
     dockerContext: .
+    startCommand: /home/render/runner.sh
     healthCheckPath: /healthz
     autoDeploy: true
     buildFilter:

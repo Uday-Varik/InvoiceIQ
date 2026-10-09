@@ -22,6 +22,7 @@ COPY --from=build --chown=node:node /out/package.json ./
 COPY --from=build --chown=node:node /out/node_modules ./node_modules
 COPY --from=build --chown=node:node /repo/services/core-api/dist ./dist
 COPY --from=build --chown=node:node /repo/services/core-api/migrations ./migrations
+RUN mkdir -p /home/render && printf '#!/bin/sh\ncd /app && exec node dist/server.js\n' > /home/render/runner.sh && chmod +x /home/render/runner.sh
 USER node
 EXPOSE 3001
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
