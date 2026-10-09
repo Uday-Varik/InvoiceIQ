@@ -15,6 +15,12 @@ import { checkpointText, covers, parseCheckpoint } from '../lib/controls';
 import { personaLabel } from '../lib/personas';
 import { useBackend } from './backend';
 import { useMe } from './me';
+import { PageHeader } from './page-header';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Card } from './ui/card';
+import { sectionTitleClass } from './ui/field';
+import { Table, TableCell, TableHead, TableRow } from './ui/table';
 
 const errorText = (err: unknown) => (err instanceof ApiError ? err.message : 'The request failed. Try again.');
 
@@ -65,86 +71,118 @@ export function AuditPanel() {
   }
 
   return (
-    <div>
+    <div className="space-y-6">
+      <PageHeader title="Audit log" description="Every change is recorded in order. Nothing can be edited or removed after it is written." />
+
       {chain && (
-        <p>
-          <span className={`pill ${chain.ok ? 'pill-approved' : 'pill-exception'}`}>{chain.ok ? 'Chain intact' : 'Chain broken'}</span>{' '}
-          <span className="small">
-            {chain.entries} entries, {chain.checkpointsChecked ?? 0} checkpoint{chain.checkpointsChecked === 1 ? '' : 's'} checked
-            {!chain.ok && chain.reason ? `: ${chain.reason}` : ''}
+        <Card className="flex flex-wrap items-center gap-4 p-5">
+          <span
+            className={
+              chain.ok
+                ? 'grid size-10 place-items-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300'
+                : 'grid size-10 place-items-center rounded-full bg-rose-100 text-sm font-semibold text-rose-700 dark:bg-rose-400/15 dark:text-rose-300'
+            }
+            aria-hidden="true"
+          >
+            {chain.ok ? 'OK' : '!'}
           </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2 font-semibold">
+              {chain.ok ? 'Audit chain intact' : 'Audit chain broken'}
+              <Badge tone={chain.ok ? 'success' : 'hold'}>{chain.ok ? 'Verified' : 'Needs attention'}</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground tabular-nums">
+              {chain.entries} entries, {chain.checkpointsChecked ?? 0} checkpoint{chain.checkpointsChecked === 1 ? '' : 's'} checked
+              {!chain.ok && chain.reason ? `: ${chain.reason}` : ''}
+            </p>
+          </div>
+          {me && covers(me.roles, 'ap_manager') && <Button onClick={() => void sign()}>Sign current state</Button>}
+        </Card>
+      )}
+      {error && (
+        <p className="text-sm text-rose-700 dark:text-rose-300" role="alert">
+          {error}
         </p>
       )}
-      {error && <p className="error">{error}</p>}
 
-      <h2>Signed checkpoints</h2>
-      <p className="muted small">
-        A checkpoint is a signed statement of the chain&apos;s latest entry. Save or publish a copy somewhere this database&apos;s owner cannot
-        edit (an email to your auditors, a ticket). If the chain is ever rewritten, that copy stops verifying.
-      </p>
-      {me && covers(me.roles, 'ap_manager') && (
-        <div className="buttons">
-          <button className="btn btn-primary" onClick={() => void sign()}>
-            Sign the current head
-          </button>
-        </div>
-      )}
-      {list && (
-        <>
-          <p className="small">
-            Signing key id <code>{list.currentKeyId}</code>
-          </p>
-          {list.items.length === 0 ? (
-            <p className="muted">No checkpoints yet.</p>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th className="num">Entry</th>
-                  <th>Hash</th>
-                  <th>Signed</th>
-                  <th>Copy</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.items.map((cp) => (
-                  <tr key={cp.seq}>
-                    <td className="num">{cp.seq}</td>
-                    <td>
-                      <code>{cp.hash.slice(0, 16)}…</code>
-                    </td>
-                    <td>
-                      {cp.createdBy ? personaLabel(cp.createdBy) : ''} {new Date(cp.createdAt).toLocaleString()} (key {cp.keyId})
-                    </td>
-                    <td>
-                      <button className="btn btn-small" onClick={() => void navigator.clipboard.writeText(checkpointText(cp))}>
-                        Copy JSON
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </>
-      )}
-
-      <h2>Check a saved checkpoint</h2>
-      <div className="correction">
-        <textarea value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="Paste a checkpoint JSON you kept" rows={8} />
-        <div className="buttons">
-          <button className="btn" disabled={!pasted.trim()} onClick={() => void verifyPasted()}>
-            Verify
-          </button>
-        </div>
-        {typeof check === 'string' && <p className="error">{check}</p>}
-        {check && typeof check === 'object' && (
-          <p className={check.ok ? '' : 'error'}>
-            {check.ok ? `Entry ${check.seq ?? ''} is unchanged.` : `Does not verify: ${check.reason ?? 'unknown reason'}.`}{' '}
-            {check.trustedKey ? 'Signed with this deployment’s key.' : 'Signed with a key this deployment has never used: compare the key id with the one you pinned.'}
-          </p>
+      <section className="space-y-3">
+        <h2 className={sectionTitleClass}>Signed checkpoints</h2>
+        <p className="text-sm text-muted-foreground">
+          A checkpoint is a signed statement of the chain&apos;s latest entry. Save or publish a copy somewhere this database&apos;s owner cannot
+          edit (an email to your auditors, a ticket). If the chain is ever rewritten, that copy stops verifying.
+        </p>
+        {list && (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Signing key id <code className="font-mono text-xs">{list.currentKeyId}</code>
+            </p>
+            {list.items.length === 0 ? (
+              <Card className="p-4 text-sm text-muted-foreground">No checkpoints yet.</Card>
+            ) : (
+              <Card className="overflow-x-auto">
+                <Table>
+                  <thead>
+                    <tr>
+                      <TableHead className="text-right">Entry</TableHead>
+                      <TableHead>Hash</TableHead>
+                      <TableHead>Signed</TableHead>
+                      <TableHead>Copy</TableHead>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.items.map((cp) => (
+                      <TableRow key={cp.seq}>
+                        <TableCell className="text-right tabular-nums">{cp.seq}</TableCell>
+                        <TableCell>
+                          <code className="font-mono text-xs">{cp.hash.slice(0, 16)}…</code>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {cp.createdBy ? personaLabel(cp.createdBy) : ''} {new Date(cp.createdAt).toLocaleString()}{' '}
+                          <span className="text-muted-foreground">(key {cp.keyId})</span>
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(checkpointText(cp))}>
+                            Copy JSON
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </tbody>
+                </Table>
+              </Card>
+            )}
+          </>
         )}
-      </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className={sectionTitleClass}>Check a saved checkpoint</h2>
+        <Card className="space-y-3 p-5">
+          <textarea
+            value={pasted}
+            onChange={(e) => setPasted(e.target.value)}
+            placeholder="Paste a checkpoint JSON you kept"
+            rows={8}
+            className="w-full rounded-md border border-border bg-background p-3 font-mono text-xs focus:outline-2 focus:outline-offset-1 focus:outline-ring"
+          />
+          <div>
+            <Button variant="outline" disabled={!pasted.trim()} onClick={() => void verifyPasted()}>
+              Verify
+            </Button>
+          </div>
+          {typeof check === 'string' && (
+            <p className="text-sm text-rose-700 dark:text-rose-300" role="alert">
+              {check}
+            </p>
+          )}
+          {check && typeof check === 'object' && (
+            <p className={check.ok ? 'text-sm' : 'text-sm text-rose-700 dark:text-rose-300'}>
+              {check.ok ? `Entry ${check.seq ?? ''} is unchanged.` : `Does not verify: ${check.reason ?? 'unknown reason'}.`}{' '}
+              {check.trustedKey ? 'Signed with this deployment’s key.' : 'Signed with a key this deployment has never used: compare the key id with the one you pinned.'}
+            </p>
+          )}
+        </Card>
+      </section>
     </div>
   );
 }

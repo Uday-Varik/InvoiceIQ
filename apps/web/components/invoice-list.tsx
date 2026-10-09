@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { listInvoices, type Invoice } from '../lib/api';
-import { formatMoney, STATE_LABEL } from '../lib/format';
+import { formatMoney } from '../lib/format';
 import { useBackend } from './backend';
+import { StatusBadge } from './ui/status-badge';
+import { Table, TableCell, TableHead, TableRow } from './ui/table';
 
 export function InvoiceList() {
   const backend = useBackend();
@@ -19,33 +21,39 @@ export function InvoiceList() {
     );
   }, [backend]);
 
-  if (error) return <p className="muted">Could not load recent invoices.</p>;
+  if (error) return <p className="p-4 text-sm text-muted-foreground">Could not load recent invoices.</p>;
   if (!items) return null;
-  if (items.length === 0) return <p className="muted">No invoices yet.</p>;
+  if (items.length === 0) return <p className="p-4 text-sm text-muted-foreground">No invoices yet. Upload one to start.</p>;
   return (
-    <table className="table">
-      <thead>
-        <tr>
-          <th>Invoice</th>
-          <th>Vendor</th>
-          <th className="num">Total</th>
-          <th>State</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((inv) => (
-          <tr key={inv.id}>
-            <td>
-              <Link href={`/invoices/${inv.id}`}>{inv.invoiceNumber ?? inv.document?.filename ?? inv.id.slice(0, 8)}</Link>
-            </td>
-            <td>{inv.vendorName ?? '—'}</td>
-            <td className="num">{inv.total ? formatMoney(inv.total.amountMinor, inv.total.currency) : '—'}</td>
-            <td>
-              <span className={`pill pill-${inv.state.toLowerCase()}`}>{STATE_LABEL[inv.state]}</span>
-            </td>
+    <div className="overflow-x-auto">
+      <Table>
+        <thead>
+          <tr>
+            <TableHead>Invoice</TableHead>
+            <TableHead>Vendor</TableHead>
+            <TableHead className="text-right">Total</TableHead>
+            <TableHead>State</TableHead>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {items.map((inv) => (
+            <TableRow key={inv.id}>
+              <TableCell>
+                <Link href={`/invoices/${inv.id}`} className="font-medium text-primary hover:underline">
+                  {inv.invoiceNumber ?? inv.document?.filename ?? inv.id.slice(0, 8)}
+                </Link>
+              </TableCell>
+              <TableCell>{inv.vendorName ?? <span className="text-muted-foreground">Vendor not found</span>}</TableCell>
+              <TableCell className="text-right tabular-nums">
+                {inv.total ? formatMoney(inv.total.amountMinor, inv.total.currency) : '—'}
+              </TableCell>
+              <TableCell>
+                <StatusBadge state={inv.state} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </tbody>
+      </Table>
+    </div>
   );
 }

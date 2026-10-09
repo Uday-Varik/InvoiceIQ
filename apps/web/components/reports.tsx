@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import {
   exportUrl,
   getSummary,
@@ -14,9 +14,16 @@ import {
   type Vendor,
 } from '../lib/api';
 import { formatMoney, STATE_LABEL } from '../lib/format';
+import { cn } from '../lib/utils';
 import { useBackend } from './backend';
+import { PageHeader } from './page-header';
+import { Button, buttonVariants } from './ui/button';
+import { Card } from './ui/card';
+import { Table, TableCell, TableHead, TableRow } from './ui/table';
 
 type Tab = 'overview' | 'vendors' | 'approvals';
+
+const TAB_LABEL: Record<Tab, string> = { overview: 'Overview', vendors: 'Spend by vendor', approvals: 'Approval metrics' };
 
 export function Reports() {
   const backend = useBackend();
@@ -53,22 +60,38 @@ export function Reports() {
     if (backend === 'ready') void load();
   }, [backend, load]);
 
-  if (backend !== 'ready') return <p className="muted">Connecting…</p>;
-  if (loading) return <p className="muted">Loading report data…</p>;
-  if (error) return <p className="error">{error}</p>;
+  if (backend !== 'ready') return <p className="text-sm text-muted-foreground">Connecting…</p>;
+  if (loading) return <p className="text-sm text-muted-foreground">Loading report data…</p>;
+  if (error)
+    return (
+      <Card role="alert" className="flex flex-wrap items-center justify-between gap-4 border-rose-200 bg-rose-50 p-5 dark:border-rose-400/30 dark:bg-rose-400/10">
+        <div>
+          <p className="font-semibold text-rose-900 dark:text-rose-200">Reports could not load</p>
+          <p className="text-sm text-rose-800 dark:text-rose-300">{error} Your invoices are safe. Try again in a moment.</p>
+        </div>
+        <Button variant="outline" onClick={() => void load()}>
+          Try again
+        </Button>
+      </Card>
+    );
 
   return (
-    <div className="reports">
-      <div className="report-tabs" role="tablist">
+    <div className="space-y-6">
+      <PageHeader title="Reports" description="Spend, approval outcomes and exports." />
+
+      <div role="tablist" className="inline-flex flex-wrap gap-1 rounded-lg bg-muted p-1">
         {(['overview', 'vendors', 'approvals'] as const).map((t) => (
           <button
             key={t}
             role="tab"
             aria-selected={tab === t}
-            className={`report-tab${tab === t ? ' report-tab-active' : ''}`}
             onClick={() => setTab(t)}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              tab === t ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+            )}
           >
-            {t === 'overview' ? 'Overview' : t === 'vendors' ? 'Spend by Vendor' : 'Approval Metrics'}
+            {TAB_LABEL[t]}
           </button>
         ))}
       </div>
@@ -77,9 +100,13 @@ export function Reports() {
       {tab === 'vendors' && <VendorSpendPanel invoices={invoices} vendors={vendors} />}
       {tab === 'approvals' && <ApprovalMetricsPanel invoices={invoices} />}
 
-      <div className="report-export">
-        <a className="btn" href={exportUrl('csv')} download>Export all invoices (CSV)</a>
-        <a className="btn" href={exportUrl('json')} download>Export all invoices (JSON)</a>
+      <div className="flex flex-wrap gap-2">
+        <a className={buttonVariants({ variant: 'outline' })} href={exportUrl('csv')} download>
+          Export all invoices (CSV)
+        </a>
+        <a className={buttonVariants({ variant: 'outline' })} href={exportUrl('json')} download>
+          Export all invoices (JSON)
+        </a>
       </div>
     </div>
   );
@@ -103,51 +130,52 @@ function OverviewPanel({
   const completedRuns = runs.filter((r) => r.status === 'paid').length;
 
   return (
-    <div className="report-panel">
-      <div className="report-kpi-row">
+    <div className="space-y-6">
+      <KpiRow>
         <KpiCard label="Total invoices" value={String(summary.count)} />
         <KpiCard label="Approved" value={String(approvedCount)} tone="ok" />
         <KpiCard label="Rejected" value={String(rejectedCount)} tone="bad" />
         <KpiCard label="Pending" value={String(pendingCount)} tone="warn" />
         <KpiCard label="Paid" value={String(paidCount)} tone="ok" />
         <KpiCard label="Payment runs" value={String(completedRuns)} />
-      </div>
+      </KpiRow>
 
-      <div className="report-grid">
-        <div className="report-card">
-          <h3>Invoice volume by state</h3>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <ReportCard title="Invoice volume by state">
           <BarChart
             data={summary.byState.map((s) => ({
               label: STATE_LABEL[s.state as InvoiceState] ?? s.state,
               value: s.count,
             }))}
           />
-        </div>
-        <div className="report-card">
-          <h3>Value by currency</h3>
+        </ReportCard>
+        <ReportCard title="Value by currency">
           {summary.byCurrency.length === 0 ? (
-            <p className="muted">No invoice data yet.</p>
+            <p className="text-sm text-muted-foreground">No invoice data yet.</p>
           ) : (
-            <table className="table">
+            <Table>
               <thead>
-                <tr><th>Currency</th><th className="num">Invoices</th><th className="num">Total</th></tr>
+                <tr>
+                  <TableHead>Currency</TableHead>
+                  <TableHead className="text-right">Invoices</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </tr>
               </thead>
               <tbody>
                 {summary.byCurrency.map((c) => (
-                  <tr key={c.currency}>
-                    <td>{c.currency}</td>
-                    <td className="num">{c.count}</td>
-                    <td className="num">{formatMoney(c.amountMinor, c.currency)}</td>
-                  </tr>
+                  <TableRow key={c.currency}>
+                    <TableCell>{c.currency}</TableCell>
+                    <TableCell className="text-right tabular-nums">{c.count}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(c.amountMinor, c.currency)}</TableCell>
+                  </TableRow>
                 ))}
               </tbody>
-            </table>
+            </Table>
           )}
-        </div>
-        <div className="report-card">
-          <h3>Processing pipeline</h3>
+        </ReportCard>
+        <ReportCard title="Processing pipeline">
           <PipelineChart invoices={invoices} />
-        </div>
+        </ReportCard>
       </div>
     </div>
   );
@@ -183,58 +211,59 @@ function VendorSpendPanel({ invoices, vendors }: { invoices: readonly Invoice[];
   const maxCount = Math.max(...vendorSpend.map((v) => v.count), 1);
 
   return (
-    <div className="report-panel">
-      <div className="report-kpi-row">
+    <div className="space-y-6">
+      <KpiRow>
         <KpiCard label="Active vendors" value={String(vendors.filter((v) => v.status === 'active').length)} />
         <KpiCard label="Unique vendors (invoiced)" value={String(vendorSpend.length)} />
-      </div>
-      <div className="report-card">
-        <h3>Top vendors by invoice count</h3>
+      </KpiRow>
+      <ReportCard title="Top vendors by invoice count">
         {vendorSpend.length === 0 ? (
-          <p className="muted">No invoice data yet.</p>
+          <p className="text-sm text-muted-foreground">No invoice data yet.</p>
         ) : (
-          <div className="vendor-bars">
+          <div className="space-y-2">
             {vendorSpend.slice(0, 15).map((v) => (
-              <div key={v.name} className="vendor-bar-row">
-                <span className="vendor-bar-label" title={v.name}>{v.name}</span>
-                <div className="vendor-bar-track">
-                  <div
-                    className="vendor-bar-fill"
-                    style={{ width: `${(v.count / maxCount) * 100}%` }}
-                  />
+              <div key={v.name} className="grid grid-cols-[minmax(0,10rem)_1fr_2.5rem] items-center gap-3 text-sm">
+                <span className="truncate" title={v.name}>
+                  {v.name}
+                </span>
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${(v.count / maxCount) * 100}%` }} />
                 </div>
-                <span className="vendor-bar-value">{v.count}</span>
+                <span className="text-right tabular-nums">{v.count}</span>
               </div>
             ))}
           </div>
         )}
-      </div>
-      <div className="report-card">
-        <h3>Spend by vendor</h3>
+      </ReportCard>
+      <ReportCard title="Spend by vendor">
         {vendorSpend.length === 0 ? (
-          <p className="muted">No data.</p>
+          <p className="text-sm text-muted-foreground">No data.</p>
         ) : (
-          <table className="table">
+          <Table>
             <thead>
-              <tr><th>Vendor</th><th className="num">Invoices</th><th className="num">Spend</th></tr>
+              <tr>
+                <TableHead>Vendor</TableHead>
+                <TableHead className="text-right">Invoices</TableHead>
+                <TableHead className="text-right">Spend</TableHead>
+              </tr>
             </thead>
             <tbody>
               {vendorSpend.map((v) => (
-                <tr key={v.name}>
-                  <td>{v.name}</td>
-                  <td className="num">{v.count}</td>
-                  <td className="num">
+                <TableRow key={v.name}>
+                  <TableCell>{v.name}</TableCell>
+                  <TableCell className="text-right tabular-nums">{v.count}</TableCell>
+                  <TableCell className="space-x-2 text-right tabular-nums">
                     {Object.entries(v.totalsByCurrency).map(([cur, minor]) => (
-                      <span key={cur} className="spend-tag">{formatMoney(String(minor), cur)}</span>
+                      <span key={cur}>{formatMoney(String(minor), cur)}</span>
                     ))}
                     {Object.keys(v.totalsByCurrency).length === 0 && '—'}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
             </tbody>
-          </table>
+          </Table>
         )}
-      </div>
+      </ReportCard>
     </div>
   );
 }
@@ -256,16 +285,15 @@ function ApprovalMetricsPanel({ invoices }: { invoices: readonly Invoice[] }) {
   }, [invoices]);
 
   return (
-    <div className="report-panel">
-      <div className="report-kpi-row">
+    <div className="space-y-6">
+      <KpiRow>
         <KpiCard label="Approval rate" value={`${metrics.approvalRate}%`} tone="ok" />
         <KpiCard label="Rejection rate" value={`${metrics.rejectionRate}%`} tone="bad" />
         <KpiCard label="Hold/exception rate" value={`${metrics.holdRate}%`} tone="warn" />
         <KpiCard label="Pending review" value={String(metrics.pending)} />
-      </div>
-      <div className="report-grid">
-        <div className="report-card">
-          <h3>Approval funnel</h3>
+      </KpiRow>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ReportCard title="Approval funnel">
           <FunnelChart
             steps={[
               { label: 'Received', value: metrics.total },
@@ -275,19 +303,18 @@ function ApprovalMetricsPanel({ invoices }: { invoices: readonly Invoice[] }) {
               { label: 'Exception', value: metrics.exception },
             ]}
           />
-        </div>
-        <div className="report-card">
-          <h3>Outcome breakdown</h3>
+        </ReportCard>
+        <ReportCard title="Outcome breakdown">
           <DonutChart
             segments={[
-              { label: 'Approved', value: metrics.approved, className: 'seg-ok' },
-              { label: 'Rejected', value: metrics.rejected, className: 'seg-bad' },
-              { label: 'Hold', value: metrics.onHold, className: 'seg-warn' },
-              { label: 'Exception', value: metrics.exception, className: 'seg-exception' },
-              { label: 'Pending', value: metrics.pending, className: 'seg-pending' },
+              { label: 'Approved', value: metrics.approved, color: '#059669' },
+              { label: 'Rejected', value: metrics.rejected, color: '#e11d48' },
+              { label: 'Hold', value: metrics.onHold, color: '#f59e0b' },
+              { label: 'Exception', value: metrics.exception, color: '#ea580c' },
+              { label: 'Pending', value: metrics.pending, color: '#a1a1aa' },
             ]}
           />
-        </div>
+        </ReportCard>
       </div>
     </div>
   );
@@ -295,26 +322,45 @@ function ApprovalMetricsPanel({ invoices }: { invoices: readonly Invoice[] }) {
 
 /* ─── Shared chart components ─── */
 
+function ReportCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Card className="space-y-4 p-5">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      {children}
+    </Card>
+  );
+}
+
+function KpiRow({ children }: { children: React.ReactNode }) {
+  return <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{children}</div>;
+}
+
+const KPI_TONE: Record<'ok' | 'warn' | 'bad', string> = {
+  ok: 'text-emerald-700 dark:text-emerald-300',
+  warn: 'text-amber-700 dark:text-amber-300',
+  bad: 'text-rose-700 dark:text-rose-300',
+};
+
 function KpiCard({ label, value, tone }: { label: string; value: string; tone?: 'ok' | 'warn' | 'bad' }) {
   return (
-    <div className={`kpi-card${tone ? ` kpi-${tone}` : ''}`}>
-      <span className="kpi-value">{value}</span>
-      <span className="kpi-label">{label}</span>
-    </div>
+    <Card className="flex flex-col gap-1 p-4">
+      <span className={cn('text-2xl font-semibold tabular-nums', tone && KPI_TONE[tone])}>{value}</span>
+      <span className="text-sm text-muted-foreground">{label}</span>
+    </Card>
   );
 }
 
 function BarChart({ data }: { data: { label: string; value: number }[] }) {
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
-    <div className="bar-chart">
+    <div className="space-y-2">
       {data.map((d) => (
-        <div key={d.label} className="bar-row">
-          <span className="bar-label">{d.label}</span>
-          <div className="bar-track">
-            <div className="bar-fill" style={{ width: `${(d.value / max) * 100}%` }} />
+        <div key={d.label} className="grid grid-cols-[minmax(0,7rem)_1fr_2rem] items-center gap-3 text-sm">
+          <span className="truncate text-muted-foreground">{d.label}</span>
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-primary" style={{ width: `${(d.value / max) * 100}%` }} />
           </div>
-          <span className="bar-value">{d.value}</span>
+          <span className="text-right tabular-nums">{d.value}</span>
         </div>
       ))}
     </div>
@@ -326,13 +372,12 @@ function PipelineChart({ invoices }: { invoices: readonly Invoice[] }) {
   const counts = stages.map((s) => ({ label: STATE_LABEL[s], value: invoices.filter((i) => i.state === s).length }));
   const max = Math.max(...counts.map((c) => c.value), 1);
   return (
-    <div className="pipeline-chart">
-      {counts.map((c, i) => (
-        <div key={c.label} className="pipeline-step">
-          <div className="pipeline-bar" style={{ height: `${Math.max((c.value / max) * 100, 4)}%` }} />
-          <span className="pipeline-label">{c.label}</span>
-          <span className="pipeline-count">{c.value}</span>
-          {i < counts.length - 1 && <span className="pipeline-arrow">→</span>}
+    <div className="flex h-44 items-end gap-2">
+      {counts.map((c) => (
+        <div key={c.label} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+          <span className="text-xs tabular-nums text-muted-foreground">{c.value}</span>
+          <div className="w-full rounded-t bg-primary/80" style={{ height: `${Math.max((c.value / max) * 100, 4)}%` }} />
+          <span className="truncate text-[11px] text-muted-foreground">{c.label}</span>
         </div>
       ))}
     </div>
@@ -342,63 +387,67 @@ function PipelineChart({ invoices }: { invoices: readonly Invoice[] }) {
 function FunnelChart({ steps }: { steps: { label: string; value: number }[] }) {
   const max = Math.max(...steps.map((s) => s.value), 1);
   return (
-    <div className="funnel-chart">
-      {steps.map((step, i) => (
-        <div key={step.label} className="funnel-row" style={{ '--w': `${Math.max((step.value / max) * 100, 20)}%` } as React.CSSProperties}>
-          <div className="funnel-bar">{step.label}: {step.value}</div>
-          {i < steps.length - 1 && <div className="funnel-connector" />}
+    <div className="space-y-2">
+      {steps.map((step) => (
+        <div
+          key={step.label}
+          className="flex items-center justify-between rounded-md bg-primary/15 px-3 py-2 text-sm"
+          style={{ width: `${Math.max((step.value / max) * 100, 20)}%` } as CSSProperties}
+        >
+          <span>{step.label}</span>
+          <span className="font-semibold tabular-nums">{step.value}</span>
         </div>
       ))}
     </div>
   );
 }
 
-interface Segment { label: string; value: number; className: string }
+interface Segment {
+  label: string;
+  value: number;
+  color: string;
+}
 
 function DonutChart({ segments }: { segments: Segment[] }) {
   const total = segments.reduce((s, seg) => s + seg.value, 0);
-  if (total === 0) return <p className="muted">No data.</p>;
+  if (total === 0) return <p className="text-sm text-muted-foreground">No data.</p>;
 
   let cumulative = 0;
-  const arcs = segments.filter((s) => s.value > 0).map((seg) => {
-    const pct = (seg.value / total) * 100;
-    const start = cumulative;
-    cumulative += pct;
-    return { ...seg, pct, start };
-  });
+  const arcs = segments
+    .filter((s) => s.value > 0)
+    .map((seg) => {
+      const pct = (seg.value / total) * 100;
+      const start = cumulative;
+      cumulative += pct;
+      return { ...seg, pct, start };
+    });
 
-  const gradientStops = arcs.map((a) => {
-    const color =
-      a.className === 'seg-ok' ? 'var(--ok)' :
-      a.className === 'seg-bad' ? 'var(--bad)' :
-      a.className === 'seg-warn' ? 'var(--warn)' :
-      a.className === 'seg-exception' ? 'var(--bad)' :
-      'var(--muted)';
-    return `${color} ${a.start}% ${a.start + a.pct}%`;
-  }).join(', ');
+  const gradientStops = arcs.map((a) => `${a.color} ${a.start}% ${a.start + a.pct}%`).join(', ');
 
   return (
-    <div className="donut-container">
+    <div className="flex flex-wrap items-center gap-6">
       <div
-        className="donut"
+        className="grid size-36 shrink-0 place-items-center rounded-full"
         style={{ background: `conic-gradient(${gradientStops})` }}
         role="img"
         aria-label={`Outcome: ${arcs.map((a) => `${a.label} ${a.pct.toFixed(0)}%`).join(', ')}`}
       >
-        <div className="donut-hole">
-          <span className="donut-total">{total}</span>
-          <span className="donut-label">total</span>
+        <div className="grid size-20 place-items-center rounded-full bg-card text-center">
+          <span className="text-lg font-semibold tabular-nums">{total}</span>
+          <span className="text-[11px] text-muted-foreground">total</span>
         </div>
       </div>
-      <div className="donut-legend">
+      <ul className="min-w-0 flex-1 space-y-2 text-sm">
         {arcs.map((a) => (
-          <div key={a.label} className="donut-legend-item">
-            <span className={`donut-swatch ${a.className}`} />
+          <li key={a.label} className="flex items-center gap-2">
+            <span className="size-2.5 shrink-0 rounded-full" style={{ background: a.color }} />
             <span>{a.label}</span>
-            <span className="muted">{a.value} ({a.pct.toFixed(0)}%)</span>
-          </div>
+            <span className="ml-auto text-muted-foreground tabular-nums">
+              {a.value} ({a.pct.toFixed(0)}%)
+            </span>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }

@@ -1,8 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { listTenants, createTenant, type Tenant } from '../../lib/admin-api';
+import { PageHeader } from '../../components/page-header';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { inputClass } from '../../components/ui/field';
 
 export default function AdminPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -20,7 +24,7 @@ export default function AdminPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleCreate(e: React.FormEvent) {
+  async function handleCreate(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     setCreating(true);
@@ -38,27 +42,24 @@ export default function AdminPage() {
   }
 
   return (
-    <>
-      <section className="admin-header">
-        <div className="admin-header-row">
-          <div>
-            <h1>Tenant Management</h1>
-            <p className="muted">Provision and manage organization tenants.</p>
-          </div>
-          <button className="btn btn-primary" onClick={() => setShowCreate(!showCreate)}>
-            {showCreate ? 'Cancel' : '+ New Tenant'}
-          </button>
-        </div>
-      </section>
+    <div className="space-y-6">
+      <PageHeader
+        title="Tenants"
+        description="Provision and manage organization tenants."
+        actions={
+          <Button onClick={() => setShowCreate(!showCreate)}>{showCreate ? 'Cancel' : 'New tenant'}</Button>
+        }
+      />
 
       {showCreate && (
-        <section className="admin-create-form">
-          <form onSubmit={handleCreate}>
-            <h2>Create New Tenant</h2>
-            <div className="form-grid">
-              <label className="form-field">
-                <span className="form-label">Organization Name</span>
+        <Card className="p-5">
+          <form onSubmit={handleCreate} className="space-y-4">
+            <h2 className="font-semibold">Create a tenant</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm">
+                <span className="text-muted-foreground">Organization name</span>
                 <input
+                  className={inputClass}
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -68,9 +69,9 @@ export default function AdminPage() {
                   autoFocus
                 />
               </label>
-              <label className="form-field">
-                <span className="form-label">Base Currency</span>
-                <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              <label className="grid gap-1 text-sm">
+                <span className="text-muted-foreground">Base currency</span>
+                <select className={inputClass} value={currency} onChange={(e) => setCurrency(e.target.value)}>
                   <option value="USD">USD</option>
                   <option value="EUR">EUR</option>
                   <option value="GBP">GBP</option>
@@ -81,50 +82,49 @@ export default function AdminPage() {
                 </select>
               </label>
             </div>
-            <div className="buttons" style={{ marginTop: 16 }}>
-              <button className="btn btn-primary" type="submit" disabled={creating || !name.trim()}>
-                {creating ? 'Creating…' : 'Create Tenant'}
-              </button>
+            <div>
+              <Button type="submit" disabled={creating || !name.trim()}>
+                {creating ? 'Creating…' : 'Create tenant'}
+              </Button>
             </div>
           </form>
-        </section>
+        </Card>
       )}
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="text-sm text-rose-700 dark:text-rose-300" role="alert">
+          {error}
+        </p>
+      )}
 
-      <section>
-        {loading ? (
-          <div className="admin-loading">
-            <span className="skeleton" style={{ width: '100%', height: 48 }} />
-            <span className="skeleton" style={{ width: '100%', height: 48 }} />
-            <span className="skeleton" style={{ width: '100%', height: 48 }} />
-          </div>
-        ) : tenants.length === 0 ? (
-          <div className="admin-empty">
-            <p className="muted">No tenants yet. Create one to get started.</p>
-          </div>
-        ) : (
-          <div className="tenant-grid">
-            {tenants.map((t) => (
-              <Link key={t.id} href={`/admin/tenants/${t.id}`} className="tenant-card">
-                <div className="tenant-card-icon">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-                  </svg>
+      {loading ? (
+        <div className="grid gap-3">
+          <div className="h-16 animate-pulse rounded-xl bg-muted" />
+          <div className="h-16 animate-pulse rounded-xl bg-muted" />
+          <div className="h-16 animate-pulse rounded-xl bg-muted" />
+        </div>
+      ) : tenants.length === 0 ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground">No tenants yet. Create one to get started.</Card>
+      ) : (
+        <div className="grid gap-3">
+          {tenants.map((t) => (
+            <Link key={t.id} href={`/admin/tenants/${t.id}`} className="no-underline">
+              <Card className="flex items-center gap-4 p-4 transition-colors hover:bg-muted/50">
+                <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground" aria-hidden="true">
+                  {t.name.slice(0, 1).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium text-foreground">{t.name}</div>
+                  <div className="text-sm text-muted-foreground tabular-nums">Created {new Date(t.createdAt).toLocaleDateString()}</div>
                 </div>
-                <div className="tenant-card-body">
-                  <span className="tenant-card-name">{t.name}</span>
-                  <span className="tenant-card-meta">{new Date(t.createdAt).toLocaleDateString()}</span>
-                </div>
-                <svg className="tenant-card-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
-    </>
+                <span aria-hidden="true" className="text-muted-foreground">
+                  ›
+                </span>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
