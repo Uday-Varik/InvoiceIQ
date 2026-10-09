@@ -159,6 +159,7 @@ export function AuditPanel() {
         <h2 className={sectionTitleClass}>Check a saved checkpoint</h2>
         <Card className="space-y-3 p-5">
           <textarea
+            aria-label="Saved checkpoint JSON"
             value={pasted}
             onChange={(e) => setPasted(e.target.value)}
             placeholder="Paste a checkpoint JSON you kept"
