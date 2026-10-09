@@ -1,4 +1,4 @@
-import { groupReasons, reasonViews, stateViews } from '../../lib/catalog';
+import { groupReasons, reasonViews, stateViews } from '../../../lib/catalog';
 
 export default function Lifecycle() {
   const groups = groupReasons(reasonViews());

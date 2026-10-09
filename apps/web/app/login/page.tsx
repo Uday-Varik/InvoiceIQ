@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Suspense, useEffect, useState } from 'react';
 
 type Provider = 'github' | 'google' | 'credentials';
 
-export default function LoginPage() {
+function LoginForm() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [tab, setTab] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -26,7 +27,7 @@ export default function LoginPage() {
     setError('');
     setSubmitting(true);
     try {
-      const endpoint = mode === 'register' ? '/auth/credentials/register' : '/auth/credentials/login';
+      const endpoint = tab === 'signup' ? '/auth/credentials/register' : '/auth/credentials/login';
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -47,90 +48,122 @@ export default function LoginPage() {
   const hasCredentials = providers.includes('credentials');
 
   return (
-    <section className="login-page">
-      <div className="login-logo">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-          <rect width="48" height="48" rx="12" fill="var(--accent)" />
-          <path d="M14 16h20v2H14zm0 6h20v2H14zm0 6h14v2H14zm18 0h2v2h-2z" fill="var(--accent-text)" />
-        </svg>
+    <div className="auth-page">
+      <div className="auth-card">
+        <Link href="/" className="auth-logo">
+          <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
+            <rect width="48" height="48" rx="12" fill="var(--accent)" />
+            <path d="M14 16h20v2H14zm0 6h20v2H14zm0 6h14v2H14zm18 0h2v2h-2z" fill="var(--accent-text)" />
+          </svg>
+        </Link>
+        <h1 className="auth-title">{tab === 'signin' ? 'Sign in to InvoiceIQ' : 'Create your account'}</h1>
+        <p className="auth-subtitle muted">
+          {tab === 'signin'
+            ? 'Choose your preferred sign-in method'
+            : 'Get started with AI-powered invoice processing'}
+        </p>
+
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
+            <span className="spinner" />
+          </div>
+        ) : (
+          <>
+            {hasOAuth && (
+              <div className="auth-providers">
+                {providers.includes('github') && (
+                  <a href="/auth/github" className="auth-provider-btn">
+                    <GitHubIcon />
+                    Continue with GitHub
+                  </a>
+                )}
+                {providers.includes('google') && (
+                  <a href="/auth/google" className="auth-provider-btn">
+                    <GoogleIcon />
+                    Continue with Google
+                  </a>
+                )}
+              </div>
+            )}
+
+            {hasOAuth && hasCredentials && (
+              <div className="auth-divider">
+                <span>or</span>
+              </div>
+            )}
+
+            {hasCredentials && (
+              <>
+                <form onSubmit={handleCredentials} className="auth-form">
+                  <label className="auth-field">
+                    <span className="auth-label">Email</span>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@company.com"
+                      required
+                      autoComplete="email"
+                      className="auth-input"
+                    />
+                  </label>
+                  <label className="auth-field">
+                    <span className="auth-label">Password</span>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={tab === 'signup' ? 'At least 8 characters' : ''}
+                      required
+                      minLength={tab === 'signup' ? 8 : undefined}
+                      autoComplete={tab === 'signup' ? 'new-password' : 'current-password'}
+                      className="auth-input"
+                    />
+                  </label>
+                  {error && <p className="login-error">{error}</p>}
+                  <button type="submit" className="btn btn-primary auth-submit" disabled={submitting}>
+                    {submitting ? (
+                      <span className="login-btn-loading"><span className="spinner" /> {tab === 'signup' ? 'Creating account...' : 'Signing in...'}</span>
+                    ) : (
+                      tab === 'signup' ? 'Create account' : 'Sign in'
+                    )}
+                  </button>
+                </form>
+                <p className="auth-switch muted small">
+                  {tab === 'signin' ? (
+                    <>
+                      {"Don't have an account? "}
+                      <button className="btn-link" onClick={() => { setTab('signup'); setError(''); }}>Sign up</button>
+                    </>
+                  ) : (
+                    <>
+                      Already have an account?{' '}
+                      <button className="btn-link" onClick={() => { setTab('signin'); setError(''); }}>Sign in</button>
+                    </>
+                  )}
+                </p>
+              </>
+            )}
+          </>
+        )}
       </div>
-      <h1>Sign in to InvoiceIQ</h1>
-      <p className="muted">Choose your preferred sign-in method to access invoice management.</p>
+    </div>
+  );
+}
 
-      {loading ? (
-        <div className="login-loading"><span className="spinner" /></div>
-      ) : (
-        <div className="login-providers">
-          {hasOAuth && (
-            <div className="login-oauth-buttons">
-              {providers.includes('google') && (
-                <a href="/auth/google" className="login-provider-btn login-google-btn">
-                  <GoogleIcon />
-                  Continue with Google
-                </a>
-              )}
-              {providers.includes('github') && (
-                <a href="/auth/github" className="login-provider-btn login-github-btn">
-                  <GitHubIcon />
-                  Continue with GitHub
-                </a>
-              )}
-            </div>
-          )}
-
-          {hasOAuth && hasCredentials && (
-            <div className="login-divider">
-              <span>or</span>
-            </div>
-          )}
-
-          {hasCredentials && (
-            <form onSubmit={handleCredentials} className="login-credentials-form">
-              <label className="login-field">
-                <span className="login-label">Email</span>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
-                  required
-                  autoComplete="email"
-                  className="login-input"
-                />
-              </label>
-              <label className="login-field">
-                <span className="login-label">Password</span>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={mode === 'register' ? 'At least 8 characters' : ''}
-                  required
-                  minLength={mode === 'register' ? 8 : undefined}
-                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                  className="login-input"
-                />
-              </label>
-              {error && <p className="login-error">{error}</p>}
-              <button className="login-provider-btn login-credentials-submit" type="submit" disabled={submitting}>
-                {submitting ? (
-                  <span className="login-btn-loading"><span className="spinner" /> {mode === 'register' ? 'Creating account...' : 'Signing in...'}</span>
-                ) : (
-                  mode === 'register' ? 'Create Account' : 'Sign In'
-                )}
-              </button>
-              <p className="login-toggle muted small">
-                {mode === 'login' ? (
-                  <>No account? <button type="button" className="btn-link small" onClick={() => { setMode('register'); setError(''); }}>Create one</button></>
-                ) : (
-                  <>Have an account? <button type="button" className="btn-link small" onClick={() => { setMode('login'); setError(''); }}>Sign in</button></>
-                )}
-              </p>
-            </form>
-          )}
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="auth-page">
+        <div className="auth-card">
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <span className="spinner" />
+          </div>
         </div>
-      )}
-    </section>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
 

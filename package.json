@@ -19,12 +19,12 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@redocly/cli": "2.54.3",
+    "@redocly/cli": "2.55.0",
     "@types/node": "22.20.4",
     "eslint": "10.11.0",
     "globals": "17.12.0",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.70.1",
+    "typescript-eslint": "8.71.0",
     "vitest": "5.0.2",
     "yaml": "2.9.1"
   }

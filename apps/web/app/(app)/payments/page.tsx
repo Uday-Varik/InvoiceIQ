@@ -1,4 +1,4 @@
-import { PaymentRuns } from '../../components/payments';
+import { PaymentRuns } from '../../../components/payments';
 
 export default function PaymentsPage() {
   return (

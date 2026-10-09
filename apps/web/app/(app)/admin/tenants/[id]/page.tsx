@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getTenant, listTenantUsers, addTenantUser, removeTenantUser, type Tenant, type TenantUser } from '../../../../lib/admin-api';
+import { getTenant, listTenantUsers, addTenantUser, removeTenantUser, type Tenant, type TenantUser } from '../../../../../lib/admin-api';
 
 const ROLE_LABELS: Record<string, string> = {
   ap_clerk: 'AP Clerk',

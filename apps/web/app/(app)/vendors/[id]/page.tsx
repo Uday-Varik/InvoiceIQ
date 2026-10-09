@@ -1,4 +1,4 @@
-import { VendorPage } from '../../../components/vendors';
+import { VendorPage } from '../../../../components/vendors';
 
 export default async function Vendor({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

@@ -1,4 +1,4 @@
-import { AuditPanel } from '../../components/audit';
+import { AuditPanel } from '../../../components/audit';
 
 export default function AuditPage() {
   return (

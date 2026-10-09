@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { listTenants, createTenant, type Tenant } from '../../lib/admin-api';
+import { listTenants, createTenant, type Tenant } from '../../../lib/admin-api';
 
 export default function AdminPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
