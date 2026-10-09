@@ -10,6 +10,7 @@ const coreApi = (process.env['CORE_API_URL'] ?? 'http://localhost:3001').replace
 const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  agentRules: false,
   typedRoutes: true,
   experimental: {
     // A scaled-to-zero core-api can take ~60s to answer its first request.
