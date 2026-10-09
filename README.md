@@ -10,10 +10,10 @@ bank-detail-change quarantine and a hash-chained audit ledger. Models help with
 extraction and risk signals, but every AI output is structurally limited to
 putting an invoice on HOLD.
 
-> Status: **Phase 7 (pluggable providers).** Extraction is now provider-
-> pluggable: a registry selects providers by config (`EXTRACTION_PROVIDER`
-> env var), and the eval harness scores any provider against the frozen test
-> set. The Terraform has not been applied yet; live model calls come later.
+> Status: **Phase 14 (richer extraction).** All 15 phases (0–14) are merged.
+> The pipeline extracts 12 fields including payment terms, PO number, vendor
+> address and tax ID. GitHub OAuth, multi-tenant onboarding, and a reporting
+> dashboard are live. The Terraform has not been applied yet.
 
 ## The problem
 
@@ -177,6 +177,68 @@ Same labels as above. Decisions in [ADR-0020](docs/adr/0020-pluggable-extraction
 | 4 | Eval harness accepts any provider via `--provider` flag | Verified-in-sandbox | `evals/src/invoiceiq_evals/cli.py` |
 | 5 | Eval report includes provider name for cross-provider comparison | Verified-in-sandbox | `evals/src/invoiceiq_evals/report.py` |
 
+## Phase 8 deliverables
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | Qwen extraction provider via OpenRouter (`EXTRACTION_PROVIDER=qwen`) | Verified-in-sandbox | `services/ai-service/src/ai_service/providers/qwen.py` |
+| 2 | Extraction prompt template with structured output parsing | Verified-in-sandbox | `services/ai-service/src/ai_service/providers/qwen.py` |
+| 3 | Provider registered in the registry for config-driven selection | Verified-in-sandbox | `services/ai-service/src/ai_service/providers/registry.py` |
+
+## Phase 9 deliverables
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | Content-Security-Policy, Permissions-Policy, X-DNS-Prefetch-Control headers | Verified-in-sandbox | `apps/web/next.config.ts` |
+| 2 | Skip-to-main-content link, semantic `<nav>`, visible focus indicators | Verified-in-sandbox | `apps/web/app/layout.tsx` |
+| 3 | ARIA labels on interactive elements, improved alt text for scans | Verified-in-sandbox | `apps/web/components/` |
+| 4 | Mobile-responsive layout with 600px breakpoint, horizontal-scroll tables | Verified-in-sandbox | `apps/web/app/globals.css` |
+
+## Phase 10 deliverables
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | GitHub OAuth authentication mode (`AUTH_MODE=github`) | Verified-in-sandbox | `services/core-api/src/auth/github.ts` |
+| 2 | HMAC-signed session cookies, OAuth redirect and callback handlers | Verified-in-sandbox | `services/core-api/src/auth/github.ts` |
+| 3 | `/auth/me` and `/auth/logout` endpoints, OpenAPI Me schema updated | Verified-in-sandbox | `services/core-api/src/http/app.ts` |
+| 4 | Login page with "Sign in with GitHub" button, AuthNotice component | Verified-in-sandbox | `apps/web/app/login/` |
+
+## Phase 11 deliverables
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | AI risk flags parsed end-to-end: Flag enum, score validation, threshold mapping | Verified-in-sandbox | `services/ai-service/src/ai_service/extraction.py` |
+| 2 | Eval renderer with attack-specific text artifacts per variant | Verified-in-sandbox | `evals/src/invoiceiq_evals/renderer.py` |
+| 3 | Terraform variables for extraction provider and API keys | Verified-in-sandbox | `infra/terraform/variables.tf` |
+| 4 | Prometheus scrape config template for both services | Verified-in-sandbox | `infra/observability/prometheus.yml` |
+| 5 | Admin tenant API: create, list, get tenants (x-phase: 11) | Verified-in-sandbox | `services/core-api/src/http/admin-http.ts` |
+
+## Phase 12 deliverables
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | Tenant users migration mapping external identities to tenants | Verified-in-sandbox | `services/core-api/migrations/0005_tenant_users.sql` |
+| 2 | GitHub OAuth tenant membership lookup and onboarding redirect | Verified-in-sandbox | `services/core-api/src/auth/github.ts` |
+| 3 | Self-service org creation flow and onboarding page | Verified-in-sandbox | `apps/web/app/onboarding/page.tsx` |
+| 4 | Admin panel for tenant and member management | Verified-in-sandbox | `apps/web/app/admin/` |
+
+## Phase 13 deliverables
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | Three-tab reports page: overview KPIs, spend-by-vendor, approval metrics | Verified-in-sandbox | `apps/web/components/reports.tsx` |
+| 2 | Horizontal bar charts for spend breakdown, donut/funnel for approvals | Verified-in-sandbox | `apps/web/components/reports.tsx` |
+| 3 | All report data sourced from existing API endpoints | Verified-in-sandbox | `apps/web/app/reports/page.tsx` |
+
+## Phase 14 deliverables
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | Four new optional extraction fields: paymentTerms, poNumber, vendorAddress, vendorTaxId | Verified-in-sandbox | `packages/contracts/openapi/ai-service.yaml` |
+| 2 | Database migration with CHECK constraints for new fields | Verified-in-sandbox | `services/core-api/migrations/0006_richer_extraction.sql` |
+| 3 | Heuristic and Qwen providers updated with regex patterns for new fields | Verified-in-sandbox | `services/ai-service/src/ai_service/providers/` |
+| 4 | Review display and correction form updated for new fields | Verified-in-sandbox | `apps/web/components/review.tsx` |
+
 ## Getting started
 
 ```bash
@@ -212,15 +274,23 @@ tests/guardrails         Cross-cutting drift and architecture tests
 
 ## Roadmap
 
-| Phase | Focus |
-| --- | --- |
-| 0 | Foundations: domain model, contracts, guardrails, data tooling, docs |
-| 1 | Persistence with RLS, queue and outbox, invoice intake, review queue UI |
-| 2 | Real extraction behind record/replay, evaluation harness on the frozen set |
-| 3 | Approvals workflow, payment runs, external anchoring of the audit chain (done) |
-| 4 | Hosting on serverless free tiers, Terraform, observability (done) |
-| 5 | Follow-ups: OCR for scans, currencies without two decimals (done) |
-| 6 | Offline evaluation harness for AI signals (done) |
+| Phase | Focus | Status |
+| --- | --- | --- |
+| 0 | Foundations: domain model, contracts, guardrails, data tooling, docs | Done |
+| 1 | Persistence with RLS, queue and outbox, invoice intake, review queue UI | Done |
+| 2 | Line items, filtered dashboard, edit-before-approve, export | Done |
+| 3 | Approvals workflow, payment runs, external anchoring of the audit chain | Done |
+| 4 | Hosting on serverless free tiers, Terraform, observability | Done |
+| 5 | OCR for scans, currencies without two decimals | Done |
+| 6 | Offline evaluation harness for AI signals | Done |
+| 7 | Pluggable extraction providers | Done |
+| 8 | Qwen extraction provider via OpenRouter | Done |
+| 9 | Frontend hardening: security, accessibility, mobile | Done |
+| 10 | GitHub OAuth authentication | Done |
+| 11 | Extraction accuracy, production hardening, tenant onboarding API | Done |
+| 12 | Multi-tenant onboarding UI and admin panel | Done |
+| 13 | Advanced reporting and analytics dashboard | Done |
+| 14 | Richer extraction: payment terms, PO number, vendor address, tax ID | Done |
 
 ## License
 
