@@ -16,7 +16,6 @@ import {
 } from '../lib/filters';
 import { formatMoney, STATE_LABEL } from '../lib/format';
 import { cn } from '../lib/utils';
-import { PageHeader } from './page-header';
 import { useBackend } from './backend';
 import { Badge } from './ui/badge';
 import { Button, buttonVariants } from './ui/button';
@@ -84,7 +83,6 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Invoices" description="Everything in the pipeline, with what needs a person right now." />
       {summary && <SummaryCards summary={summary} onPick={(state) => apply({ ...applied, state })} active={applied.state} />}
 
       <form className="grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4" onSubmit={onSubmit} aria-label="Filter invoices">
