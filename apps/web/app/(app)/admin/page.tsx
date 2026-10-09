@@ -2,11 +2,11 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { listTenants, createTenant, type Tenant } from '../../lib/admin-api';
-import { PageHeader } from '../../components/page-header';
-import { Button } from '../../components/ui/button';
-import { Card } from '../../components/ui/card';
-import { inputClass } from '../../components/ui/field';
+import { listTenants, createTenant, type Tenant } from '../../../lib/admin-api';
+import { PageHeader } from '../../../components/page-header';
+import { Button } from '../../../components/ui/button';
+import { Card } from '../../../components/ui/card';
+import { inputClass } from '../../../components/ui/field';
 
 export default function AdminPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);

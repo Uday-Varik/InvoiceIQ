@@ -1,7 +1,7 @@
-import { groupReasons, reasonViews, stateViews } from '../../lib/catalog';
-import { PageHeader } from '../../components/page-header';
-import { Card } from '../../components/ui/card';
-import { Table, TableCell, TableHead, TableRow } from '../../components/ui/table';
+import { groupReasons, reasonViews, stateViews } from '../../../lib/catalog';
+import { PageHeader } from '../../../components/page-header';
+import { Card } from '../../../components/ui/card';
+import { Table, TableCell, TableHead, TableRow } from '../../../components/ui/table';
 
 export default function Lifecycle() {
   const groups = groupReasons(reasonViews());

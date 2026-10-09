@@ -11,7 +11,7 @@ const SECTIONS: readonly { label: string; links: readonly { href: Route; label: 
   {
     label: 'Work',
     links: [
-      { href: '/', label: 'Dashboard' },
+      { href: '/dashboard', label: 'Dashboard' },
       { href: '/invoices', label: 'Invoices' },
       { href: '/vendors', label: 'Vendors' },
       { href: '/payments', label: 'Payment runs' },
@@ -31,7 +31,6 @@ const SECTIONS: readonly { label: string; links: readonly { href: Route; label: 
 ];
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === '/') return pathname === '/';
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -41,7 +40,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen flex-col md:flex-row">
       <aside className="border-b border-border bg-card md:sticky md:top-0 md:h-screen md:w-60 md:shrink-0 md:border-r md:border-b-0">
         <div className="flex items-center justify-between gap-2 px-4 py-3 md:py-5">
-          <Link href="/" className="flex items-center gap-2 text-sm font-semibold text-foreground no-underline">
+          <Link href="/dashboard" className="flex items-center gap-2 text-sm font-semibold text-foreground no-underline">
             <span className="grid h-7 w-7 place-items-center rounded-md bg-primary text-xs text-primary-foreground">IQ</span>
             InvoiceIQ
           </Link>

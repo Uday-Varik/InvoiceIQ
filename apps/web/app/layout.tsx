@@ -1,8 +1,5 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
-import { AppShell } from '../components/app-shell';
-import { BackendProvider } from '../components/backend';
-import { MeProvider } from '../components/me';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -22,11 +19,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <a href="#main-content" className="skip-link">
           Skip to main content
         </a>
-        <AppShell>
-          <BackendProvider>
-            <MeProvider>{children}</MeProvider>
-          </BackendProvider>
-        </AppShell>
+        {children}
       </body>
     </html>
   );

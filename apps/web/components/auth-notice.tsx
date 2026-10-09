@@ -23,5 +23,9 @@ export function AuthNotice() {
     );
   }
 
-  return <span className="muted small demo-notice">Public demo: shared tenant</span>;
+  if (me.authMode === 'demo') {
+    return <span className="muted small demo-notice">Public demo: shared tenant</span>;
+  }
+
+  return null;
 }

@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
-import { Dashboard } from '../../components/dashboard';
-import { PageHeader } from '../../components/page-header';
+import { Dashboard } from '../../../components/dashboard';
+import { PageHeader } from '../../../components/page-header';
 
 export default function InvoicesPage() {
   return (

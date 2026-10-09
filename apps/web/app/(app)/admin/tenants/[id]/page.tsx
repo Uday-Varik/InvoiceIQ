@@ -3,13 +3,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getTenant, listTenantUsers, addTenantUser, removeTenantUser, type Tenant, type TenantUser } from '../../../../lib/admin-api';
-import { PageHeader } from '../../../../components/page-header';
-import { Badge } from '../../../../components/ui/badge';
-import { Button } from '../../../../components/ui/button';
-import { Card } from '../../../../components/ui/card';
-import { Table, TableCell, TableHead, TableRow } from '../../../../components/ui/table';
-import { inputClass } from '../../../../components/ui/field';
+import { getTenant, listTenantUsers, addTenantUser, removeTenantUser, type Tenant, type TenantUser } from '../../../../../lib/admin-api';
+import { PageHeader } from '../../../../../components/page-header';
+import { Badge } from '../../../../../components/ui/badge';
+import { Button } from '../../../../../components/ui/button';
+import { Card } from '../../../../../components/ui/card';
+import { Table, TableCell, TableHead, TableRow } from '../../../../../components/ui/table';
+import { inputClass } from '../../../../../components/ui/field';
 
 const ROLE_LABELS: Record<string, string> = {
   ap_clerk: 'AP Clerk',
