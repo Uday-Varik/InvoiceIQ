@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "catalog": "tsx scripts/export-catalog.ts",
+    "start": "node dist/server.js",
     "catalog:check": "tsx scripts/export-catalog.ts --check"
   },
   "dependencies": {

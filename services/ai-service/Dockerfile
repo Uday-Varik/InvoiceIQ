@@ -26,6 +26,7 @@ RUN apt-get update \
 COPY --from=build --chown=app:app /app/.venv /app/.venv
 ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 PORT=8001
 WORKDIR /app
+RUN mkdir -p /home/render && printf '#!/bin/sh\ncd /app && exec uvicorn ai_service.main:app --host 0.0.0.0 --port "$PORT" --proxy-headers --no-server-header\n' > /home/render/runner.sh && chmod +x /home/render/runner.sh
 USER app
 EXPOSE 8001
 HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
