@@ -71,10 +71,10 @@ export function headerFrom(extraction: ExtractionResult): ExtractedHeader {
     subtotalMinor: minor(f.subtotalMinor.value),
     taxMinor: minor(f.taxMinor.value),
     dueDate: isoDate(f.dueDate.value),
-    paymentTerms: text(f.paymentTerms.value, 100),
-    poNumber: text(f.poNumber.value, 64),
-    vendorAddress: text(f.vendorAddress.value, 500),
-    vendorTaxId: text(f.vendorTaxId.value, 64),
+    paymentTerms: text(f.paymentTerms?.value ?? null, 100),
+    poNumber: text(f.poNumber?.value ?? null, 64),
+    vendorAddress: text(f.vendorAddress?.value ?? null, 500),
+    vendorTaxId: text(f.vendorTaxId?.value ?? null, 64),
   };
 }
 

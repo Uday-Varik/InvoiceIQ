@@ -9,8 +9,8 @@ import { outgoingTraceparent } from '../observability/trace.js';
  */
 
 const Field = z.object({ value: z.string().nullable(), confidence: z.number().min(0).max(1) }).strict();
-/** Fields added in Phase 2. An older ai-service omits them; they then read as unknown, never as guessed. */
-const LaterField = Field.default({ value: null, confidence: 0 });
+/** Fields added in Phase 2+. An older ai-service omits them (→ undefined) or sends null; either way they read as unknown, never as guessed. */
+const LaterField = z.preprocess((v) => v ?? { value: null, confidence: 0 }, Field);
 
 const LineItem = z
   .object({
