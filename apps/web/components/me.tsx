@@ -20,7 +20,7 @@ export function MeProvider({ children }: { children: ReactNode }) {
     getMe()
       .then(setMe)
       .catch((err) => {
-        if (err instanceof ApiError && err.status === 401 && !window.location.pathname.startsWith('/login')) {
+        if (err instanceof ApiError && err.status === 401 && !window.location.pathname.startsWith('/login') && window.location.pathname !== '/') {
           window.location.href = '/login';
           return;
         }

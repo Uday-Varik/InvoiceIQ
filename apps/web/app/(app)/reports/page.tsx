@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
-import { Reports } from '../../components/reports';
+import { Reports } from '../../../components/reports';
 
 export default function ReportsPage() {
   return (

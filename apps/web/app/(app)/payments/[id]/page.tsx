@@ -1,4 +1,4 @@
-import { PaymentRunPage } from '../../../components/payments';
+import { PaymentRunPage } from '../../../../components/payments';
 
 export default async function PaymentRun({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
