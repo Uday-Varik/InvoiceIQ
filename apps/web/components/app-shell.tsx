@@ -38,7 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="bg-navy text-navy-text md:sticky md:top-0 md:flex md:h-screen md:w-60 md:shrink-0 md:flex-col">
+      <aside className="min-w-0 max-w-full bg-navy text-navy-text md:sticky md:top-0 md:flex md:h-screen md:w-60 md:shrink-0 md:flex-col">
         <div className="flex items-center gap-2.5 px-4 py-3 md:py-5">
           <Link href="/dashboard" className="flex items-center gap-2.5 text-sm font-semibold text-navy-text-strong no-underline">
             <span aria-hidden="true" className="grid h-7 w-7 place-items-center rounded-md bg-accent text-xs font-bold text-accent-text">
@@ -47,7 +47,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             InvoiceIQ
           </Link>
         </div>
-        <nav aria-label="Main navigation" className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-1 md:flex-col md:gap-0.5 md:overflow-visible">
+        <nav aria-label="Main navigation" className="flex min-w-0 gap-1 overflow-x-auto px-3 pb-3 md:flex-1 md:flex-col md:gap-0.5 md:overflow-visible">
           {SECTIONS.map((section) => (
             <div key={section.label} className="contents md:block md:pt-4">
               <div className="hidden px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-navy-text/70 md:block">{section.label}</div>

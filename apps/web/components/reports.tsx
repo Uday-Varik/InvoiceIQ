@@ -25,6 +25,22 @@ type Tab = 'overview' | 'vendors' | 'approvals';
 
 const TAB_LABEL: Record<Tab, string> = { overview: 'Overview', vendors: 'Spend by vendor', approvals: 'Approval metrics' };
 
+const INVOICE_PAGE_SIZE = 200;
+const INVOICE_PAGE_LIMIT = 5;
+
+/** The API caps a page at 200, so the report reads up to five pages (1,000 invoices). */
+async function listAllInvoices(): Promise<readonly Invoice[]> {
+  const items: Invoice[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < INVOICE_PAGE_LIMIT; page++) {
+    const next = await listInvoices('', { limit: INVOICE_PAGE_SIZE, ...(cursor ? { cursor } : {}) });
+    items.push(...next.items);
+    cursor = next.nextCursor;
+    if (!cursor) break;
+  }
+  return items;
+}
+
 export function Reports() {
   const backend = useBackend();
   const [tab, setTab] = useState<Tab>('overview');
@@ -39,14 +55,9 @@ export function Reports() {
     setLoading(true);
     setError(null);
     try {
-      const [sum, page, vl, rl] = await Promise.all([
-        getSummary(),
-        listInvoices('', { limit: 500 }),
-        listVendors(),
-        listPaymentRuns(),
-      ]);
+      const [sum, all, vl, rl] = await Promise.all([getSummary(), listAllInvoices(), listVendors(), listPaymentRuns()]);
       setSummary(sum);
-      setInvoices(page.items);
+      setInvoices(all);
       setVendors(vl.items);
       setRuns(rl.items);
     } catch {
@@ -372,12 +383,12 @@ function PipelineChart({ invoices }: { invoices: readonly Invoice[] }) {
   const counts = stages.map((s) => ({ label: STATE_LABEL[s], value: invoices.filter((i) => i.state === s).length }));
   const max = Math.max(...counts.map((c) => c.value), 1);
   return (
-    <div className="flex h-44 items-end gap-2">
+    <div className="flex h-56 items-end gap-2">
       {counts.map((c) => (
         <div key={c.label} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
           <span className="text-xs tabular-nums text-muted-foreground">{c.value}</span>
           <div className="w-full rounded-t bg-primary/80" style={{ height: `${Math.max((c.value / max) * 100, 4)}%` }} />
-          <span className="truncate text-[11px] text-muted-foreground">{c.label}</span>
+          <span className="text-center text-[11px] leading-tight text-muted-foreground [overflow-wrap:anywhere]">{c.label}</span>
         </div>
       ))}
     </div>
