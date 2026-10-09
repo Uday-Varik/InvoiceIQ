@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { exportUrl, getSummary, listInvoices, type Invoice, type InvoiceState, type InvoiceSummary } from '../lib/api';
 import { INVOICE_STATES } from '../lib/catalog';
 import {
@@ -16,9 +16,12 @@ import {
 } from '../lib/filters';
 import { formatMoney, STATE_LABEL } from '../lib/format';
 import { cn } from '../lib/utils';
+import { PageHeader } from './page-header';
 import { useBackend } from './backend';
 import { Badge } from './ui/badge';
+import { Button, buttonVariants } from './ui/button';
 import { Card } from './ui/card';
+import { inputClass } from './ui/field';
 import { StatusBadge } from './ui/status-badge';
 import { Table, TableCell, TableHead, TableRow } from './ui/table';
 
@@ -80,17 +83,16 @@ export function Dashboard() {
   });
 
   return (
-    <div className="dashboard">
+    <div className="space-y-6">
+      <PageHeader title="Invoices" description="Everything in the pipeline, with what needs a person right now." />
       {summary && <SummaryCards summary={summary} onPick={(state) => apply({ ...applied, state })} active={applied.state} />}
 
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4 shadow-sm" onSubmit={onSubmit} aria-label="Filter invoices">
-        <label>
-          Search
-          <input type="search" placeholder="Vendor, invoice number or file" maxLength={100} {...field('q')} />
-        </label>
-        <label>
-          State
-          <select {...field('state')}>
+      <form className="grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4" onSubmit={onSubmit} aria-label="Filter invoices">
+        <Field label="Search" className="sm:col-span-2">
+          <input type="search" className={inputClass} placeholder="Vendor, invoice number or file" maxLength={100} {...field('q')} />
+        </Field>
+        <Field label="State">
+          <select className={inputClass} {...field('state')}>
             <option value="">Any</option>
             {INVOICE_STATES.map((s) => (
               <option key={s} value={s}>
@@ -98,59 +100,49 @@ export function Dashboard() {
               </option>
             ))}
           </select>
-        </label>
-        <label>
-          Currency
-          <input placeholder="USD" maxLength={3} size={4} {...field('currency')} />
-          {errors.currency && <span className="error small">{errors.currency}</span>}
-        </label>
-        <label>
-          Invoice date from
-          <input type="date" {...field('dateFrom')} />
-        </label>
-        <label>
-          to
-          <input type="date" {...field('dateTo')} />
-          {errors.dateTo && <span className="error small">{errors.dateTo}</span>}
-        </label>
-        <label>
-          Total from
-          <input inputMode="decimal" placeholder="0.00" {...field('minTotal')} />
-          {errors.minTotal && <span className="error small">{errors.minTotal}</span>}
-        </label>
-        <label>
-          to
-          <input inputMode="decimal" placeholder="0.00" {...field('maxTotal')} />
-          {errors.maxTotal && <span className="error small">{errors.maxTotal}</span>}
-        </label>
-        <div className="buttons">
-          <button className="btn btn-primary" type="submit" disabled={Object.keys(errors).length > 0}>
-            Apply
-          </button>
+        </Field>
+        <Field label="Currency" error={errors.currency}>
+          <input className={inputClass} placeholder="USD" maxLength={3} {...field('currency')} />
+        </Field>
+        <Field label="Invoice date from" error={errors.dateFrom}>
+          <input type="date" className={inputClass} {...field('dateFrom')} />
+        </Field>
+        <Field label="Invoice date to" error={errors.dateTo}>
+          <input type="date" className={inputClass} {...field('dateTo')} />
+        </Field>
+        <Field label="Total from" error={errors.minTotal}>
+          <input inputMode="decimal" className={inputClass} placeholder="0.00" {...field('minTotal')} />
+        </Field>
+        <Field label="Total to" error={errors.maxTotal}>
+          <input inputMode="decimal" className={inputClass} placeholder="0.00" {...field('maxTotal')} />
+        </Field>
+        <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-4">
+          <Button type="submit" disabled={Object.keys(errors).length > 0}>
+            Apply filters
+          </Button>
           {activeFilterCount(applied) > 0 && (
-            <button
-              className="btn"
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => {
                 setDraft(EMPTY_FILTERS);
                 apply(EMPTY_FILTERS);
               }}
             >
               Clear
-            </button>
+            </Button>
           )}
-          <span className="spacer" />
-          <a className="btn" href={exportUrl('csv', query)} download>
+          <span className="flex-1" />
+          <a className={buttonVariants({ variant: 'outline' })} href={exportUrl('csv', query)} download>
             Export CSV
           </a>
-          <a className="btn" href={exportUrl('json', query)} download>
+          <a className={buttonVariants({ variant: 'outline' })} href={exportUrl('json', query)} download>
             Export JSON
           </a>
         </div>
       </form>
 
-      {error && <p className="error">{error}</p>}
-      {items && items.length === 0 && !loading && <p className="muted">No invoices match these filters.</p>}
+      {error && <ErrorLine message={error} />}
+      {items && items.length === 0 && !loading && <p className="text-sm text-muted-foreground">No invoices match these filters.</p>}
       {items && items.length > 0 && (
         <Card className="overflow-x-auto">
           <Table>
@@ -192,15 +184,33 @@ export function Dashboard() {
           </Table>
         </Card>
       )}
-      <div className="buttons">
+      <div className="flex flex-wrap items-center gap-3">
         {cursor && (
-          <button className="btn" disabled={loading} onClick={() => void load(cursor)}>
+          <Button variant="outline" disabled={loading} onClick={() => void load(cursor)}>
             {loading ? 'Loading…' : 'Load more'}
-          </button>
+          </Button>
         )}
-        {items && <span className="muted small">{summary ? `Showing ${items.length} of ${summary.count}` : `Showing ${items.length}`}</span>}
+        {items && <span className="text-sm text-muted-foreground">{summary ? `Showing ${items.length} of ${summary.count}` : `Showing ${items.length}`}</span>}
       </div>
     </div>
+  );
+}
+
+function Field({ label, error, className, children }: { label: string; error?: string | undefined; className?: string | undefined; children: ReactNode }) {
+  return (
+    <label className={cn('grid gap-1 text-sm', className)}>
+      <span className="font-medium text-foreground">{label}</span>
+      {children}
+      {error && <span className="text-xs text-rose-700 dark:text-rose-300">{error}</span>}
+    </label>
+  );
+}
+
+function ErrorLine({ message }: { message: string }) {
+  return (
+    <p className="text-sm text-rose-700 dark:text-rose-300" role="alert">
+      {message}
+    </p>
   );
 }
 
@@ -209,14 +219,14 @@ function SummaryCards({ summary, onPick, active }: { summary: InvoiceSummary; on
   const tile = 'flex flex-col items-start gap-1 p-4 text-left transition-colors hover:bg-muted/50';
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <button type="button" onClick={() => onPick('')} className={cn('rounded-xl', active === '' && 'ring-2 ring-ring')}>
+      <button type="button" aria-pressed={active === ''} onClick={() => onPick('')} className={cn('rounded-xl', active === '' && 'ring-2 ring-ring')}>
         <Card className={tile}>
           <span className="text-2xl font-semibold tabular-nums">{summary.count}</span>
           <span className="text-sm text-muted-foreground">All invoices</span>
         </Card>
       </button>
       {HEADLINE.map((s) => (
-        <button key={s} type="button" onClick={() => onPick(s)} className={cn('rounded-xl', active === s && 'ring-2 ring-ring')}>
+        <button key={s} type="button" aria-pressed={active === s} onClick={() => onPick(s)} className={cn('rounded-xl', active === s && 'ring-2 ring-ring')}>
           <Card className={tile}>
             <StatusBadge state={s} />
             <span className="text-2xl font-semibold tabular-nums">{count(s)}</span>
