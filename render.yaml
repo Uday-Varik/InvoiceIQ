@@ -76,10 +76,25 @@ services:
       # password, replacing the hand-run ALTER ROLE step (24+ characters).
       - key: APP_DB_PASSWORD
         sync: false
-      # The public demo: one shared demo tenant, no login. Switch to oidc and set
-      # OIDC_ISSUER, OIDC_AUDIENCE and OIDC_JWKS_URL for a real deployment.
+      # github: GitHub OAuth login (needs GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
+      # SESSION_SECRET). demo: no login, shared demo tenant. oidc: generic OIDC
+      # (needs OIDC_ISSUER, OIDC_AUDIENCE, OIDC_JWKS_URL).
       - key: AUTH_MODE
-        value: demo
+        value: github
+      # GitHub OAuth app credentials (required when AUTH_MODE=github).
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      # Signs session cookies (>= 32 chars, required when AUTH_MODE=github).
+      - key: SESSION_SECRET
+        generateValue: true
+      # Frontend origin to redirect to after OAuth login.
+      - key: FRONTEND_URL
+        sync: false
+      # Allowed CORS origins (comma-separated). Set to the Vercel frontend URL.
+      - key: CORS_ORIGIN
+        sync: false
       # https://invoiceiq-ai-service.onrender.com once that service exists.
       - key: AI_SERVICE_URL
         sync: false
