@@ -2,6 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { httpAiClient, type AiClient } from './clients/ai-service.js';
 import { demoAuthenticator, oidcAuthenticator, remoteKeys, type Authenticator } from './auth/auth.js';
 import { githubAuthenticator, registerGitHubAuthRoutes, type GitHubAuthOptions } from './auth/github.js';
+import { registerGoogleAuthRoutes, type GoogleAuthOptions } from './auth/google.js';
+import { registerCredentialsAuthRoutes, type CredentialsAuthOptions } from './auth/credentials.js';
+import { sessionAuthenticator } from './auth/session.js';
 import { parseCheckpointKey, type Config } from './config.js';
 import { checkpointSigner } from './audit/checkpoints.js';
 import { bootstrapTenant, DEMO_TENANT_ID } from './db/bootstrap.js';
@@ -30,10 +33,45 @@ export function githubAuthOptionsFor(config: Config, ownerPool?: pg.Pool): GitHu
   };
 }
 
+export function googleAuthOptionsFor(config: Config, ownerPool?: pg.Pool): GoogleAuthOptions {
+  return {
+    clientId: config.GOOGLE_CLIENT_ID as string,
+    clientSecret: config.GOOGLE_CLIENT_SECRET as string,
+    sessionSecret: config.SESSION_SECRET as string,
+    callbackUrl: config.GOOGLE_CALLBACK_URL,
+    frontendUrl: config.FRONTEND_URL,
+    defaultRole: config.GITHUB_DEFAULT_ROLE,
+    tenantId: DEMO_TENANT_ID,
+    ownerPool,
+  };
+}
+
+export function credentialsAuthOptionsFor(config: Config, ownerPool?: pg.Pool): CredentialsAuthOptions {
+  return {
+    sessionSecret: config.SESSION_SECRET as string,
+    frontendUrl: config.FRONTEND_URL,
+    defaultRole: config.GITHUB_DEFAULT_ROLE,
+    tenantId: DEMO_TENANT_ID,
+    ownerPool,
+  };
+}
+
+export function enabledProviders(config: Config): string[] {
+  const providers: string[] = [];
+  if (config.AUTH_MODE === 'github') {
+    if (config.GITHUB_CLIENT_ID && config.GITHUB_CLIENT_SECRET) providers.push('github');
+    if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) providers.push('google');
+    if (config.CREDENTIALS_AUTH_ENABLED === 'true') providers.push('credentials');
+  }
+  return providers;
+}
+
 export function authenticatorFor(config: Config): Authenticator {
   if (config.AUTH_MODE === 'demo') return demoAuthenticator(DEMO_PRINCIPAL);
-  if (config.AUTH_MODE === 'github') return githubAuthenticator(githubAuthOptionsFor(config));
-  // OIDC mode: use demo fallback if OIDC config is incomplete (e.g., in development/test)
+  if (config.AUTH_MODE === 'github') {
+    if (config.SESSION_SECRET) return sessionAuthenticator(config.SESSION_SECRET);
+    return githubAuthenticator(githubAuthOptionsFor(config));
+  }
   if (config.OIDC_ISSUER && config.OIDC_AUDIENCE && config.OIDC_JWKS_URL) {
     return oidcAuthenticator({
       issuer: config.OIDC_ISSUER,
@@ -180,7 +218,17 @@ export async function startRuntime(config: Config): Promise<Runtime> {
         }
       : {}),
   });
-  if (config.AUTH_MODE === 'github') registerGitHubAuthRoutes(app, githubAuthOptionsFor(config, ownerPool));
+  if (config.AUTH_MODE === 'github') {
+    registerGitHubAuthRoutes(app, githubAuthOptionsFor(config, ownerPool));
+    if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) {
+      registerGoogleAuthRoutes(app, googleAuthOptionsFor(config, ownerPool));
+    }
+    if (config.CREDENTIALS_AUTH_ENABLED === 'true') {
+      registerCredentialsAuthRoutes(app, credentialsAuthOptionsFor(config, ownerPool));
+    }
+    const providers = enabledProviders(config);
+    app.get('/auth/providers', async () => ({ providers }));
+  }
   if (signer.ephemeral) app.log.warn({ keyId: signer.keyId }, 'AUDIT_CHECKPOINT_KEY is not set; audit checkpoints are signed with a key that changes on every restart');
   if (production && !config.METRICS_TOKEN) app.log.warn('METRICS_TOKEN is not set; /metrics is disabled');
   metrics.registry.addCollector(outboxCollector(db, metrics));

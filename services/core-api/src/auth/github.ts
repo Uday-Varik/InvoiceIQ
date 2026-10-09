@@ -1,11 +1,11 @@
-import { randomBytes, createHmac, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Authenticator } from './auth.js';
 import { AuthError, type ApproverRole } from './auth.js';
 import type { Pool } from 'pg';
 import { findUserTenants, upsertTenantUser, touchTenantUser } from '../tenants/store.js';
+import { SESSION_COOKIE, signSession, verifySession, parseCookie } from './session.js';
 
-const SESSION_COOKIE = 'iq_session';
 const STATE_COOKIE = 'iq_oauth_state';
 
 export interface GitHubAuthOptions {
@@ -16,58 +16,16 @@ export interface GitHubAuthOptions {
   readonly frontendUrl?: string | undefined;
   readonly defaultRole: ApproverRole;
   readonly tenantId: string;
-  /** Owner-role pool for tenant_users lookups (multi-tenant). */
   readonly ownerPool?: Pool | undefined;
-}
-
-interface SessionPayload {
-  readonly uid: string;
-  readonly login: string;
-  readonly tid: string;
-  readonly roles: readonly ApproverRole[];
-  readonly exp: number;
-}
-
-function sign(payload: SessionPayload, secret: string): string {
-  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const mac = createHmac('sha256', secret).update(data).digest('base64url');
-  return `${data}.${mac}`;
-}
-
-function verify(token: string, secret: string): SessionPayload | undefined {
-  const dot = token.indexOf('.');
-  if (dot < 1) return undefined;
-  const data = token.slice(0, dot);
-  const mac = token.slice(dot + 1);
-  const expected = createHmac('sha256', secret).update(data).digest('base64url');
-  const macBuf = Buffer.from(mac);
-  const expectedBuf = Buffer.from(expected);
-  if (macBuf.length !== expectedBuf.length || !timingSafeEqual(macBuf, expectedBuf)) return undefined;
-  try {
-    const payload = JSON.parse(Buffer.from(data, 'base64url').toString()) as SessionPayload;
-    if (typeof payload.exp !== 'number' || Date.now() > payload.exp) return undefined;
-    return payload;
-  } catch {
-    return undefined;
-  }
-}
-
-function parseCookie(header: string | undefined, name: string): string | undefined {
-  if (!header) return undefined;
-  for (const part of header.split(';')) {
-    const [k, ...rest] = part.trim().split('=');
-    if (k === name) return rest.join('=');
-  }
-  return undefined;
 }
 
 export function githubAuthenticator(opts: GitHubAuthOptions): Authenticator {
   return {
     mode: 'github' as Authenticator['mode'],
-    async authenticate(authorization, cookie) {
+    async authenticate(_authorization, cookie) {
       const token = parseCookie(cookie, SESSION_COOKIE);
       if (!token) throw new AuthError('not authenticated: no session');
-      const payload = verify(token, opts.sessionSecret);
+      const payload = verifySession(token, opts.sessionSecret);
       if (!payload) throw new AuthError('invalid or expired session');
       return {
         tenantId: payload.tid,
@@ -101,9 +59,7 @@ async function fetchGitHubUser(accessToken: string): Promise<{ id: number; login
 }
 
 function requestOrigin(req: FastifyRequest): string {
-  const proto = req.protocol;
-  const host = req.hostname;
-  return `${proto}://${host}`;
+  return `${req.protocol}://${req.hostname}`;
 }
 
 export function registerGitHubAuthRoutes(app: FastifyInstance, opts: GitHubAuthOptions): void {
@@ -161,9 +117,7 @@ export function registerGitHubAuthRoutes(app: FastifyInstance, opts: GitHubAuthO
           roles = first.roles;
           await touchTenantUser(opts.ownerPool, 'github', String(ghUser.id), tid);
         } else {
-          // No membership: redirect to onboarding
           redirectTo = (opts.frontendUrl ?? '') + '/onboarding';
-          // Create a membership in the default tenant
           const membership = await upsertTenantUser(opts.ownerPool, {
             tenantId: opts.tenantId,
             provider: 'github',
@@ -176,14 +130,17 @@ export function registerGitHubAuthRoutes(app: FastifyInstance, opts: GitHubAuthO
         }
       }
 
-      const payload: SessionPayload = {
-        uid: String(ghUser.id),
-        login: ghUser.login,
-        tid,
-        roles: [...roles],
-        exp: Date.now() + sessionMaxAge * 1000,
-      };
-      const session = sign(payload, opts.sessionSecret);
+      const session = signSession(
+        {
+          uid: String(ghUser.id),
+          login: ghUser.login,
+          tid,
+          roles: [...roles],
+          provider: 'github',
+          exp: Date.now() + sessionMaxAge * 1000,
+        },
+        opts.sessionSecret,
+      );
 
       void reply.header('set-cookie', `${SESSION_COOKIE}=${session}; ${cookieOpts}; Max-Age=${sessionMaxAge}`);
       return reply.redirect(redirectTo);
@@ -193,30 +150,39 @@ export function registerGitHubAuthRoutes(app: FastifyInstance, opts: GitHubAuthO
   app.get('/auth/me', async (req, reply) => {
     const token = parseCookie(req.headers.cookie, SESSION_COOKIE);
     if (!token) return reply.code(401).send({ authenticated: false });
-    const payload = verify(token, opts.sessionSecret);
+    const payload = verifySession(token, opts.sessionSecret);
     if (!payload) return reply.code(401).send({ authenticated: false });
+    const provider = payload.provider || 'github';
     let tenants: Array<{ tenantId: string; login: string; roles: readonly ApproverRole[] }> = [];
     if (opts.ownerPool) {
-      const memberships = await findUserTenants(opts.ownerPool, 'github', payload.uid);
+      const memberships = await findUserTenants(opts.ownerPool, provider, payload.uid);
       tenants = memberships.map((m) => ({ tenantId: m.tenantId, login: m.login, roles: m.roles }));
     }
-    return { authenticated: true, login: payload.login, roles: payload.roles, tenantId: payload.tid, tenants };
+    return { authenticated: true, login: payload.login, roles: payload.roles, tenantId: payload.tid, provider, tenants };
   });
 
   app.post<{ Body: { tenantId: string } }>('/auth/switch-tenant', async (req, reply) => {
     const token = parseCookie(req.headers.cookie, SESSION_COOKIE);
     if (!token) return reply.code(401).send({ error: 'not authenticated' });
-    const current = verify(token, opts.sessionSecret);
+    const current = verifySession(token, opts.sessionSecret);
     if (!current) return reply.code(401).send({ error: 'session expired' });
     if (!opts.ownerPool) return reply.code(400).send({ error: 'multi-tenant not enabled' });
     const tenantId = (req.body as { tenantId?: string })?.tenantId;
     if (!tenantId) return reply.code(400).send({ error: 'tenantId required' });
-    const memberships = await findUserTenants(opts.ownerPool, 'github', current.uid);
+    const provider = current.provider || 'github';
+    const memberships = await findUserTenants(opts.ownerPool, provider, current.uid);
     const target = memberships.find((m) => m.tenantId === tenantId);
     if (!target) return reply.code(403).send({ error: 'not a member of that tenant' });
-    await touchTenantUser(opts.ownerPool, 'github', current.uid, tenantId);
-    const newPayload: SessionPayload = { uid: current.uid, login: current.login, tid: tenantId, roles: [...target.roles], exp: Date.now() + sessionMaxAge * 1000 };
-    const session = sign(newPayload, opts.sessionSecret);
+    await touchTenantUser(opts.ownerPool, provider, current.uid, tenantId);
+    const newPayload = {
+      uid: current.uid,
+      login: current.login,
+      tid: tenantId,
+      roles: [...target.roles] as ApproverRole[],
+      provider,
+      exp: Date.now() + sessionMaxAge * 1000,
+    };
+    const session = signSession(newPayload, opts.sessionSecret);
     void reply.header('set-cookie', `${SESSION_COOKIE}=${session}; ${cookieOpts}; Max-Age=${sessionMaxAge}`);
     return { ok: true, tenantId };
   });
