@@ -218,6 +218,8 @@ export async function startRuntime(config: Config): Promise<Runtime> {
         }
       : {}),
   });
+  const providers = enabledProviders(config);
+  app.get('/auth/providers', async () => ({ providers, authMode: config.AUTH_MODE }));
   if (config.AUTH_MODE === 'github') {
     registerGitHubAuthRoutes(app, githubAuthOptionsFor(config, ownerPool));
     if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) {
@@ -226,8 +228,6 @@ export async function startRuntime(config: Config): Promise<Runtime> {
     if (config.CREDENTIALS_AUTH_ENABLED === 'true') {
       registerCredentialsAuthRoutes(app, credentialsAuthOptionsFor(config, ownerPool));
     }
-    const providers = enabledProviders(config);
-    app.get('/auth/providers', async () => ({ providers }));
   }
   if (signer.ephemeral) app.log.warn({ keyId: signer.keyId }, 'AUDIT_CHECKPOINT_KEY is not set; audit checkpoints are signed with a key that changes on every restart');
   if (production && !config.METRICS_TOKEN) app.log.warn('METRICS_TOKEN is not set; /metrics is disabled');

@@ -17,7 +17,13 @@ function LoginForm() {
   useEffect(() => {
     fetch('/auth/providers')
       .then((r) => (r.ok ? r.json() : { providers: ['github'] }))
-      .then((data: { providers: Provider[] }) => setProviders(data.providers))
+      .then((data: { providers: Provider[]; authMode?: string }) => {
+        if (data.authMode === 'demo') {
+          window.location.href = '/';
+          return;
+        }
+        setProviders(data.providers);
+      })
       .catch(() => setProviders(['github']))
       .finally(() => setLoading(false));
   }, []);
