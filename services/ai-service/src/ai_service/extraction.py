@@ -29,6 +29,10 @@ FIELD_NAMES = (
     "subtotalMinor",
     "taxMinor",
     "dueDate",
+    "paymentTerms",
+    "poNumber",
+    "vendorAddress",
+    "vendorTaxId",
 )
 MAX_LINE_ITEMS = 200
 
@@ -154,7 +158,11 @@ def extract_document(request: DocumentExtractionRequest, provider: ExtractionPro
     if doc.source != "ocr":
         return result
     capped = {
-        name: field.model_copy(update={"confidence": min(field.confidence, OCR_MAX_CONFIDENCE)})
+        name: (
+            field.model_copy(update={"confidence": min(field.confidence, OCR_MAX_CONFIDENCE)})
+            if field is not None
+            else None
+        )
         for name, field in result.fields
     }
     return result.model_copy(
