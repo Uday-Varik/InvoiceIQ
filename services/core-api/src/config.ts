@@ -45,6 +45,12 @@ const EnvSchema = z
     /** Default role for GitHub-authenticated users. */
     GITHUB_DEFAULT_ROLE: z.enum(['ap_clerk', 'ap_manager', 'controller', 'cfo']).default('cfo'),
 
+    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+    GOOGLE_CALLBACK_URL: z.string().url().optional(),
+    /** Enable email/password credential-based authentication. */
+    CREDENTIALS_AUTH_ENABLED: z.enum(['true', 'false']).default('false'),
+
     AI_SERVICE_URL: z.string().url(),
     AI_SIGNING_SECRET: z.string().min(32, 'AI_SIGNING_SECRET must be at least 32 characters'),
     // Long enough for a many-line invoice (ai-service gives up on the model at 90 s),

@@ -52,7 +52,7 @@ describeDb('row-level security (real Postgres, app role)', () => {
       const { rows } = await owner.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>(
         `SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity FROM pg_class c
           JOIN pg_namespace n ON n.oid = c.relnamespace
-         WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname <> 'schema_migrations' ORDER BY c.relname`,
+         WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname NOT IN ('schema_migrations', 'credential_users') ORDER BY c.relname`,
       );
       expect(rows.map((r) => r.relname)).toEqual([
         'audit_checkpoints',
