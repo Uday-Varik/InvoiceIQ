@@ -15,7 +15,12 @@ import {
   type DashboardFilters,
 } from '../lib/filters';
 import { formatMoney, STATE_LABEL } from '../lib/format';
+import { cn } from '../lib/utils';
 import { useBackend } from './backend';
+import { Badge } from './ui/badge';
+import { Card } from './ui/card';
+import { StatusBadge } from './ui/status-badge';
+import { Table, TableCell, TableHead, TableRow } from './ui/table';
 
 const PAGE_SIZE = 25;
 /** The states a reviewer acts on, shown as headline cards. */
@@ -78,7 +83,7 @@ export function Dashboard() {
     <div className="dashboard">
       {summary && <SummaryCards summary={summary} onPick={(state) => apply({ ...applied, state })} active={applied.state} />}
 
-      <form className="filters" onSubmit={onSubmit} aria-label="Filter invoices">
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4 shadow-sm" onSubmit={onSubmit} aria-label="Filter invoices">
         <label>
           Search
           <input type="search" placeholder="Vendor, invoice number or file" maxLength={100} {...field('q')} />
@@ -147,39 +152,45 @@ export function Dashboard() {
       {error && <p className="error">{error}</p>}
       {items && items.length === 0 && !loading && <p className="muted">No invoices match these filters.</p>}
       {items && items.length > 0 && (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Invoice</th>
-              <th>Vendor</th>
-              <th>Invoice date</th>
-              <th>Due</th>
-              <th className="num">Total</th>
-              <th>State</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((inv) => (
-              <tr key={inv.id}>
-                <td>
-                  <Link href={`/invoices/${inv.id}`}>{inv.invoiceNumber ?? inv.document?.filename ?? inv.id.slice(0, 8)}</Link>
-                  {inv.corrections && inv.corrections.length > 0 && (
-                    <span className="badge" title={`Corrected: ${inv.corrections.join(', ')}`}>
-                      edited
-                    </span>
-                  )}
-                </td>
-                <td>{inv.vendorName ?? '—'}</td>
-                <td>{inv.invoiceDate ?? '—'}</td>
-                <td>{inv.dueDate ?? '—'}</td>
-                <td className="num">{inv.total ? formatMoney(inv.total.amountMinor, inv.total.currency) : '—'}</td>
-                <td>
-                  <span className={`pill pill-${inv.state.toLowerCase()}`}>{STATE_LABEL[inv.state]}</span>
-                </td>
+        <Card className="overflow-x-auto">
+          <Table>
+            <thead>
+              <tr>
+                <TableHead>Invoice</TableHead>
+                <TableHead>Vendor</TableHead>
+                <TableHead>Invoice date</TableHead>
+                <TableHead>Due</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead>State</TableHead>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((inv) => (
+                <TableRow key={inv.id}>
+                  <TableCell>
+                    <Link href={`/invoices/${inv.id}`} className="font-medium text-primary hover:underline">
+                      {inv.invoiceNumber ?? inv.document?.filename ?? inv.id.slice(0, 8)}
+                    </Link>
+                    {inv.corrections && inv.corrections.length > 0 && (
+                      <Badge className="ml-2" title={`Corrected: ${inv.corrections.join(', ')}`}>
+                        edited
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>{inv.vendorName ?? <span className="text-muted-foreground">Vendor not found</span>}</TableCell>
+                  <TableCell className="tabular-nums">{inv.invoiceDate ?? '—'}</TableCell>
+                  <TableCell className="tabular-nums">{inv.dueDate ?? '—'}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {inv.total ? formatMoney(inv.total.amountMinor, inv.total.currency) : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge state={inv.state} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </tbody>
+          </Table>
+        </Card>
       )}
       <div className="buttons">
         {cursor && (
@@ -195,25 +206,30 @@ export function Dashboard() {
 
 function SummaryCards({ summary, onPick, active }: { summary: InvoiceSummary; onPick: (state: InvoiceState | '') => void; active: string }) {
   const count = (s: InvoiceState) => summary.byState.find((r) => r.state === s)?.count ?? 0;
+  const tile = 'flex flex-col items-start gap-1 p-4 text-left transition-colors hover:bg-muted/50';
   return (
-    <div className="cards">
-      <button className={`card${active === '' ? ' card-active' : ''}`} onClick={() => onPick('')}>
-        <span className="card-value">{summary.count}</span>
-        <span className="card-label">All invoices</span>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <button type="button" onClick={() => onPick('')} className={cn('rounded-xl', active === '' && 'ring-2 ring-ring')}>
+        <Card className={tile}>
+          <span className="text-2xl font-semibold tabular-nums">{summary.count}</span>
+          <span className="text-sm text-muted-foreground">All invoices</span>
+        </Card>
       </button>
       {HEADLINE.map((s) => (
-        <button key={s} className={`card${active === s ? ' card-active' : ''}`} onClick={() => onPick(s)}>
-          <span className="card-value">{count(s)}</span>
-          <span className="card-label">{STATE_LABEL[s]}</span>
+        <button key={s} type="button" onClick={() => onPick(s)} className={cn('rounded-xl', active === s && 'ring-2 ring-ring')}>
+          <Card className={tile}>
+            <StatusBadge state={s} />
+            <span className="text-2xl font-semibold tabular-nums">{count(s)}</span>
+          </Card>
         </button>
       ))}
       {summary.byCurrency.map((c) => (
-        <div key={c.currency} className="card card-static" title={`${c.count} invoice${c.count === 1 ? '' : 's'}`}>
-          <span className="card-value">{formatMoney(c.amountMinor, c.currency)}</span>
-          <span className="card-label">
+        <Card key={c.currency} className="flex flex-col gap-1 p-4" title={`${c.count} invoice${c.count === 1 ? '' : 's'}`}>
+          <span className="text-2xl font-semibold tabular-nums">{formatMoney(c.amountMinor, c.currency)}</span>
+          <span className="text-sm text-muted-foreground">
             Total in {c.currency} ({c.count})
           </span>
-        </div>
+        </Card>
       ))}
     </div>
   );

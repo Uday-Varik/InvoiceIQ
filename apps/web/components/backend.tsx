@@ -28,11 +28,11 @@ export function BackendProvider({ children }: { children: ReactNode }) {
 function WakeBanner({ status }: { status: BackendStatus }) {
   if (status === 'waking') {
     return (
-      <div className="banner banner-waking" role="status" aria-live="polite">
-        <span className="spinner" aria-hidden="true" />
-        <div>
-          <strong>Waking the demo…</strong>
-          <p>
+      <div role="status" aria-live="polite" className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-sm shadow-sm">
+        <span className="spinner mt-0.5" aria-hidden="true" />
+        <div className="space-y-1">
+          <strong className="font-semibold">Waking the demo…</strong>
+          <p className="text-muted-foreground">
             The API runs on a free tier that sleeps when nobody is using it. The first request takes up to a minute while
             it starts. This page will carry on by itself.
           </p>

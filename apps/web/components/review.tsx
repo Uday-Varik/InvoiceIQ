@@ -20,10 +20,18 @@ import { minorToInput } from '../lib/money';
 import { actionsFor, confidenceLevel, formatMoney, IN_FLIGHT, STATE_LABEL } from '../lib/format';
 import { approvalProgress, approveBlocker } from '../lib/controls';
 import { personaLabel } from '../lib/personas';
+import { cn } from '../lib/utils';
 import { useBackend } from './backend';
 import { useMe } from './me';
 import { CorrectionFormPanel } from './correction-form';
 import { PipelineProgress } from './pipeline-progress';
+import { Button } from './ui/button';
+import { Card } from './ui/card';
+import { Badge } from './ui/badge';
+import { Notice } from './ui/notice';
+import { sectionTitleClass, textareaClass } from './ui/field';
+import { StatusBadge } from './ui/status-badge';
+import { Table, TableCell, TableHead, TableRow } from './ui/table';
 
 const FIELD_LABELS: Array<[keyof NonNullable<Invoice['extraction']>['fields'], string]> = [
   ['vendorName', 'Vendor'],
@@ -82,51 +90,54 @@ export function InvoiceReview({ id }: { id: string }) {
     return () => clearTimeout(timer.current);
   }, [backend, load]);
 
-  if (loadError) return <p className="error">{loadError}</p>;
-  if (!invoice) return <p className="muted">Loading…</p>;
+  if (loadError) return <p className="text-sm text-rose-700 dark:text-rose-300">{loadError}</p>;
+  if (!invoice) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const busyPipeline = IN_FLIGHT.has(invoice.state);
   return (
-    <div className="review">
-      <section className="review-doc">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+      <Card className="overflow-hidden lg:sticky lg:top-6 lg:self-start">
         {invoice.document?.contentType === 'application/pdf' ? (
-          <iframe src={documentUrl(invoice.id)} title="Invoice document" className="doc-frame" loading="lazy" />
+          <iframe src={documentUrl(invoice.id)} title="Invoice document" className="h-[80vh] w-full" loading="lazy" />
         ) : (
-          <img src={documentUrl(invoice.id)} alt={`Scanned invoice ${invoice.invoiceNumber ?? ''}`} className="doc-image" loading="lazy" />
+          <img src={documentUrl(invoice.id)} alt={`Scanned invoice ${invoice.invoiceNumber ?? ''}`} className="w-full" loading="lazy" />
         )}
-      </section>
-      <section className="review-panel">
-        <div className="review-head">
-          <span className={`pill pill-${invoice.state.toLowerCase()}`}>{STATE_LABEL[invoice.state]}</span>
+      </Card>
+
+      <section className="min-w-0 space-y-6">
+        <div className="space-y-2">
+          <StatusBadge state={invoice.state} />
+          <h1 className="text-2xl font-semibold tracking-tight">{invoice.invoiceNumber ?? invoice.document?.filename ?? 'Invoice'}</h1>
+          <p className="text-3xl font-semibold tabular-nums">
+            {invoice.total ? (
+              formatMoney(invoice.total.amountMinor, invoice.total.currency)
+            ) : busyPipeline ? (
+              <span className="inline-block h-8 w-40 animate-pulse rounded bg-muted" aria-hidden="true" />
+            ) : (
+              <span className="text-base font-normal text-muted-foreground">Total not extracted</span>
+            )}
+          </p>
         </div>
-        <h1 className="title">{invoice.invoiceNumber ?? invoice.document?.filename ?? 'Invoice'}</h1>
-        <p className="total">
-          {invoice.total ? (
-            formatMoney(invoice.total.amountMinor, invoice.total.currency)
-          ) : busyPipeline ? (
-            <span className="skeleton skeleton-total" aria-hidden="true" />
-          ) : (
-            'Total not extracted'
-          )}
-        </p>
+
         <PipelineProgress invoice={invoice} />
+
         {invoice.corrections && invoice.corrections.length > 0 && (
-          <p className="small">
-            <span className="badge">edited</span> A reviewer corrected the {invoice.corrections.map((c) => CORRECTION_LABEL[c] ?? c).join(', ')}.
+          <p className="text-sm text-muted-foreground">
+            <Badge className="mr-1">edited</Badge> A reviewer corrected the {invoice.corrections.map((c) => CORRECTION_LABEL[c] ?? c).join(', ')}.
           </p>
         )}
 
         {invoice.reasons.length > 0 && (
-          <div className="reasons">
-            <strong>Why it is {STATE_LABEL[invoice.state].toLowerCase()}</strong>
-            <ul>
+          <Card className="space-y-2 border-amber-200 bg-amber-50 p-4 dark:border-amber-400/30 dark:bg-amber-400/10">
+            <p className="text-sm font-semibold">Why it is {STATE_LABEL[invoice.state].toLowerCase()}</p>
+            <ul className="space-y-1 text-sm">
               {invoice.reasons.map((r) => (
                 <li key={r}>
-                  <code>{r}</code> {reasonViews().find((v) => v.code === r)?.description}
+                  <code className="font-mono text-xs">{r}</code> {reasonViews().find((v) => v.code === r)?.description}
                 </li>
               ))}
             </ul>
-          </div>
+          </Card>
         )}
 
         <InvoiceDetails invoice={invoice} />
@@ -144,76 +155,80 @@ export function InvoiceReview({ id }: { id: string }) {
           />
         ) : (
           canCorrect(invoice.state) && (
-            <p>
-              <button className="btn" onClick={() => setEditing(true)}>
+            <div>
+              <Button variant="outline" onClick={() => setEditing(true)}>
                 Correct fields…
-              </button>
-            </p>
+              </Button>
+            </div>
           )
         )}
 
-        <h2>Extracted fields</h2>
-        {invoice.extraction ? (
-          <table className="table fields">
-            <tbody>
-              {FIELD_LABELS.map(([key, label]) => (
-                <FieldRow key={key} label={label} field={invoice.extraction?.fields[key]} />
-              ))}
-            </tbody>
-          </table>
-        ) : busyPipeline ? (
-          <table className="table fields" aria-busy="true">
-            <tbody>
-              {FIELD_LABELS.map(([key, label]) => (
-                <tr key={key}>
-                  <th>{label}</th>
-                  <td>
-                    <span className="skeleton" aria-hidden="true" />
-                  </td>
-                  <td className="num">
-                    <span className="skeleton skeleton-short" aria-hidden="true" />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="muted">Nothing was extracted from this document.</p>
-        )}
-        {invoice.extraction && <p className="muted small">Extracted by {invoice.extraction.provider}. Confidence below 80% puts the invoice on hold.</p>}
+        <div className="space-y-3">
+          <h2 className={sectionTitleClass}>Extracted fields</h2>
+          {invoice.extraction ? (
+            <Card className="overflow-hidden">
+              <Table>
+                <tbody>
+                  {FIELD_LABELS.map(([key, label]) => (
+                    <FieldRow key={key} label={label} field={invoice.extraction?.fields[key]} />
+                  ))}
+                </tbody>
+              </Table>
+            </Card>
+          ) : busyPipeline ? (
+            <Card className="p-4 text-sm text-muted-foreground">Reading the invoice…</Card>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nothing was extracted from this document.</p>
+          )}
+          {invoice.extraction && (
+            <p className="text-xs text-muted-foreground">
+              Extracted by {invoice.extraction.provider}. Confidence below 80% puts the invoice on hold.
+            </p>
+          )}
+        </div>
 
         {!editing && <Actions invoice={invoice} onChange={setInvoice} />}
 
-        <h2>History</h2>
-        <ol className="history">
-          {(invoice.history ?? []).map((e) => (
-            <li key={e.seq}>
-              <span className="muted small">{new Date(e.occurredAt).toLocaleString()}</span>{' '}
-              {e.to ? (
-                <>
-                  {e.from ? `${STATE_LABEL[e.from]} → ` : ''}
-                  <strong>{STATE_LABEL[e.to]}</strong>
-                </>
-              ) : (
-                e.type
-              )}{' '}
-              <span className={`actor actor-${e.actor.kind}`}>{e.actor.kind === 'ai' ? 'AI' : e.actor.kind}: {e.actor.id}</span>
-              {e.reasons && e.reasons.length > 0 && <span className="small"> ({e.reasons.join(', ')})</span>}
-              {e.changes && (
-                <ul className="small changes">
-                  {Object.entries(e.changes).map(([field, c]) => (
-                    <li key={field}>
-                      {CORRECTION_LABEL[field] ?? field}: {describeValue(field, c.from, invoice.total?.currency)} → {describeValue(field, c.to, invoice.total?.currency)}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {e.comment && <div className="small">“{e.comment}”</div>}
-            </li>
-          ))}
-        </ol>
-        <p>
-          <Link href="/">← Upload another</Link>
+        <div className="space-y-3">
+          <h2 className={sectionTitleClass}>History</h2>
+          <ol className="space-y-3 border-l border-border pl-4 text-sm">
+            {(invoice.history ?? []).map((e) => (
+              <li key={e.seq}>
+                <span className="text-xs text-muted-foreground tabular-nums">{new Date(e.occurredAt).toLocaleString()}</span>
+                <div>
+                  {e.to ? (
+                    <>
+                      {e.from ? `${STATE_LABEL[e.from]} → ` : ''}
+                      <strong>{STATE_LABEL[e.to]}</strong>
+                    </>
+                  ) : (
+                    e.type
+                  )}{' '}
+                  <span className="text-xs text-muted-foreground">
+                    {e.actor.kind === 'ai' ? 'AI' : e.actor.kind}: {e.actor.id}
+                  </span>
+                  {e.reasons && e.reasons.length > 0 && <span className="text-xs text-muted-foreground"> ({e.reasons.join(', ')})</span>}
+                </div>
+                {e.changes && (
+                  <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                    {Object.entries(e.changes).map(([field, c]) => (
+                      <li key={field}>
+                        {CORRECTION_LABEL[field] ?? field}: {describeValue(field, c.from, invoice.total?.currency)} →{' '}
+                        {describeValue(field, c.to, invoice.total?.currency)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {e.comment && <div className="text-xs text-muted-foreground">“{e.comment}”</div>}
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <p className="text-sm">
+          <Link href="/" className="text-primary hover:underline">
+            ← Upload another
+          </Link>
         </p>
       </section>
     </div>
@@ -235,77 +250,87 @@ function InvoiceDetails({ invoice }: { invoice: Invoice }) {
   const money = (minor: string | undefined) => (minor !== undefined && currency ? formatMoney(minor, currency) : '—');
   if (!invoice.subtotal && !invoice.tax && !invoice.dueDate && lines.length === 0) return null;
   return (
-    <>
-      <h2>Details</h2>
-      <table className="table fields">
-        <tbody>
-          {invoice.invoiceDate && (
-            <tr>
-              <th>Invoice date</th>
-              <td>{invoice.invoiceDate}</td>
-            </tr>
-          )}
-          {invoice.dueDate && (
-            <tr>
-              <th>Due date</th>
-              <td>{invoice.dueDate}</td>
-            </tr>
-          )}
-          {invoice.subtotal && (
-            <tr>
-              <th>Subtotal</th>
-              <td className="num">{formatMoney(invoice.subtotal.amountMinor, invoice.subtotal.currency)}</td>
-            </tr>
-          )}
-          {invoice.tax && (
-            <tr>
-              <th>Tax</th>
-              <td className="num">{formatMoney(invoice.tax.amountMinor, invoice.tax.currency)}</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-      {lines.length > 0 && (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Description</th>
-              <th className="num">Qty</th>
-              <th className="num">Unit price</th>
-              <th className="num">Amount</th>
-            </tr>
-          </thead>
+    <div className="space-y-3">
+      <h2 className={sectionTitleClass}>Details</h2>
+      <Card className="overflow-hidden">
+        <Table>
           <tbody>
-            {lines.map((l) => (
-              <tr key={l.position}>
-                <td className="muted">{l.position}</td>
-                <td>{l.description}</td>
-                <td className="num">{l.quantity ?? '—'}</td>
-                <td className="num">{money(l.unitPriceMinor)}</td>
-                <td className="num">{money(l.amountMinor)}</td>
-              </tr>
-            ))}
+            {invoice.invoiceDate && (
+              <TableRow>
+                <TableHead className="w-40 normal-case tracking-normal text-foreground">Invoice date</TableHead>
+                <TableCell>{invoice.invoiceDate}</TableCell>
+              </TableRow>
+            )}
+            {invoice.dueDate && (
+              <TableRow>
+                <TableHead className="w-40 normal-case tracking-normal text-foreground">Due date</TableHead>
+                <TableCell>{invoice.dueDate}</TableCell>
+              </TableRow>
+            )}
+            {invoice.subtotal && (
+              <TableRow>
+                <TableHead className="w-40 normal-case tracking-normal text-foreground">Subtotal</TableHead>
+                <TableCell className="text-right tabular-nums">{formatMoney(invoice.subtotal.amountMinor, invoice.subtotal.currency)}</TableCell>
+              </TableRow>
+            )}
+            {invoice.tax && (
+              <TableRow>
+                <TableHead className="w-40 normal-case tracking-normal text-foreground">Tax</TableHead>
+                <TableCell className="text-right tabular-nums">{formatMoney(invoice.tax.amountMinor, invoice.tax.currency)}</TableCell>
+              </TableRow>
+            )}
           </tbody>
-        </table>
+        </Table>
+      </Card>
+      {lines.length > 0 && (
+        <Card className="overflow-x-auto">
+          <Table>
+            <thead>
+              <tr>
+                <TableHead>#</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+                <TableHead className="text-right">Unit price</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l) => (
+                <TableRow key={l.position}>
+                  <TableCell className="text-muted-foreground">{l.position}</TableCell>
+                  <TableCell>{l.description}</TableCell>
+                  <TableCell className="text-right tabular-nums">{l.quantity ?? '—'}</TableCell>
+                  <TableCell className="text-right tabular-nums">{money(l.unitPriceMinor)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{money(l.amountMinor)}</TableCell>
+                </TableRow>
+              ))}
+            </tbody>
+          </Table>
+        </Card>
       )}
-    </>
+    </div>
   );
 }
+
+const CONFIDENCE_TONE: Record<'high' | 'medium' | 'low', string> = {
+  high: 'text-emerald-700 dark:text-emerald-300',
+  medium: 'text-amber-700 dark:text-amber-300',
+  low: 'text-rose-700 dark:text-rose-300',
+};
 
 function FieldRow({ label, field }: { label: string; field: ExtractedField | undefined }) {
   const confidence = field?.confidence ?? 0;
   const level = confidenceLevel(confidence);
   return (
-    <tr>
-      <th>{label}</th>
-      <td>{field?.value ?? <span className="muted">not found</span>}</td>
-      <td className="num">
-        <span className={`conf conf-${level}`} title={`confidence ${confidence}`}>
+    <TableRow>
+      <TableHead className="w-44 normal-case tracking-normal text-muted-foreground">{label}</TableHead>
+      <TableCell>{field?.value ?? <span className="text-muted-foreground">Not on document</span>}</TableCell>
+      <TableCell className="text-right">
+        <span className={cn('text-xs font-medium tabular-nums', CONFIDENCE_TONE[level])} title={`confidence ${confidence}`}>
           {Math.round(confidence * 100)}%
         </span>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -341,10 +366,10 @@ function Actions({ invoice, onChange }: { invoice: Invoice; onChange: (inv: Invo
 
   const note = comment.trim() || undefined;
   return (
-    <div className="actions">
-      <h2>Decision</h2>
+    <Card className="space-y-4 p-5">
+      <h2 className={sectionTitleClass}>Decision</h2>
       {progress && (
-        <p className="small">
+        <p className="text-sm">
           <strong>{progress.text}</strong> for the {invoice.approvalTier?.name} tier
           {(invoice.approvals ?? []).filter((a) => a.current).length > 0 &&
             `: approved so far by ${(invoice.approvals ?? [])
@@ -353,27 +378,33 @@ function Actions({ invoice, onChange }: { invoice: Invoice; onChange: (inv: Invo
               .join(', ')}`}
         </p>
       )}
-      {actions.includes('approve') && blocker && <p className="warn small">{blocker}</p>}
-      <textarea aria-label="Decision comment" placeholder="Comment (optional, kept in the audit log)" value={comment} maxLength={2000} onChange={(e) => setComment(e.target.value)} />
+      {actions.includes('approve') && blocker && <Notice>{blocker}</Notice>}
+      <textarea
+        aria-label="Decision comment"
+        placeholder="Comment (optional, kept in the audit log)"
+        value={comment}
+        maxLength={2000}
+        onChange={(e) => setComment(e.target.value)}
+        className={cn(textareaClass, 'min-h-20')}
+      />
       {rejecting && (
-        <fieldset className="reject-reasons">
-          <legend>Reject because</legend>
+        <fieldset className="space-y-2 rounded-md border border-border p-3 text-sm">
+          <legend className="px-1 text-sm font-medium">Reject because</legend>
           {REJECT_REASONS.map((r) => (
-            <label key={r.code}>
+            <label key={r.code} className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={reasons.includes(r.code as ReasonCode)}
                 onChange={(e) => setReasons(e.target.checked ? [...reasons, r.code as ReasonCode] : reasons.filter((c) => c !== r.code))}
-              />{' '}
-              <code>{r.code}</code>
+              />
+              <code className="font-mono text-xs">{r.code}</code>
             </label>
           ))}
         </fieldset>
       )}
-      <div className="buttons">
+      <div className="flex flex-wrap gap-2">
         {actions.includes('approve') && (
-          <button
-            className="btn btn-primary"
+          <Button
             disabled={busy || blocker !== undefined}
             onClick={() =>
               void run(async () => {
@@ -384,29 +415,34 @@ function Actions({ invoice, onChange }: { invoice: Invoice; onChange: (inv: Invo
             }
           >
             Approve
-          </button>
+          </Button>
         )}
         {actions.includes('sendToApproval') && (
-          <button className="btn btn-primary" disabled={busy} onClick={() => void run(() => sendToApproval(invoice.id, note, key.current))}>
+          <Button disabled={busy} onClick={() => void run(() => sendToApproval(invoice.id, note, key.current))}>
             Release to approval
-          </button>
+          </Button>
         )}
         {actions.includes('reject') &&
           (rejecting ? (
-            <button className="btn btn-danger" disabled={busy || reasons.length === 0} onClick={() => void run(() => rejectInvoice(invoice.id, reasons, note, key.current))}>
+            <Button
+              variant="outline"
+              className="border-rose-300 text-rose-700 hover:bg-rose-50 dark:text-rose-300"
+              disabled={busy || reasons.length === 0}
+              onClick={() => void run(() => rejectInvoice(invoice.id, reasons, note, key.current))}
+            >
               Confirm rejection
-            </button>
+            </Button>
           ) : (
-            <button className="btn" disabled={busy} onClick={() => setRejecting(true)}>
+            <Button variant="outline" disabled={busy} onClick={() => setRejecting(true)}>
               Reject…
-            </button>
+            </Button>
           ))}
       </div>
       {error && (
-        <p className="error" role="alert">
+        <p className="text-sm text-rose-700 dark:text-rose-300" role="alert">
           {error}
         </p>
       )}
-    </div>
+    </Card>
   );
 }

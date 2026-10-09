@@ -1,9 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getTenant, listTenantUsers, addTenantUser, removeTenantUser, type Tenant, type TenantUser } from '../../../../../lib/admin-api';
+import { PageHeader } from '../../../../../components/page-header';
+import { Badge } from '../../../../../components/ui/badge';
+import { Button } from '../../../../../components/ui/button';
+import { Card } from '../../../../../components/ui/card';
+import { Table, TableCell, TableHead, TableRow } from '../../../../../components/ui/table';
+import { inputClass } from '../../../../../components/ui/field';
 
 const ROLE_LABELS: Record<string, string> = {
   ap_clerk: 'AP Clerk',
@@ -27,12 +33,15 @@ export default function TenantDetailPage() {
 
   useEffect(() => {
     Promise.all([getTenant(id), listTenantUsers(id)])
-      .then(([t, u]) => { setTenant(t); setUsers(u.items); })
+      .then(([t, u]) => {
+        setTenant(t);
+        setUsers(u.items);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
 
-  async function handleAdd(e: React.FormEvent) {
+  async function handleAdd(e: FormEvent) {
     e.preventDefault();
     if (!login.trim()) return;
     setAdding(true);
@@ -59,113 +68,111 @@ export default function TenantDetailPage() {
     }
   }
 
-  if (loading) {
+  if (loading) return <div className="h-40 animate-pulse rounded-xl bg-muted" />;
+
+  if (!tenant) {
     return (
-      <section>
-        <span className="skeleton" style={{ width: 200, height: 28, display: 'block', marginBottom: 16 }} />
-        <span className="skeleton" style={{ width: '100%', height: 200 }} />
-      </section>
+      <div className="space-y-3">
+        <p className="text-sm text-rose-700 dark:text-rose-300">Tenant not found.</p>
+        <Link href="/admin" className="text-sm text-primary hover:underline">
+          ← Back
+        </Link>
+      </div>
     );
   }
 
-  if (!tenant) {
-    return <section><p className="error">Tenant not found.</p><Link href="/admin">← Back</Link></section>;
-  }
-
   return (
-    <>
-      <section>
-        <Link href="/admin" className="admin-back">← All Tenants</Link>
-        <div className="admin-header-row" style={{ marginTop: 12 }}>
-          <div>
-            <h1>{tenant.name}</h1>
-            <p className="muted small">ID: {tenant.id} · Created {new Date(tenant.createdAt).toLocaleDateString()}</p>
-          </div>
-        </div>
-      </section>
+    <div className="space-y-6">
+      <Link href="/admin" className="text-sm text-primary hover:underline">
+        ← All tenants
+      </Link>
+      <PageHeader
+        title={tenant.name}
+        description={`Created ${new Date(tenant.createdAt).toLocaleDateString()} · ID ${tenant.id}`}
+      />
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="text-sm text-rose-700 dark:text-rose-300" role="alert">
+          {error}
+        </p>
+      )}
 
-      <section>
-        <div className="admin-header-row">
-          <h2>Members</h2>
-          <button className="btn btn-small" onClick={() => setShowAdd(!showAdd)}>
-            {showAdd ? 'Cancel' : '+ Add Member'}
-          </button>
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Members</h2>
+          <Button size="sm" variant="outline" onClick={() => setShowAdd(!showAdd)}>
+            {showAdd ? 'Cancel' : 'Add member'}
+          </Button>
         </div>
 
         {showAdd && (
-          <form onSubmit={handleAdd} className="admin-add-user-form">
-            <div className="form-grid">
-              <label className="form-field">
-                <span className="form-label">GitHub Username</span>
-                <input
-                  type="text"
-                  value={login}
-                  onChange={(e) => setLogin(e.target.value)}
-                  placeholder="octocat"
-                  required
-                  autoFocus
-                />
+          <Card className="p-5">
+            <form onSubmit={handleAdd} className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <label className="grid gap-1 text-sm">
+                <span className="text-muted-foreground">GitHub username</span>
+                <input className={inputClass} type="text" value={login} onChange={(e) => setLogin(e.target.value)} placeholder="octocat" required autoFocus />
               </label>
-              <label className="form-field">
-                <span className="form-label">Role</span>
-                <select value={role} onChange={(e) => setRole(e.target.value)}>
+              <label className="grid gap-1 text-sm">
+                <span className="text-muted-foreground">Role</span>
+                <select className={inputClass} value={role} onChange={(e) => setRole(e.target.value)}>
                   {Object.entries(ROLE_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
                   ))}
                 </select>
               </label>
-              <label className="form-field form-checkbox">
+              <Button type="submit" disabled={adding || !login.trim()}>
+                {adding ? 'Adding…' : 'Add member'}
+              </Button>
+              <label className="flex items-center gap-2 text-sm sm:col-span-3">
                 <input type="checkbox" checked={isOwner} onChange={(e) => setIsOwner(e.target.checked)} />
-                <span>Owner (admin access)</span>
+                Owner (admin access)
               </label>
-            </div>
-            <div className="buttons" style={{ marginTop: 12 }}>
-              <button className="btn btn-primary btn-small" type="submit" disabled={adding || !login.trim()}>
-                {adding ? 'Adding…' : 'Add Member'}
-              </button>
-            </div>
-          </form>
+            </form>
+          </Card>
         )}
 
         {users.length === 0 ? (
-          <p className="muted">No members yet.</p>
+          <Card className="p-6 text-sm text-muted-foreground">No members yet.</Card>
         ) : (
-          <div className="table-wrap">
-            <table className="table">
+          <Card className="overflow-x-auto">
+            <Table>
               <thead>
                 <tr>
-                  <th>User</th>
-                  <th>Roles</th>
-                  <th>Owner</th>
-                  <th>Joined</th>
-                  <th></th>
+                  <TableHead>User</TableHead>
+                  <TableHead>Roles</TableHead>
+                  <TableHead>Owner</TableHead>
+                  <TableHead>Joined</TableHead>
+                  <TableHead>
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
                 </tr>
               </thead>
               <tbody>
                 {users.map((u) => (
-                  <tr key={u.id}>
-                    <td>
-                      <strong>{u.login}</strong>
-                      <br />
-                      <span className="muted small">{u.provider}:{u.externalId}</span>
-                    </td>
-                    <td>{u.roles.map((r) => ROLE_LABELS[r] ?? r).join(', ')}</td>
-                    <td>{u.isOwner ? <span className="pill pill-approved">Owner</span> : '—'}</td>
-                    <td className="small muted">{new Date(u.createdAt).toLocaleDateString()}</td>
-                    <td>
-                      <button className="btn-link small" style={{ color: 'var(--bad)' }} onClick={() => handleRemove(u.id)}>
+                  <TableRow key={u.id}>
+                    <TableCell>
+                      <div className="font-medium">{u.login}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {u.provider}:{u.externalId}
+                      </div>
+                    </TableCell>
+                    <TableCell>{u.roles.map((r) => ROLE_LABELS[r] ?? r).join(', ')}</TableCell>
+                    <TableCell>{u.isOwner ? <Badge tone="success">Owner</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" className="text-rose-700 dark:text-rose-300" onClick={() => handleRemove(u.id)}>
                         Remove
-                      </button>
-                    </td>
-                  </tr>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </tbody>
-            </table>
-          </div>
+            </Table>
+          </Card>
         )}
       </section>
-    </>
+    </div>
   );
 }

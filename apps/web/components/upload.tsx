@@ -3,7 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type DragEvent } from 'react';
 import { ApiError, uploadInvoice } from '../lib/api';
+import { cn } from '../lib/utils';
 import { useBackend } from './backend';
+import { Card } from './ui/card';
 
 const ACCEPT = 'application/pdf,image/png,image/jpeg';
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -41,9 +43,8 @@ export function UploadDropzone() {
   }
 
   return (
-    <div>
-      <div
-        className={`dropzone${dragging ? ' dropzone-active' : ''}${disabled ? ' dropzone-disabled' : ''}`}
+    <div className="space-y-2">
+      <Card
         role="button"
         tabIndex={0}
         aria-disabled={disabled}
@@ -55,11 +56,16 @@ export function UploadDropzone() {
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
+        className={cn(
+          'grid cursor-pointer place-items-center gap-1 border-2 border-dashed p-8 text-center shadow-none transition-colors',
+          dragging ? 'border-primary bg-muted' : 'border-border hover:bg-muted/50',
+          disabled && 'cursor-not-allowed opacity-60',
+        )}
       >
         <input ref={input} type="file" accept={ACCEPT} hidden onChange={(e) => void send(e.target.files?.[0])} />
-        <p className="dropzone-title">
+        <p className="font-medium">
           {busy ? (
-            <span className="dropzone-busy" role="status">
+            <span className="inline-flex items-center gap-2" role="status">
               <span className="spinner" aria-hidden="true" />
               Uploading…
             </span>
@@ -69,14 +75,14 @@ export function UploadDropzone() {
             'Waiting for the API…'
           )}
         </p>
-        <p className="muted">PDF, PNG or JPEG, up to 10 MB. PDFs with a text layer extract best.</p>
-      </div>
+        <p className="text-sm text-muted-foreground">PDF, PNG or JPEG, up to 10 MB. PDFs with a text layer extract best.</p>
+      </Card>
       {error && (
-        <p className="error" role="alert">
+        <p className="text-sm text-rose-700 dark:text-rose-300" role="alert">
           {error}
         </p>
       )}
-      <p className="muted small">
+      <p className="text-sm text-muted-foreground">
         No invoice handy? <a href="/sample-invoice.pdf" download>Download a sample PDF</a> and drop it back in.
       </p>
     </div>
