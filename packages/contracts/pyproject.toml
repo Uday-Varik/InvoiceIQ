@@ -3,7 +3,7 @@ name = "invoiceiq-contracts"
 version = "0.1.0"
 description = "Pydantic models generated from packages/contracts/openapi"
 requires-python = ">=3.11"
-dependencies = ["pydantic==2.13.5"]
+dependencies = ["pydantic==2.14.1"]
 
 [build-system]
 requires = ["hatchling==1.32.4"]

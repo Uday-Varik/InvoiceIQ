@@ -5,7 +5,7 @@ description = "Synthetic data, labels, red-team taxonomy and frozen eval sets fo
 requires-python = ">=3.11"
 dependencies = [
   "invoiceiq-contracts",
-  "pydantic==2.13.5",
+  "pydantic==2.14.1",
   "pyyaml==6.0.3",
 ]
 
