@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "InvoiceIQ extraction and advisory risk signals (no payment authority)"
 requires-python = ">=3.11"
 dependencies = [
-  "fastapi==0.141.1",
+  "fastapi==0.162.0",
   "invoiceiq-contracts",
   "pydantic==2.14.1",
   "pypdf==6.21.3",
