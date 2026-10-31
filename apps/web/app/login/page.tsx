@@ -19,7 +19,7 @@ function LoginForm() {
       .then((r) => (r.ok ? r.json() : { providers: ['github'] }))
       .then((data: { providers: Provider[]; authMode?: string }) => {
         if (data.authMode === 'demo') {
-          window.location.href = '/';
+          window.location.href = '/dashboard';
           return;
         }
         setProviders(data.providers);
@@ -43,7 +43,7 @@ function LoginForm() {
         const body = (await res.json().catch(() => ({}))) as { detail?: string };
         throw new Error(body.detail || `Authentication failed (${res.status})`);
       }
-      window.location.href = '/';
+      window.location.href = '/dashboard';
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
       setSubmitting(false);
