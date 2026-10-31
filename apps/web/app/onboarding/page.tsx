@@ -36,7 +36,7 @@ export default function OnboardingPage() {
     try {
       const t = await selfCreateTenant(name.trim(), currency || undefined);
       await switchTenant(t.id);
-      window.location.href = '/';
+      window.location.href = '/dashboard';
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
       setCreating(false);
@@ -46,7 +46,7 @@ export default function OnboardingPage() {
   async function handleSelectTenant(tenantId: string) {
     try {
       await switchTenant(tenantId);
-      window.location.href = '/';
+      window.location.href = '/dashboard';
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -110,7 +110,29 @@ export default function OnboardingPage() {
 
         {(step === 'welcome' || step === 'create') && (
           <div className="space-y-4">
-            {step === 'welcome' && (
+            {step === 'welcome' && me && me.tenants.length > 0 && (
+              <>
+                <p className="text-center text-sm text-muted-foreground">
+                  You already belong to an organization. Continue with it, or create a new one below.
+                </p>
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => {
+                    const first = me.tenants[0];
+                    if (first) void handleSelectTenant(first.tenantId);
+                  }}
+                >
+                  Continue to your organization
+                </Button>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" />
+                  or create a new organization
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+              </>
+            )}
+            {step === 'welcome' && (!me || me.tenants.length === 0) && (
               <p className="text-center text-sm text-muted-foreground">
                 Create your organization to start managing invoices with AI-powered extraction and multi-tier approvals.
               </p>

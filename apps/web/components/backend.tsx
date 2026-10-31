@@ -31,7 +31,7 @@ function WakeBanner({ status }: { status: BackendStatus }) {
       <div role="status" aria-live="polite" className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-sm shadow-sm">
         <span className="spinner mt-0.5" aria-hidden="true" />
         <div className="space-y-1">
-          <strong className="font-semibold">Waking the demo…</strong>
+          <strong className="font-semibold">Waking the service…</strong>
           <p className="text-muted-foreground">
             The API runs on a free tier that sleeps when nobody is using it. The first request takes up to a minute while
             it starts. This page will carry on by itself.
@@ -43,7 +43,7 @@ function WakeBanner({ status }: { status: BackendStatus }) {
   if (status === 'down') {
     return (
       <div className="banner banner-down" role="alert">
-        <strong>The demo backend is not answering.</strong>
+        <strong>The backend is not answering.</strong>
         <p>It may be redeploying or over its free-tier limits. Try again in a few minutes.</p>
       </div>
     );
