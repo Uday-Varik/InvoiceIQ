@@ -3,6 +3,7 @@ import { httpAiClient, type AiClient } from './clients/ai-service.js';
 import { demoAuthenticator, oidcAuthenticator, remoteKeys, type Authenticator } from './auth/auth.js';
 import { githubAuthenticator, registerGitHubAuthRoutes, type GitHubAuthOptions } from './auth/github.js';
 import { registerGoogleAuthRoutes, type GoogleAuthOptions } from './auth/google.js';
+import { registerAppleAuthRoutes, type AppleAuthOptions } from './auth/apple.js';
 import { registerCredentialsAuthRoutes, type CredentialsAuthOptions } from './auth/credentials.js';
 import { sessionAuthenticator } from './auth/session.js';
 import { parseCheckpointKey, type Config } from './config.js';
@@ -46,6 +47,21 @@ export function googleAuthOptionsFor(config: Config, ownerPool?: pg.Pool): Googl
   };
 }
 
+export function appleAuthOptionsFor(config: Config, ownerPool?: pg.Pool): AppleAuthOptions {
+  return {
+    clientId: config.APPLE_CLIENT_ID as string,
+    teamId: config.APPLE_TEAM_ID as string,
+    keyId: config.APPLE_KEY_ID as string,
+    privateKey: config.APPLE_PRIVATE_KEY as string,
+    sessionSecret: config.SESSION_SECRET as string,
+    callbackUrl: config.APPLE_CALLBACK_URL,
+    frontendUrl: config.FRONTEND_URL,
+    defaultRole: config.GITHUB_DEFAULT_ROLE,
+    tenantId: DEMO_TENANT_ID,
+    ownerPool,
+  };
+}
+
 export function credentialsAuthOptionsFor(config: Config, ownerPool?: pg.Pool): CredentialsAuthOptions {
   return {
     sessionSecret: config.SESSION_SECRET as string,
@@ -61,6 +77,7 @@ export function enabledProviders(config: Config): string[] {
   if (config.AUTH_MODE === 'github') {
     if (config.GITHUB_CLIENT_ID && config.GITHUB_CLIENT_SECRET) providers.push('github');
     if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) providers.push('google');
+    if (config.APPLE_CLIENT_ID && config.APPLE_TEAM_ID && config.APPLE_KEY_ID && config.APPLE_PRIVATE_KEY) providers.push('apple');
     if (config.CREDENTIALS_AUTH_ENABLED === 'true') providers.push('credentials');
   }
   return providers;
@@ -224,6 +241,9 @@ export async function startRuntime(config: Config): Promise<Runtime> {
     registerGitHubAuthRoutes(app, githubAuthOptionsFor(config, ownerPool));
     if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) {
       registerGoogleAuthRoutes(app, googleAuthOptionsFor(config, ownerPool));
+    }
+    if (config.APPLE_CLIENT_ID && config.APPLE_TEAM_ID && config.APPLE_KEY_ID && config.APPLE_PRIVATE_KEY) {
+      registerAppleAuthRoutes(app, appleAuthOptionsFor(config, ownerPool));
     }
     if (config.CREDENTIALS_AUTH_ENABLED === 'true') {
       registerCredentialsAuthRoutes(app, credentialsAuthOptionsFor(config, ownerPool));

@@ -48,6 +48,15 @@ const EnvSchema = z
     GOOGLE_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
     GOOGLE_CALLBACK_URL: z.string().url().optional(),
+
+    /** Apple Sign In (Service ID). Required together when APPLE_CLIENT_ID is set. */
+    APPLE_CLIENT_ID: z.string().min(1).optional(),
+    APPLE_TEAM_ID: z.string().min(1).optional(),
+    APPLE_KEY_ID: z.string().min(1).optional(),
+    /** Apple private key (.p8), PEM PKCS#8. Used to sign the client_secret JWT. */
+    APPLE_PRIVATE_KEY: z.string().min(1).optional(),
+    /** Override for the Apple OAuth redirect_uri. When unset, derived from the request origin. */
+    APPLE_CALLBACK_URL: z.string().url().optional(),
     /** Enable email/password credential-based authentication. */
     CREDENTIALS_AUTH_ENABLED: z.enum(['true', 'false']).default('false'),
 
@@ -102,6 +111,11 @@ const EnvSchema = z
     if (env.AUTH_MODE === 'github') {
       for (const key of ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'SESSION_SECRET'] as const) {
         if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required when AUTH_MODE=github` });
+      }
+      if (env.APPLE_CLIENT_ID) {
+        for (const key of ['APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY'] as const) {
+          if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required when APPLE_CLIENT_ID is set` });
+        }
       }
     }
     if (env.APP_DB_PASSWORD && !env.MIGRATION_DATABASE_URL) {
