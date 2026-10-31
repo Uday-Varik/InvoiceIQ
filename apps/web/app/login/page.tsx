@@ -2,13 +2,16 @@
 
 import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
-type Provider = 'github' | 'google' | 'credentials';
+type Provider = 'github' | 'google' | 'apple' | 'credentials';
 
 function LoginForm() {
+  const searchParams = useSearchParams();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'signin' | 'signup'>('signin');
+  const [loadError, setLoadError] = useState(false);
+  const [tab, setTab] = useState<'signin' | 'signup'>(searchParams.get('tab') === 'signup' ? 'signup' : 'signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,7 +19,10 @@ function LoginForm() {
 
   useEffect(() => {
     fetch('/auth/providers')
-      .then((r) => (r.ok ? r.json() : { providers: ['github'] }))
+      .then((r) => {
+        if (!r.ok) throw new Error(`providers request failed (${r.status})`);
+        return r.json();
+      })
       .then((data: { providers: Provider[]; authMode?: string }) => {
         if (data.authMode === 'demo') {
           window.location.href = '/dashboard';
@@ -24,7 +30,12 @@ function LoginForm() {
         }
         setProviders(data.providers);
       })
-      .catch(() => setProviders(['github']))
+      .catch(() => {
+        // Never invent a provider from a failed request: a backend that is
+        // asleep or unreachable must show an error, not a button that 404s.
+        setProviders([]);
+        setLoadError(true);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -43,14 +54,14 @@ function LoginForm() {
         const body = (await res.json().catch(() => ({}))) as { detail?: string };
         throw new Error(body.detail || `Authentication failed (${res.status})`);
       }
-      window.location.href = '/dashboard';
+      window.location.href = tab === 'signup' ? '/onboarding' : '/dashboard';
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
       setSubmitting(false);
     }
   }
 
-  const hasOAuth = providers.includes('github') || providers.includes('google');
+  const hasOAuth = providers.includes('github') || providers.includes('google') || providers.includes('apple');
   const hasCredentials = providers.includes('credentials');
 
   return (
@@ -66,13 +77,25 @@ function LoginForm() {
         <p className="auth-subtitle muted">
           {tab === 'signin'
             ? 'Choose your preferred sign-in method'
-            : 'Get started with AI-powered invoice processing'}
+            : 'Create your account with one of these methods. Signing in with GitHub, Google, or Apple for the first time creates your account and organization.'}
         </p>
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
             <span className="spinner" />
           </div>
+        ) : loadError ? (
+          <p className="login-error" role="alert">
+            The sign-in service is not answering. It may be starting up after idle — wait a moment and{' '}
+            <button className="btn-link" onClick={() => window.location.reload()}>
+              try again
+            </button>
+            .
+          </p>
+        ) : providers.length === 0 ? (
+          <p className="muted">
+            Sign-in is not set up yet. No sign-in method is configured on the server.
+          </p>
         ) : (
           <>
             {hasOAuth && (
@@ -87,6 +110,12 @@ function LoginForm() {
                   <a href="/auth/google" className="auth-provider-btn">
                     <GoogleIcon />
                     Continue with Google
+                  </a>
+                )}
+                {providers.includes('apple') && (
+                  <a href="/auth/apple" className="auth-provider-btn">
+                    <AppleIcon />
+                    Continue with Apple
                   </a>
                 )}
               </div>
@@ -177,6 +206,15 @@ function GitHubIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
       <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+    </svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M15.6 3.2c.2 2-1.3 3.7-3.1 3.9-.2-1.9 1.2-3.7 3.1-3.9z" />
+      <path d="M12.2 8.1c-3.2 0-5.5 2.5-5.5 5.8 0 3.6 2.6 7 5.2 7 .6 0 1-.2 1.4-.2.4 0 .8.2 1.4.2 2.6 0 5.2-3.4 5.2-7 0-3.3-2.3-5.8-5.5-5.8-.7 0-1.4.2-2.2.2-.8 0-1.5-.2-2-.2z" />
     </svg>
   );
 }

@@ -1,8 +1,8 @@
 /**
- * The demo runs on free tiers that scale to zero, so the first request after
+ * The services run on free tiers that scale to zero, so the first request after
  * idle can take a minute while core-api (and then ai-service) boot. This polls
- * core-api's /healthz and reports progress so the UI can say "waking the demo"
- * instead of looking broken.
+ * core-api's /healthz and reports progress so the UI can say the service is
+ * starting up instead of looking broken.
  */
 
 export type BackendStatus = 'checking' | 'waking' | 'ready' | 'down';
