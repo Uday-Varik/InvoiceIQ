@@ -86,6 +86,35 @@ services:
         sync: false
       - key: GITHUB_CLIENT_SECRET
         sync: false
+      # Google OAuth client credentials (required when AUTH_MODE=github and
+      # Google sign-in is offered).
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      # Override for the Google OAuth redirect_uri. When unset, derived from
+      # the request origin; set it to the Vercel URL so the session cookie
+      # lands on the frontend origin.
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+      # Apple Sign In (required when AUTH_MODE=github and Apple sign-in is
+      # offered): Service ID client ID, Team ID, Key ID, and the .p8 private
+      # key (PEM). The private key signs the client_secret JWT per exchange.
+      - key: APPLE_CLIENT_ID
+        sync: false
+      - key: APPLE_TEAM_ID
+        sync: false
+      - key: APPLE_KEY_ID
+        sync: false
+      - key: APPLE_PRIVATE_KEY
+        sync: false
+      # Override for the Apple OAuth redirect_uri. When unset, derived from
+      # the request origin; set it to the Vercel URL, matching the Service ID.
+      - key: APPLE_CALLBACK_URL
+        sync: false
+      # Enable email/password sign-in (AUTH_MODE=github only). Unset means off.
+      - key: CREDENTIALS_AUTH_ENABLED
+        sync: false
       # Signs session cookies (>= 32 chars, required when AUTH_MODE=github).
       - key: SESSION_SECRET
         generateValue: true
