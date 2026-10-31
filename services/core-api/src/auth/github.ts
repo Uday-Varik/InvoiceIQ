@@ -103,7 +103,7 @@ export function registerGitHubAuthRoutes(app: FastifyInstance, opts: GitHubAuthO
 
       let tid = opts.tenantId;
       let roles: readonly ApproverRole[] = [opts.defaultRole];
-      let redirectTo = opts.frontendUrl ?? '/';
+      let redirectTo = opts.frontendUrl ? `${opts.frontendUrl}/dashboard` : '/dashboard';
 
       if (opts.ownerPool) {
         const memberships = await findUserTenants(opts.ownerPool, 'github', String(ghUser.id));

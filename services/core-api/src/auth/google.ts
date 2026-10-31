@@ -105,7 +105,7 @@ export function registerGoogleAuthRoutes(app: FastifyInstance, opts: GoogleAuthO
 
       let tid = opts.tenantId;
       let roles: readonly ApproverRole[] = [opts.defaultRole];
-      let redirectTo = opts.frontendUrl ?? '/';
+      let redirectTo = opts.frontendUrl ? `${opts.frontendUrl}/dashboard` : '/dashboard';
 
       if (opts.ownerPool) {
         const memberships = await findUserTenants(opts.ownerPool, 'google', googleUser.id);
