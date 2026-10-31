@@ -76,8 +76,16 @@ export class RateLimiter {
 }
 
 /** Which bucket a request draws from, or undefined when it is not limited. Reads are never limited. */
-export function bucketFor(method: string, url: string): 'uploads' | 'writes' | undefined {
+export function bucketFor(method: string, url: string): 'uploads' | 'writes' | 'auth' | undefined {
   const path = url.split('?')[0] ?? '';
+  if (path.startsWith('/auth/')) {
+    // Read-only auth lookups stay unlimited: the login page polls /auth/providers
+    // and onboarding reads /auth/me, and throttling those would break sign-in
+    // while the backend wakes up. Everything that starts, completes, or ends a
+    // session is throttled, so password guessing and callback abuse are bounded.
+    if (path === '/auth/providers' || path === '/auth/me') return undefined;
+    return 'auth';
+  }
   if (!path.startsWith('/v1/')) return undefined;
   const m = method.toUpperCase();
   if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS') return undefined;
