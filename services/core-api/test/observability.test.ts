@@ -475,6 +475,16 @@ describe('rate limiter', () => {
     ['POST', '/v1/lifecycle/evaluate', 'writes'],
     ['GET', '/metrics', undefined],
     ['POST', '/healthz', undefined],
+    ['GET', '/auth/providers', undefined],
+    ['GET', '/auth/me', undefined],
+    ['GET', '/auth/github', 'auth'],
+    ['GET', '/auth/github/callback?code=x', 'auth'],
+    ['GET', '/auth/google/callback?code=x', 'auth'],
+    ['POST', '/auth/apple/callback', 'auth'],
+    ['POST', '/auth/credentials/login', 'auth'],
+    ['POST', '/auth/credentials/register', 'auth'],
+    ['POST', '/auth/switch-tenant', 'auth'],
+    ['POST', '/auth/logout', 'auth'],
   ])('%s %s draws from %s', (method, url, bucket) => {
     expect(bucketFor(method, url)).toBe(bucket);
   });

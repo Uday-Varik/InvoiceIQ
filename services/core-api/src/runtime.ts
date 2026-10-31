@@ -217,6 +217,7 @@ export async function startRuntime(config: Config): Promise<Runtime> {
     rateLimiter: new RateLimiter({
       writes: { perMinute: config.RATE_LIMIT_WRITES_PER_MINUTE },
       uploads: { perMinute: config.RATE_LIMIT_UPLOADS_PER_MINUTE },
+      auth: { perMinute: config.RATE_LIMIT_AUTH_PER_MINUTE },
     }),
     aiPing: () => (ai.ping ? ai.ping() : Promise.resolve(false)),
     auth: authenticatorFor(config),

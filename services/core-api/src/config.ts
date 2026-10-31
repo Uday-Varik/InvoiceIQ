@@ -92,6 +92,8 @@ const EnvSchema = z
     /** Per client address. 0 turns a limit off. Reads are never limited. */
     RATE_LIMIT_WRITES_PER_MINUTE: z.coerce.number().int().min(0).max(100_000).default(120),
     RATE_LIMIT_UPLOADS_PER_MINUTE: z.coerce.number().int().min(0).max(100_000).default(20),
+    /** Sign-in, sign-up, and OAuth callback attempts, per client address. */
+    RATE_LIMIT_AUTH_PER_MINUTE: z.coerce.number().int().min(0).max(100_000).default(60),
     /** Reverse proxies in front of core-api; the client address is read that many hops back. */
     TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(1),
     /** Labels invoiceiq_build_info. Render sets RENDER_GIT_COMMIT on its own. */
