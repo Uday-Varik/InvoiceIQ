@@ -10,10 +10,11 @@ bank-detail-change quarantine and a hash-chained audit ledger. Models help with
 extraction and risk signals, but every AI output is structurally limited to
 putting an invoice on HOLD.
 
-> Status: **Phase 14 (richer extraction).** All 15 phases (0–14) are merged.
+> Status: **Phase 15 (production sign-in).** All 16 phases (0–15) are merged.
 > The pipeline extracts 12 fields including payment terms, PO number, vendor
-> address and tax ID. GitHub OAuth, multi-tenant onboarding, and a reporting
-> dashboard are live. The Terraform has not been applied yet.
+> address and tax ID. GitHub, Google, and Apple OAuth, email/password
+> sign-in, multi-tenant onboarding, and a reporting dashboard are live. The
+> Terraform has not been applied yet.
 
 ## The problem
 
@@ -238,6 +239,17 @@ Same labels as above. Decisions in [ADR-0020](docs/adr/0020-pluggable-extraction
 | 2 | Database migration with CHECK constraints for new fields | Verified-in-sandbox | `services/core-api/migrations/0006_richer_extraction.sql` |
 | 3 | Heuristic and Qwen providers updated with regex patterns for new fields | Verified-in-sandbox | `services/ai-service/src/ai_service/providers/` |
 | 4 | Review display and correction form updated for new fields | Verified-in-sandbox | `apps/web/components/review.tsx` |
+
+## Phase 15 deliverables
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | Sign-in and create-account flows that differ: signup tab, provider buttons, honest loading/error/not-set-up states | Verified-in-sandbox | `apps/web/app/login/page.tsx` |
+| 2 | Apple Sign In: state + nonce, form_post callback, JWKS id_token verification, ES256 client_secret JWT | Verified-in-sandbox | `services/core-api/src/auth/apple.ts` |
+| 3 | Auth rate limiting: 60/min auth bucket; providers/me lookups exempt | Verified-in-sandbox | `services/core-api/src/observability/rate-limit.ts` |
+| 4 | Onboarding lands in the app and offers continuing with an existing organization | Verified-in-sandbox | `apps/web/app/onboarding/page.tsx` |
+| 5 | Production sign-in setup: provider apps, Render variables, callback-URL rules, session notes | Verified-in-sandbox | `docs/runbooks/deploy-free-tier.md` |
+| 6 | ADR-0021 production sign-in decision record | Verified-in-sandbox | `docs/adr/0021-production-sign-in.md` |
 
 ## Getting started
 

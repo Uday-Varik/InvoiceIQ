@@ -25,6 +25,7 @@ immutable once accepted; a reversal is a new ADR that supersedes the old one.
 | [0018](0018-ocr-and-currency-exponents.md) | OCR with Tesseract for scans, and ISO 4217 exponents for every amount | Accepted |
 | [0019](0019-offline-eval-harness.md) | Offline evaluation harness for AI signals | Accepted |
 | [0020](0020-pluggable-extraction-providers.md) | Pluggable extraction providers | Accepted |
+| [0021](0021-production-sign-in.md) | Production sign-in: session-cookie providers (GitHub, Google, Apple, credentials) | Accepted |
 
 ## Writing a new ADR
 
