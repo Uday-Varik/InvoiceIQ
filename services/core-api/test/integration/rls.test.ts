@@ -46,13 +46,16 @@ describeDb('row-level security (real Postgres, app role)', () => {
   });
 
   it('every tenant-owned table has RLS enabled and forced', async () => {
+    // credential_users and sessions are auth infrastructure, not tenant
+    // data: they are reachable only through the owner connection (REVOKE
+    // ALL FROM invoiceiq_app in their migrations), so RLS does not apply.
     const owner = new pg.Client({ connectionString: tdb.ownerUrl });
     await owner.connect();
     try {
       const { rows } = await owner.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>(
         `SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity FROM pg_class c
           JOIN pg_namespace n ON n.oid = c.relnamespace
-         WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname NOT IN ('schema_migrations', 'credential_users') ORDER BY c.relname`,
+         WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname NOT IN ('schema_migrations', 'credential_users', 'sessions') ORDER BY c.relname`,
       );
       expect(rows.map((r) => r.relname)).toEqual([
         'audit_checkpoints',
