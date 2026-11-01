@@ -87,6 +87,89 @@ export async function touchTenantUser(db: Pool, provider: string, externalId: st
   );
 }
 
+/** One identity's membership in one tenant, if it exists. */
+export async function findMembership(
+  db: Pool,
+  provider: string,
+  externalId: string,
+  tenantId: string,
+): Promise<TenantUser | undefined> {
+  const { rows } = await db.query<TenantUserRow>(
+    `SELECT * FROM tenant_users WHERE provider = $1 AND external_id = $2 AND tenant_id = $3`,
+    [provider, externalId, tenantId],
+  );
+  const row = rows[0];
+  return row ? toTenantUser(row) : undefined;
+}
+
+/** Update a membership's roles and/or owner flag. Returns the updated membership, or undefined when absent. */
+export async function updateTenantUser(
+  db: Pool,
+  tenantId: string,
+  userId: string,
+  patch: { roles?: readonly ApproverRole[]; isOwner?: boolean },
+): Promise<TenantUser | undefined> {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  if (patch.roles !== undefined) {
+    params.push(patch.roles);
+    sets.push(`roles = $${params.length}`);
+  }
+  if (patch.isOwner !== undefined) {
+    params.push(patch.isOwner);
+    sets.push(`is_owner = $${params.length}`);
+  }
+  if (sets.length === 0) return undefined;
+  params.push(tenantId, userId);
+  const { rows } = await db.query<TenantUserRow>(
+    `UPDATE tenant_users SET ${sets.join(', ')}, last_used_at = now() WHERE tenant_id = $${params.length - 1} AND id = $${params.length} RETURNING *`,
+    params,
+  );
+  const row = rows[0];
+  return row ? toTenantUser(row) : undefined;
+}
+
+/**
+ * Membership-change guardrails, as pure decisions over the current
+ * member list so they can be tested without a database:
+ * - a tenant must always keep at least one owner;
+ * - nobody may remove or demote the last owner, including themself;
+ * - nobody may strip their own last role or owner flag and lock
+ *   themselves out of managing the tenant.
+ * Returns an error message when the change is forbidden, else undefined.
+ */
+export function checkMemberChange(
+  members: readonly TenantUser[],
+  change: {
+    readonly targetId: string;
+    readonly callerId: string;
+    readonly nextRoles?: readonly ApproverRole[] | undefined;
+    readonly nextIsOwner?: boolean | undefined;
+    readonly remove?: boolean | undefined;
+  },
+): string | undefined {
+  const target = members.find((m) => m.id === change.targetId);
+  if (!target) return 'member not found';
+  const owners = members.filter((m) => m.isOwner);
+  const lastOwner = owners.length === 1 && owners[0]?.id === target.id;
+  if (change.remove === true) {
+    if (lastOwner) return 'a tenant must keep at least one owner';
+    return undefined;
+  }
+  if (change.nextIsOwner === false && lastOwner) {
+    return 'a tenant must keep at least one owner';
+  }
+  if (change.targetId === change.callerId) {
+    if (change.nextRoles !== undefined && change.nextRoles.length === 0) {
+      return 'you cannot remove all of your own roles';
+    }
+    if (change.nextIsOwner === false && target.isOwner && owners.length === 1) {
+      return 'a tenant must keep at least one owner';
+    }
+  }
+  return undefined;
+}
+
 /** List users in a tenant (bypasses RLS — uses owner pool). */
 export async function listTenantUsers(db: Pool, tenantId: string): Promise<TenantUser[]> {
   const { rows } = await db.query<TenantUserRow>(

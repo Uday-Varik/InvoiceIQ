@@ -9,7 +9,10 @@ export function AuthNotice() {
   if (me.authMode === 'github') {
     return (
       <span className="auth-notice">
-        <span className="small">{me.userId}</span>
+        <span className="small">
+          {me.userId}
+          {me.roles.length > 0 ? ` · ${me.roles.join(', ')}` : ''}
+        </span>
         <button
           className="btn-link small"
           onClick={async () => {

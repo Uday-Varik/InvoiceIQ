@@ -3,6 +3,7 @@ import type { Pool } from 'pg';
 import type { ApproverRole } from './auth.js';
 import { findUserTenants, touchTenantUser } from '../tenants/store.js';
 import {
+  hashClientIp,
   listSessions,
   readSessionToken,
   revokeAllSessions,
@@ -13,6 +14,7 @@ import {
   sessionSetCookie,
   verifySessionToken,
 } from './session.js';
+import { recordAuthEvent } from './audit.js';
 
 /**
  * Session routes. These belong to session mode as a whole, not to any one
@@ -72,6 +74,14 @@ export function registerSessionRoutes(app: FastifyInstance, opts: SessionRoutesO
     await touchTenantUser(pool, current.provider, current.externalId, tenantId);
     const rotated = await rotateSession(pool, token, { tenantId, roles: target.roles });
     if (!rotated) return reply.code(401).send({ error: 'session expired' });
+    await recordAuthEvent(pool, {
+      tenantId,
+      provider: current.provider,
+      externalId: current.externalId,
+      login: current.login,
+      event: 'tenant_switched',
+      ipHash: hashClientIp(req.ip),
+    });
     void reply.header('set-cookie', sessionSetCookie(rotated.token, secure));
     return { ok: true, tenantId };
   });
@@ -89,6 +99,15 @@ export function registerSessionRoutes(app: FastifyInstance, opts: SessionRoutesO
           } else {
             await revokeSessionToken(pool, token);
           }
+          await recordAuthEvent(pool, {
+            tenantId: session.tenantId,
+            provider: session.provider,
+            externalId: session.externalId,
+            login: session.login,
+            event: 'logout',
+            detail: { all: body?.all ?? false },
+            ipHash: hashClientIp(req.ip),
+          });
         }
       }
     }
@@ -123,6 +142,15 @@ export function registerSessionRoutes(app: FastifyInstance, opts: SessionRoutesO
     if (!session) return reply.code(401).send({ error: 'not authenticated' });
     const revoked = await revokeSessionById(pool, session.provider, session.externalId, req.params.sessionId);
     if (!revoked) return reply.code(404).send({ error: 'not found', detail: 'no such live session' });
+    await recordAuthEvent(pool, {
+      tenantId: session.tenantId,
+      provider: session.provider,
+      externalId: session.externalId,
+      login: session.login,
+      event: 'session_revoked',
+      detail: { sessionId: req.params.sessionId },
+      ipHash: hashClientIp(req.ip),
+    });
     return { ok: true };
   });
 
@@ -131,6 +159,15 @@ export function registerSessionRoutes(app: FastifyInstance, opts: SessionRoutesO
     const session = await currentSession(req);
     if (!session) return reply.code(401).send({ error: 'not authenticated' });
     const count = await revokeAllSessions(pool, session.provider, session.externalId, session.id);
+    await recordAuthEvent(pool, {
+      tenantId: session.tenantId,
+      provider: session.provider,
+      externalId: session.externalId,
+      login: session.login,
+      event: 'session_revoked',
+      detail: { others: true, revoked: count },
+      ipHash: hashClientIp(req.ip),
+    });
     return { ok: true, revoked: count };
   });
 }

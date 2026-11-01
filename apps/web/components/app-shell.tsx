@@ -75,7 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           ))}
         </nav>
-        <div className="hidden border-t border-navy-line p-3 text-sm md:block">
+        <div className="border-t border-navy-line p-3 text-sm">
           <AuthNotice />
         </div>
       </aside>

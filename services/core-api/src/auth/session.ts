@@ -180,6 +180,21 @@ export async function revokeAllSessions(
   return rowCount ?? 0;
 }
 
+/** Revoke every live session for one identity within one tenant, e.g. after a role change or removal there. Other tenants' sessions are untouched. */
+export async function revokeSessionsForTenant(
+  db: SessionDb,
+  provider: string,
+  externalId: string,
+  tenantId: string,
+): Promise<number> {
+  const { rowCount } = await db.query(
+    `UPDATE sessions SET revoked_at = now()
+     WHERE provider = $1 AND external_id = $2 AND tenant_id = $3 AND revoked_at IS NULL AND expires_at > now()`,
+    [provider, externalId, tenantId],
+  );
+  return rowCount ?? 0;
+}
+
 export async function listSessions(db: SessionDb, provider: string, externalId: string): Promise<SessionRecord[]> {
   const { rows } = await db.query<SessionRow>(
     `SELECT * FROM sessions WHERE provider = $1 AND external_id = $2 AND revoked_at IS NULL AND expires_at > now() ORDER BY last_seen_at DESC`,
@@ -244,6 +259,8 @@ export function sessionAuthenticator(db: SessionDb | undefined): Authenticator {
         tenantId: record.tenantId,
         userId: record.login,
         roles: [...record.roles],
+        provider: record.provider,
+        externalId: record.externalId,
       };
     },
   };
