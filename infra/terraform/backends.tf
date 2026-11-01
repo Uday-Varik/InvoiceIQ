@@ -28,11 +28,11 @@ locals {
       GOOGLE_CALLBACK_URL  = { value = var.session_auth.google_callback_url }
     } : {},
     var.session_auth.apple_client_id != null ? {
-      APPLE_CLIENT_ID     = { value = var.session_auth.apple_client_id }
-      APPLE_TEAM_ID       = { value = var.session_auth.apple_team_id }
-      APPLE_KEY_ID        = { value = var.session_auth.apple_key_id }
-      APPLE_PRIVATE_KEY   = { value = var.session_auth.apple_private_key }
-      APPLE_CALLBACK_URL  = { value = var.session_auth.apple_callback_url }
+      APPLE_CLIENT_ID    = { value = var.session_auth.apple_client_id }
+      APPLE_TEAM_ID      = { value = var.session_auth.apple_team_id }
+      APPLE_KEY_ID       = { value = var.session_auth.apple_key_id }
+      APPLE_PRIVATE_KEY  = { value = var.session_auth.apple_private_key }
+      APPLE_CALLBACK_URL = { value = var.session_auth.apple_callback_url }
     } : {},
     var.session_auth.credentials_enabled ? {
       CREDENTIALS_AUTH_ENABLED = { value = "true" }
