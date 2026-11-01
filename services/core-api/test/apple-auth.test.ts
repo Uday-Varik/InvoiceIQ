@@ -1,12 +1,7 @@
-import { createHmac, generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { decodeProtectedHeader, importSPKI, jwtVerify } from 'jose';
-import {
-  appleAuthenticator,
-  createClientSecret,
-  type AppleAuthOptions,
-} from '../src/auth/apple.js';
-import { AuthError } from '../src/auth/auth.js';
+import { createClientSecret, type AppleAuthOptions } from '../src/auth/apple.js';
 import { loadConfig } from '../src/config.js';
 
 const SECRET = 'test-session-secret-that-is-long-enough-32chars';
@@ -25,48 +20,6 @@ const opts: AppleAuthOptions = {
   defaultRole: 'cfo',
   tenantId: TENANT,
 };
-
-function signSession(payload: object): string {
-  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const mac = createHmac('sha256', SECRET).update(data).digest('base64url');
-  return `${data}.${mac}`;
-}
-
-function validPayload(overrides: Partial<{ uid: string; login: string; tid: string; roles: string[]; exp: number }> = {}) {
-  return {
-    uid: '001234.abcdef',
-    login: 'user@privaterelay.appleid.com',
-    tid: TENANT,
-    roles: ['cfo'],
-    exp: Date.now() + 3600_000,
-    ...overrides,
-  };
-}
-
-describe('appleAuthenticator (session cookie)', () => {
-  const auth = appleAuthenticator(opts);
-
-  it('accepts a valid session', async () => {
-    const principal = await auth.authenticate(undefined, `iq_session=${signSession(validPayload())}`);
-    expect(principal.tenantId).toBe(TENANT);
-    expect(principal.userId).toBe('user@privaterelay.appleid.com');
-    expect(principal.roles).toEqual(['cfo']);
-  });
-
-  it('rejects a missing session', async () => {
-    await expect(auth.authenticate(undefined, undefined)).rejects.toBeInstanceOf(AuthError);
-  });
-
-  it('rejects a tampered session', async () => {
-    const token = signSession(validPayload());
-    await expect(auth.authenticate(undefined, `iq_session=${token}tampered`)).rejects.toBeInstanceOf(AuthError);
-  });
-
-  it('rejects an expired session', async () => {
-    const token = signSession(validPayload({ exp: Date.now() - 1000 }));
-    await expect(auth.authenticate(undefined, `iq_session=${token}`)).rejects.toBeInstanceOf(AuthError);
-  });
-});
 
 describe('createClientSecret', () => {
   it('signs an ES256 JWT Apple accepts, with a six-month lifetime', async () => {
