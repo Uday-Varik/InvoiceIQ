@@ -6,6 +6,7 @@ import { registerSessionRoutes } from './auth/session-routes.js';
 import { registerGoogleAuthRoutes, type GoogleAuthOptions } from './auth/google.js';
 import { registerAppleAuthRoutes, type AppleAuthOptions } from './auth/apple.js';
 import { registerCredentialsAuthRoutes, type CredentialsAuthOptions } from './auth/credentials.js';
+import { logMailer } from './auth/mailer.js';
 import { sessionAuthenticator } from './auth/session.js';
 import { parseCheckpointKey, type Config } from './config.js';
 import { checkpointSigner } from './audit/checkpoints.js';
@@ -70,6 +71,8 @@ export function credentialsAuthOptionsFor(config: Config, ownerPool?: pg.Pool): 
     defaultRole: config.GITHUB_DEFAULT_ROLE,
     tenantId: DEMO_TENANT_ID,
     ownerPool,
+    mailer: logMailer({ from: config.MAILER_FROM }),
+    appBaseUrl: config.FRONTEND_URL,
   };
 }
 
