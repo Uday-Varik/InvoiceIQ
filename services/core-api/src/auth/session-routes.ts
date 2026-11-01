@@ -66,10 +66,10 @@ export function registerSessionRoutes(app: FastifyInstance, opts: SessionRoutesO
     if (!tenantId) return reply.code(400).send({ error: 'tenantId required' });
     const current = await verifySessionToken(pool, token);
     if (!current) return reply.code(401).send({ error: 'session expired' });
-    const memberships = await findUserTenants(ownerPool, current.provider, current.externalId);
+    const memberships = await findUserTenants(pool, current.provider, current.externalId);
     const target = memberships.find((m) => m.tenantId === tenantId);
     if (!target) return reply.code(403).send({ error: 'not a member of that tenant' });
-    await touchTenantUser(ownerPool, current.provider, current.externalId, tenantId);
+    await touchTenantUser(pool, current.provider, current.externalId, tenantId);
     const rotated = await rotateSession(pool, token, { tenantId, roles: target.roles });
     if (!rotated) return reply.code(401).send({ error: 'session expired' });
     void reply.header('set-cookie', sessionSetCookie(rotated.token, secure));

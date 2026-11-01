@@ -46,7 +46,7 @@ function fakeDb(session: Row | undefined): SessionDb {
     query: (async (sql: string, params?: unknown[]) => {
       if (typeof sql === 'string' && sql.includes('FROM sessions')) {
         const hash = params?.[0];
-        if (session && hash === hashSessionToken('valid-token') && !session.revoked_at && session.expires_at > new Date()) {
+        if (session && hash === hashSessionToken('valid-session-token-123') && !session.revoked_at && session.expires_at > new Date()) {
           return { rows: [session] };
         }
         return { rows: [] };
@@ -63,7 +63,7 @@ describe('sessionAuthenticator (server-side sessions)', () => {
 
   it('accepts a live session token', async () => {
     const auth = sessionAuthenticator(fakeDb(row()));
-    const principal = await auth.authenticate(undefined, 'iq_session=valid-token');
+    const principal = await auth.authenticate(undefined, 'iq_session=valid-session-token-123');
     expect(principal.tenantId).toBe(TENANT);
     expect(principal.userId).toBe('testuser');
     expect(principal.roles).toEqual(['cfo']);
@@ -86,16 +86,16 @@ describe('sessionAuthenticator (server-side sessions)', () => {
 
   it('rejects an expired session', async () => {
     const auth = sessionAuthenticator(fakeDb(row({ expires_at: new Date(Date.now() - 1000) })));
-    await expect(auth.authenticate(undefined, 'iq_session=valid-token')).rejects.toThrow(AuthError);
+    await expect(auth.authenticate(undefined, 'iq_session=valid-session-token-123')).rejects.toThrow(AuthError);
   });
 
   it('rejects a revoked session', async () => {
     const auth = sessionAuthenticator(fakeDb(row({ revoked_at: new Date() })));
-    await expect(auth.authenticate(undefined, 'iq_session=valid-token')).rejects.toThrow(AuthError);
+    await expect(auth.authenticate(undefined, 'iq_session=valid-session-token-123')).rejects.toThrow(AuthError);
   });
 
   it('rejects when there is no session database', async () => {
     const auth = sessionAuthenticator(undefined);
-    await expect(auth.authenticate(undefined, 'iq_session=valid-token')).rejects.toThrow(AuthError);
+    await expect(auth.authenticate(undefined, 'iq_session=valid-session-token-123')).rejects.toThrow(AuthError);
   });
 });

@@ -34,7 +34,7 @@ export interface SessionIdentity {
   readonly login: string;
   readonly tenantId: string;
   readonly roles: readonly ApproverRole[];
-  readonly mfaVerified?: boolean;
+  readonly mfaVerified?: boolean | undefined;
 }
 
 export interface SessionRecord extends SessionIdentity {
@@ -103,7 +103,7 @@ export function hashClientIp(ip: string | undefined): string | undefined {
 export async function createSession(
   db: SessionDb,
   identity: SessionIdentity,
-  opts: { userAgent?: string; ipHash?: string; ttlMs?: number } = {},
+  opts: { userAgent?: string | undefined; ipHash?: string | undefined; ttlMs?: number } = {},
 ): Promise<{ record: SessionRecord; token: string }> {
   const token = newSessionToken();
   const expiresAt = new Date(Date.now() + (opts.ttlMs ?? SESSION_TTL_MS));
