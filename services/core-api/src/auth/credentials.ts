@@ -2,7 +2,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import type { ApproverRole } from './auth.js';
-import { signSession, type SessionOptions } from './session.js';
+import { createSession, hashClientIp, sessionSetCookie, type SessionOptions } from './session.js';
 import { findUserTenants, upsertTenantUser } from '../tenants/store.js';
 
 export interface CredentialsAuthOptions extends SessionOptions {
@@ -29,8 +29,6 @@ function verifyPassword(password: string, stored: string): boolean {
 
 export function registerCredentialsAuthRoutes(app: FastifyInstance, opts: CredentialsAuthOptions): void {
   const secure = process.env['NODE_ENV'] === 'production';
-  const cookieOpts = `Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
-  const sessionMaxAge = 7 * 24 * 60 * 60;
 
   app.post<{ Body: { email?: string; password?: string } }>('/auth/credentials/register', async (req, reply) => {
     const body = req.body as { email?: string; password?: string } | undefined;
@@ -74,19 +72,19 @@ export function registerCredentialsAuthRoutes(app: FastifyInstance, opts: Creden
       roles: [opts.defaultRole],
     });
 
-    const session = signSession(
+    const { token } = await createSession(
+      opts.ownerPool,
       {
-        uid: userId,
-        login: email,
-        tid: membership.tenantId,
-        roles: [...membership.roles],
         provider: 'credentials',
-        exp: Date.now() + sessionMaxAge * 1000,
+        externalId: userId,
+        login: email,
+        tenantId: membership.tenantId,
+        roles: [...membership.roles],
       },
-      opts.sessionSecret,
+      { userAgent: req.headers['user-agent'], ipHash: hashClientIp(req.ip) },
     );
 
-    void reply.header('set-cookie', `iq_session=${session}; ${cookieOpts}; Max-Age=${sessionMaxAge}`);
+    void reply.header('set-cookie', sessionSetCookie(token, secure));
     return { ok: true, login: email };
   });
 
@@ -123,19 +121,19 @@ export function registerCredentialsAuthRoutes(app: FastifyInstance, opts: Creden
       roles = first.roles;
     }
 
-    const session = signSession(
+    const { token } = await createSession(
+      opts.ownerPool,
       {
-        uid: user.id,
-        login: user.email,
-        tid,
-        roles: [...roles],
         provider: 'credentials',
-        exp: Date.now() + sessionMaxAge * 1000,
+        externalId: user.id,
+        login: user.email,
+        tenantId: tid,
+        roles: [...roles],
       },
-      opts.sessionSecret,
+      { userAgent: req.headers['user-agent'], ipHash: hashClientIp(req.ip) },
     );
 
-    void reply.header('set-cookie', `iq_session=${session}; ${cookieOpts}; Max-Age=${sessionMaxAge}`);
+    void reply.header('set-cookie', sessionSetCookie(token, secure));
     return { ok: true, login: user.email };
   });
 }

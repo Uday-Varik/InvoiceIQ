@@ -2,11 +2,10 @@ import { randomBytes } from 'node:crypto';
 import { parse as parseQueryString } from 'node:querystring';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT } from 'jose';
-import type { Authenticator } from './auth.js';
-import { AuthError, type ApproverRole } from './auth.js';
+import type { ApproverRole } from './auth.js';
 import type { Pool } from 'pg';
 import { findUserTenants, upsertTenantUser, touchTenantUser } from '../tenants/store.js';
-import { SESSION_COOKIE, signSession, verifySession, parseCookie } from './session.js';
+import { createSession, hashClientIp, parseCookie, sessionSetCookie } from './session.js';
 
 const STATE_COOKIE = 'iq_apple_oauth_state';
 const NONCE_COOKIE = 'iq_apple_oauth_nonce';
@@ -26,23 +25,6 @@ export interface AppleAuthOptions {
   readonly defaultRole: ApproverRole;
   readonly tenantId: string;
   readonly ownerPool?: Pool | undefined;
-}
-
-export function appleAuthenticator(opts: AppleAuthOptions): Authenticator {
-  return {
-    mode: 'github' as Authenticator['mode'],
-    async authenticate(_authorization, cookie) {
-      const token = parseCookie(cookie, SESSION_COOKIE);
-      if (!token) throw new AuthError('not authenticated: no session');
-      const payload = verifySession(token, opts.sessionSecret);
-      if (!payload) throw new AuthError('invalid or expired session');
-      return {
-        tenantId: payload.tid,
-        userId: payload.login,
-        roles: [...payload.roles],
-      };
-    },
-  };
 }
 
 /**
@@ -128,8 +110,6 @@ function formValue(value: string | string[] | undefined): string | undefined {
 
 export function registerAppleAuthRoutes(app: FastifyInstance, opts: AppleAuthOptions): void {
   const secure = process.env['NODE_ENV'] === 'production';
-  const cookieOpts = `Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
-  const sessionMaxAge = 7 * 24 * 60 * 60;
 
   // Apple posts the callback as application/x-www-form-urlencoded (form_post).
   // No form-body plugin is installed, so parse it with the Node querystring
@@ -224,19 +204,20 @@ export function registerAppleAuthRoutes(app: FastifyInstance, opts: AppleAuthOpt
         }
       }
 
-      const session = signSession(
+      if (!opts.ownerPool) throw new Error('sessions require database');
+      const { token } = await createSession(
+        opts.ownerPool,
         {
-          uid: appleUser.sub,
-          login: appleUser.email ?? appleUser.sub,
-          tid,
-          roles: [...roles],
           provider: 'apple',
-          exp: Date.now() + sessionMaxAge * 1000,
+          externalId: appleUser.sub,
+          login: appleUser.email ?? appleUser.sub,
+          tenantId: tid,
+          roles: [...roles],
         },
-        opts.sessionSecret,
+        { userAgent: req.headers['user-agent'], ipHash: hashClientIp(req.ip) },
       );
 
-      void reply.header('set-cookie', `${SESSION_COOKIE}=${session}; ${cookieOpts}; Max-Age=${sessionMaxAge}`);
+      void reply.header('set-cookie', sessionSetCookie(token, secure));
       return reply.redirect(redirectTo);
     },
   );

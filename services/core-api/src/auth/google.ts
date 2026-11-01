@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import type { ApproverRole } from './auth.js';
 import { findUserTenants, upsertTenantUser, touchTenantUser } from '../tenants/store.js';
-import { signSession, type SessionOptions } from './session.js';
+import { createSession, hashClientIp, sessionSetCookie, type SessionOptions } from './session.js';
 
 export interface GoogleAuthOptions extends SessionOptions {
   readonly clientId: string;
@@ -56,8 +56,6 @@ function requestOrigin(req: FastifyRequest): string {
 
 export function registerGoogleAuthRoutes(app: FastifyInstance, opts: GoogleAuthOptions): void {
   const secure = process.env['NODE_ENV'] === 'production';
-  const cookieOpts = `Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
-  const sessionMaxAge = 7 * 24 * 60 * 60;
 
   app.get('/auth/google', async (req, reply) => {
     const state = randomBytes(24).toString('base64url');
@@ -128,19 +126,20 @@ export function registerGoogleAuthRoutes(app: FastifyInstance, opts: GoogleAuthO
         }
       }
 
-      const session = signSession(
+      if (!opts.ownerPool) throw new Error('sessions require database');
+      const { token } = await createSession(
+        opts.ownerPool,
         {
-          uid: googleUser.id,
-          login: googleUser.email,
-          tid,
-          roles: [...roles],
           provider: 'google',
-          exp: Date.now() + sessionMaxAge * 1000,
+          externalId: googleUser.id,
+          login: googleUser.email,
+          tenantId: tid,
+          roles: [...roles],
         },
-        opts.sessionSecret,
+        { userAgent: req.headers['user-agent'], ipHash: hashClientIp(req.ip) },
       );
 
-      void reply.header('set-cookie', `iq_session=${session}; ${cookieOpts}; Max-Age=${sessionMaxAge}`);
+      void reply.header('set-cookie', sessionSetCookie(token, secure));
       return reply.redirect(redirectTo);
     },
   );

@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { httpAiClient, type AiClient } from './clients/ai-service.js';
 import { demoAuthenticator, oidcAuthenticator, remoteKeys, type Authenticator } from './auth/auth.js';
-import { githubAuthenticator, registerGitHubAuthRoutes, type GitHubAuthOptions } from './auth/github.js';
+import { registerGitHubAuthRoutes, type GitHubAuthOptions } from './auth/github.js';
+import { registerSessionRoutes } from './auth/session-routes.js';
 import { registerGoogleAuthRoutes, type GoogleAuthOptions } from './auth/google.js';
 import { registerAppleAuthRoutes, type AppleAuthOptions } from './auth/apple.js';
 import { registerCredentialsAuthRoutes, type CredentialsAuthOptions } from './auth/credentials.js';
@@ -83,12 +84,9 @@ export function enabledProviders(config: Config): string[] {
   return providers;
 }
 
-export function authenticatorFor(config: Config): Authenticator {
+export function authenticatorFor(config: Config, ownerPool?: pg.Pool): Authenticator {
   if (config.AUTH_MODE === 'demo') return demoAuthenticator(DEMO_PRINCIPAL);
-  if (config.AUTH_MODE === 'github') {
-    if (config.SESSION_SECRET) return sessionAuthenticator(config.SESSION_SECRET);
-    return githubAuthenticator(githubAuthOptionsFor(config));
-  }
+  if (config.AUTH_MODE === 'github') return sessionAuthenticator(ownerPool);
   if (config.OIDC_ISSUER && config.OIDC_AUDIENCE && config.OIDC_JWKS_URL) {
     return oidcAuthenticator({
       issuer: config.OIDC_ISSUER,
@@ -220,7 +218,7 @@ export async function startRuntime(config: Config): Promise<Runtime> {
       auth: { perMinute: config.RATE_LIMIT_AUTH_PER_MINUTE },
     }),
     aiPing: () => (ai.ping ? ai.ping() : Promise.resolve(false)),
-    auth: authenticatorFor(config),
+    auth: authenticatorFor(config, ownerPool),
     maxUploadBytes: config.MAX_UPLOAD_BYTES,
     checkpointSigner: signer,
     deps: { db, worker: { kick: () => worker.kick() } },
@@ -240,6 +238,7 @@ export async function startRuntime(config: Config): Promise<Runtime> {
   app.get('/auth/providers', async () => ({ providers, authMode: config.AUTH_MODE }));
   if (config.AUTH_MODE === 'github') {
     registerGitHubAuthRoutes(app, githubAuthOptionsFor(config, ownerPool));
+    registerSessionRoutes(app, { ownerPool });
     if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) {
       registerGoogleAuthRoutes(app, googleAuthOptionsFor(config, ownerPool));
     }
