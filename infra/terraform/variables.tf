@@ -56,14 +56,42 @@ variable "vercel_team" {
 }
 
 variable "auth_mode" {
-  description = "demo: one shared open tenant (the public demo). oidc: real users from an identity provider."
+  description = "demo: one shared open tenant (the public demo). oidc: real users from an identity provider. github: session mode — real accounts via GitHub, Google, Apple, and/or email/password, with server-side sessions (ADR-0022)."
   type        = string
   default     = "demo"
 
   validation {
-    condition     = contains(["demo", "oidc"], var.auth_mode)
-    error_message = "auth_mode must be demo or oidc."
+    condition     = contains(["demo", "oidc", "github"], var.auth_mode)
+    error_message = "auth_mode must be demo, oidc, or github."
   }
+}
+
+variable "frontend_url" {
+  description = "Public origin of the web app, e.g. https://invoice-iq-web.vercel.app (no trailing slash). Required when auth_mode is github: OAuth callbacks and post-login redirects point here."
+  type        = string
+  default     = null
+}
+
+variable "session_auth" {
+  description = "Provider credentials for auth_mode = github (session mode). Required when auth_mode is github. Each provider is optional, but at least one provider (or credentials auth) must be configured or nobody can sign in. Secrets stay in Terraform state: treat state as sensitive."
+  type = object({
+    github_client_id     = optional(string)
+    github_client_secret = optional(string)
+    github_callback_url  = optional(string)
+    google_client_id     = optional(string)
+    google_client_secret = optional(string)
+    google_callback_url  = optional(string)
+    apple_client_id      = optional(string)
+    apple_team_id        = optional(string)
+    apple_key_id         = optional(string)
+    apple_private_key    = optional(string)
+    apple_callback_url   = optional(string)
+    credentials_enabled  = optional(bool, false)
+    session_secret       = optional(string)
+    mfa_secret_key       = optional(string)
+  })
+  default   = null
+  sensitive = true
 }
 
 variable "oidc" {

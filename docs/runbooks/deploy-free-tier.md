@@ -132,21 +132,34 @@ In the Vercel project settings, turn Deployment Protection off (or it will
 keep asking every visitor to log in to Vercel before the app's own sign-in
 can appear). This is required for any public sign-in, in any mode.
 
-### 4.5 Session and abuse notes
+### 4.5 Session and abuse notes (authentication v2, ADR-0022)
 
-- Sessions are HMAC-signed cookies (`iq_session`, 7 days, HttpOnly,
-  SameSite=Lax, Secure in production). The payload is signed, not
-  encrypted; it carries the login label, tenant, and roles.
+- Sessions are server-side rows keyed by a hash of an opaque token.
+  The cookie (`iq_session`, 7 days, HttpOnly, SameSite=Lax, Secure in
+  production) carries no identity. Any session can be revoked from
+  Account & security, and role changes end the affected tenant's
+  sessions.
+- Rotating `SESSION_SECRET` does **not** sign users out. It only signs
+  the short-lived MFA step-up tokens. Rotating `MFA_SECRET_KEY`
+  without re-encrypting TOTP secrets locks every MFA user out; there
+  is no automated re-encryption, so rotation means users re-enroll.
+  If `MFA_SECRET_KEY` is unset, TOTP secrets fall back to
+  `SESSION_SECRET` with a startup warning.
 - Sign-in, sign-up, and OAuth callbacks are throttled at 60 attempts per
   minute per address (`RATE_LIMIT_AUTH_PER_MINUTE`). The limiter is
   in-memory per instance; a multi-instance deployment needs a shared
   store.
+- Email/password verification and reset links are only logged today:
+  the log mailer writes the full link to the server log and sends no
+  email. Do not enable `CREDENTIALS_AUTH_ENABLED` for real users
+  until a transactional mail provider is wired into the `Mailer`
+  seam.
 - Demo mode stays available via `AUTH_MODE=demo`. The persona bar and the
   shared tenant exist only there; flipping to GitHub mode removes the
   demo shortcut.
-- Terraform cannot enable session mode: its `auth_mode` variable only
-  knows demo and OIDC, with no provider variables. Manual Render setup
-  above is the only route until Terraform gains them.
+- Terraform can now enable session mode (`auth_mode = "github"` with
+  `session_auth` and `frontend_url`); it has not been applied to the
+  live deployment, which was set up through dashboards.
 
 ### 4.6 Verify it
 
@@ -159,6 +172,32 @@ can appear). This is required for any public sign-in, in any mode.
    a wrong password shows the form error, not a redirect loop.
 4. Apple (if configured): first sign-in may ask for name/email sharing;
    a private-relay email is normal and works as the login label.
+
+## 5. Operating authentication v2
+
+- **Sessions:** Account & security lists every active session, with
+  per-session revocation and "end all other sessions". A session
+  lasts 7 days and is a snapshot of roles at sign-in; changing a
+  member's roles or removing them ends their sessions in that tenant
+  only.
+- **Two-factor authentication:** per user, optional, from Account &
+  security. Setup shows the secret once and ten single-use recovery
+  codes once — neither is shown again. Disabling needs a current code
+  or a recovery code. If a user loses both, an admin cannot reset MFA
+  from the UI: remove and re-add the member, or clear the `user_mfa`
+  row from the owner connection, and have them set it up again.
+- **Members and roles:** tenant admins manage members from the admin
+  UI or `PATCH /v1/admin/tenants/:tenantId/users/:userId`. A tenant
+  always keeps at least one owner; the last owner cannot be removed
+  or demoted, including by themself. Roles follow the permission
+  matrix in `src/auth/permissions.ts`; a tenant owner holds every
+  permission in their tenant.
+- **Audit trail:** every auth event is recorded in `auth_events`
+  (owner connection only). Tenant admins read it at
+  `GET /v1/admin/tenants/:tenantId/auth-events`.
+- **Secrets:** `SESSION_SECRET` rotation is safe (see §4.5).
+  `MFA_SECRET_KEY` rotation is not: it requires re-enrollment. Never
+  paste secret values in chat, issues, or docs.
 
 ## Cold starts
 
