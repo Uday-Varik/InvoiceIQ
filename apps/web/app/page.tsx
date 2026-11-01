@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowRight,
+  ArrowUp,
   Building2,
   Check,
   Copy,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { Reveal } from '../components/landing-motion';
 
 const STATS = [
   { value: '12', label: 'invoice fields extracted by AI, including PO number, payment terms and tax ID' },
@@ -45,42 +47,42 @@ const STEPS = [
   },
 ];
 
-const FEATURES: { icon: LucideIcon; title: string; body: string; span: string }[] = [
+const FEATURES: { icon: LucideIcon; title: string; body: string; span: boolean }[] = [
   {
     icon: FileSearch,
     title: 'AI extraction that shows its work',
     body: 'Every extracted field carries a confidence score. Anything uncertain goes to a reviewer, with the source text beside it.',
-    span: 'md:col-span-2',
+    span: true,
   },
   {
     icon: Copy,
     title: 'Duplicate detection',
     body: 'Invoices that match an earlier one are flagged before they can reach a payment run.',
-    span: '',
+    span: false,
   },
   {
     icon: Landmark,
     title: 'Bank-change quarantine',
     body: 'When a vendor’s bank details change, payments to that vendor are held until someone verifies the change.',
-    span: '',
+    span: false,
   },
   {
     icon: Building2,
     title: 'Multi-tier approvals',
     body: 'Route by amount, vendor or category. Clerks capture, managers approve, controllers release payment runs.',
-    span: '',
+    span: false,
   },
   {
     icon: Wallet,
     title: 'Payment runs',
     body: 'Batch approved invoices into a run and follow it from queued through execution to reconciliation.',
-    span: '',
+    span: false,
   },
   {
     icon: ScrollText,
     title: 'Tamper-evident audit log',
     body: 'Every action is hash-chained to the one before it. Editing history breaks the chain, so auditors can verify it.',
-    span: 'md:col-span-2',
+    span: true,
   },
 ];
 
@@ -91,27 +93,40 @@ const ROLES = [
   { role: 'CFO', body: 'Sees spend, approval turnaround and audit status without digging through inboxes.' },
 ];
 
+const SAFETY = [
+  ['Type system', 'AI reason codes accept exactly one outcome: HOLD. Any other outcome fails to compile.'],
+  ['Lifecycle gate', 'The state machine refuses any AI-driven transition except into HOLD. Tests replay 200 AI-driven invoices and none reach payment.'],
+  ['API contract', 'The signal schema allows only HOLD in OpenAPI, Zod and Pydantic, so the contract cannot drift.'],
+  ['Import rules', 'The AI service has no database credentials and cannot load database drivers. CI enforces that boundary.'],
+];
+
+const MARQUEE = [
+  'Three-way match',
+  'Duplicate detection',
+  'Bank-change quarantine',
+  'Hash-chained audit',
+  'AI can only hold',
+  'Multi-tier approvals',
+];
+
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0a1d3b]/85 text-white backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5">
-          <Link href="/" aria-label="InvoiceIQ home" className="shrink-0">
-            <Image src="/brand/logo-light.png" alt="InvoiceIQ" width={800} height={267} className="h-7 w-auto" priority />
+    <div className="mx-landing">
+      <header className="mx-header">
+        <div className="mx-wrap mx-header-inner">
+          <Link href="/" aria-label="InvoiceIQ home" className="mx-brand">
+            <Image src="/brand/logo-light.png" alt="InvoiceIQ" width={800} height={267} className="mx-logo" priority />
           </Link>
-          <nav aria-label="Primary" className="hidden items-center gap-7 text-sm text-white/70 md:flex">
-            <a href="#product" className="transition-colors hover:text-white">Product</a>
-            <a href="#how-it-works" className="transition-colors hover:text-white">How it works</a>
-            <a href="#safety" className="transition-colors hover:text-white">Safety</a>
+          <nav aria-label="Primary" className="mx-nav">
+            <a href="#product"><span className="mx-nav-num">01</span>Product</a>
+            <a href="#how-it-works"><span className="mx-nav-num">02</span>How it works</a>
+            <a href="#safety"><span className="mx-nav-num">03</span>Safety</a>
           </nav>
-          <div className="flex items-center gap-2">
-            <Link href="/login" className="rounded-md px-3 py-1.5 text-sm text-white/80 transition-colors hover:text-white">
+          <div className="mx-header-actions">
+            <Link href="/login" className="mx-signin">
               Sign in
             </Link>
-            <Link
-              href="/login?tab=signup"
-              className="rounded-md bg-[#2dd4bf] px-3.5 py-1.5 text-sm font-semibold text-[#052e2b] transition-colors hover:bg-[#5eead4]"
-            >
+            <Link href="/login?tab=signup" className="mx-cta-pill">
               Get started
             </Link>
           </div>
@@ -119,48 +134,42 @@ export default function LandingPage() {
       </header>
 
       <main id="main-content">
-        <section className="relative isolate overflow-hidden bg-[#0a1d3b] text-white">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_80%_20%,rgba(45,212,191,0.22),transparent_45%),radial-gradient(circle_at_10%_90%,rgba(59,130,246,0.18),transparent_40%)]"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]"
-          />
-
-          <div className="mx-auto grid max-w-6xl items-center gap-14 px-5 pb-20 pt-16 md:pb-28 md:pt-24 lg:grid-cols-[1.05fr_0.95fr]">
-            <div>
-              <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/80">
-                <span className="size-1.5 rounded-full bg-[#2dd4bf]" />
+        <section className="mx-hero">
+          <div aria-hidden="true" className="mx-hero-glow" />
+          <div aria-hidden="true" className="mx-hero-grid" />
+          <p aria-hidden="true" className="mx-outline-word">HOLD</p>
+          <div className="mx-wrap mx-hero-inner">
+            <div className="mx-hero-copy">
+              <p className="mx-meta-row">
+                <span>Accounts payable</span>
+                <span className="mx-meta-dot" aria-hidden="true" />
+                <span>AI can only hold</span>
+              </p>
+              <p className="mx-eyebrow">
+                <span className="mx-eyebrow-dot" aria-hidden="true" />
                 AI reads. Controls decide. People approve.
               </p>
-              <h1 className="mt-6 text-4xl font-semibold leading-[1.05] tracking-tight text-balance sm:text-5xl lg:text-6xl">
-                Pay every invoice <span className="bg-linear-to-r from-[#5eead4] to-[#60a5fa] bg-clip-text text-transparent">right the first time.</span>
+              <h1 className="mx-display">
+                Pay every invoice{' '}
+                <span className="mx-display-accent">right the first time.</span>
               </h1>
-              <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/70 text-pretty">
+              <p className="mx-lede">
                 InvoiceIQ extracts every field from your invoices, matches them to purchase orders and holds anything
                 suspicious before money moves. Our AI can slow a payment down. It cannot speed one up.
               </p>
-              <div className="mt-9 flex flex-wrap items-center gap-3">
-                <Link
-                  href="/login?tab=signup"
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#2dd4bf] px-5 py-3 text-sm font-semibold text-[#052e2b] shadow-lg shadow-teal-500/20 transition-colors hover:bg-[#5eead4]"
-                >
+              <div className="mx-hero-actions">
+                <Link href="/login?tab=signup" className="mx-btn-primary">
                   Create your account
-                  <ArrowRight className="size-4" aria-hidden="true" />
+                  <ArrowRight className="mx-btn-icon" aria-hidden="true" />
                 </Link>
-                <a
-                  href="#how-it-works"
-                  className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-white/10"
-                >
+                <a href="#how-it-works" className="mx-btn-ghost">
                   See how it works
                 </a>
               </div>
-              <p className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/55">
+              <p className="mx-checks">
                 {['Duplicate detection', 'Bank-change quarantine', 'Hash-chained audit log'].map((item) => (
-                  <span key={item} className="inline-flex items-center gap-1.5">
-                    <Check className="size-3.5 text-[#2dd4bf]" aria-hidden="true" />
+                  <span key={item} className="mx-check">
+                    <Check className="mx-check-icon" aria-hidden="true" />
                     {item}
                   </span>
                 ))}
@@ -169,138 +178,153 @@ export default function LandingPage() {
 
             <HeroPanel />
           </div>
+          <p aria-hidden="true" className="mx-scroll-cue">
+            <span>Scroll</span>
+            <span className="mx-scroll-line" />
+          </p>
         </section>
 
-        <section aria-label="Key numbers" className="border-b border-border bg-card">
-          <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-px bg-border md:grid-cols-4">
-            {STATS.map((stat) => (
-              <div key={stat.value} className="bg-card px-5 py-8">
-                <dd className="text-4xl font-semibold tracking-tight tabular-nums">{stat.value}</dd>
-                <dt className="mt-2 text-sm leading-snug text-muted-foreground">{stat.label}</dt>
-              </div>
-            ))}
-          </dl>
-        </section>
-
-        <section id="how-it-works" className="scroll-mt-20 mx-auto max-w-6xl px-5 py-20 md:py-28">
-          <SectionHeading
-            eyebrow="How it works"
-            title="From a stack of PDFs to a payment run in four steps"
-            body="Each step has a clear owner and a visible result. Nothing skips a step, and nothing is hidden from the audit log."
-          />
-          <ol className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-4">
-            {STEPS.map((step, index) => (
-              <li key={step.title} className="flex flex-col bg-card p-7">
-                <div className="flex items-center justify-between">
-                  <span className="grid size-10 place-items-center rounded-lg bg-primary/10 text-primary">
-                    <step.icon className="size-5" aria-hidden="true" />
+        <div className="mx-marquee" aria-hidden="true">
+          <div className="mx-marquee-track">
+            {[0, 1].map((copy) => (
+              <span key={copy} className="mx-marquee-copy">
+                {MARQUEE.map((item) => (
+                  <span key={item} className="mx-marquee-item">
+                    {item}
+                    <span className="mx-marquee-diamond">◆</span>
                   </span>
-                  <span className="font-mono text-xs text-muted-foreground">0{index + 1}</span>
-                </div>
-                <h3 className="mt-6 text-lg font-semibold">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{step.body}</p>
-              </li>
+                ))}
+              </span>
             ))}
-          </ol>
+          </div>
+        </div>
+
+        <section aria-label="Key numbers" className="mx-section mx-stats">
+          <div className="mx-wrap">
+            <dl className="mx-stats-grid">
+              {STATS.map((stat) => (
+                <Reveal key={stat.value} className="mx-stat">
+                  <dd className="mx-stat-value">{stat.value}</dd>
+                  <dt className="mx-stat-label">{stat.label}</dt>
+                </Reveal>
+              ))}
+            </dl>
+          </div>
         </section>
 
-        <section id="product" className="scroll-mt-20 border-y border-border bg-muted/40">
-          <div className="mx-auto max-w-6xl px-5 py-20 md:py-28">
-            <SectionHeading
-              eyebrow="Product"
-              title="Built for the controls an auditor will ask about"
-              body="Speed matters, but so does being able to explain every decision. Each feature below leaves a trace."
-            />
-            <div className="mt-14 grid gap-4 md:grid-cols-3">
+        <section id="how-it-works" className="mx-section">
+          <div className="mx-wrap">
+            <Reveal focus>
+              <p className="mx-section-eyebrow">02 — How it works</p>
+              <h2 className="mx-title">From a stack of PDFs to a payment run in four steps</h2>
+              <p className="mx-section-body">
+                Each step has a clear owner and a visible result. Nothing skips a step, and nothing is hidden from the
+                audit log.
+              </p>
+            </Reveal>
+            <ol className="mx-steps">
+              {STEPS.map((step, index) => (
+                <Reveal as="li" key={step.title} className="mx-step">
+                  <div className="mx-step-top">
+                    <span className="mx-step-icon">
+                      <step.icon aria-hidden="true" />
+                    </span>
+                    <span className="mx-step-num">0{index + 1}</span>
+                  </div>
+                  <h3 className="mx-step-title">{step.title}</h3>
+                  <p className="mx-step-body">{step.body}</p>
+                </Reveal>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section id="product" className="mx-section">
+          <div className="mx-wrap">
+            <Reveal focus>
+              <p className="mx-section-eyebrow">01 — Product</p>
+              <h2 className="mx-title">Built for the controls an auditor will ask about</h2>
+              <p className="mx-section-body">
+                Speed matters, but so does being able to explain every decision. Each feature below leaves a trace.
+              </p>
+            </Reveal>
+            <div className="mx-features">
               {FEATURES.map((feature) => (
-                <article
-                  key={feature.title}
-                  className={`${feature.span} group rounded-2xl border border-border bg-card p-7 shadow-sm transition-shadow hover:shadow-md`}
-                >
-                  <span className="grid size-10 place-items-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                    <feature.icon className="size-5" aria-hidden="true" />
+                <Reveal as="article" key={feature.title} className={`mx-feature${feature.span ? ' mx-feature-wide' : ''}`}>
+                  <span className="mx-feature-icon">
+                    <feature.icon aria-hidden="true" />
                   </span>
-                  <h3 className="mt-6 text-lg font-semibold">{feature.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{feature.body}</p>
-                </article>
+                  <h3 className="mx-feature-title">{feature.title}</h3>
+                  <p className="mx-feature-body">{feature.body}</p>
+                </Reveal>
               ))}
             </div>
           </div>
         </section>
 
-        <section id="safety" className="scroll-mt-20 mx-auto max-w-6xl px-5 py-20 md:py-28">
-          <div className="grid items-start gap-14 lg:grid-cols-2">
-            <div>
-              <SectionHeading
-                eyebrow="Safety model"
-                title="The AI can only say “wait.”"
-                body="Most AP tools trust a model with the decision. InvoiceIQ treats the model as an untrusted advisor and enforces that rule in code, not in a prompt."
-                align="left"
-              />
-            </div>
-            <ul className="space-y-4">
-              {[
-                ['Type system', 'AI reason codes accept exactly one outcome: HOLD. Any other outcome fails to compile.'],
-                ['Lifecycle gate', 'The state machine refuses any AI-driven transition except into HOLD. Tests replay 200 AI-driven invoices and none reach payment.'],
-                ['API contract', 'The signal schema allows only HOLD in OpenAPI, Zod and Pydantic, so the contract cannot drift.'],
-                ['Import rules', 'The AI service has no database credentials and cannot load database drivers. CI enforces that boundary.'],
-              ].map(([title, body]) => (
-                <li key={title} className="flex gap-4 rounded-xl border border-border bg-card p-5">
-                  <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-[#0a1d3b] text-[#2dd4bf]">
-                    <Lock className="size-4" aria-hidden="true" />
+        <section id="safety" className="mx-section">
+          <div className="mx-wrap mx-safety-grid">
+            <Reveal focus>
+              <p className="mx-section-eyebrow">03 — Safety model</p>
+              <h2 className="mx-title">The AI can only say “wait.”</h2>
+              <p className="mx-section-body">
+                Most AP tools trust a model with the decision. InvoiceIQ treats the model as an untrusted advisor and
+                enforces that rule in code, not in a prompt.
+              </p>
+            </Reveal>
+            <ul className="mx-safety-list">
+              {SAFETY.map(([title, body]) => (
+                <Reveal as="li" key={title} className="mx-safety-row">
+                  <span className="mx-safety-icon">
+                    <Lock aria-hidden="true" />
                   </span>
                   <div>
-                    <h3 className="font-semibold">{title}</h3>
-                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{body}</p>
+                    <h3 className="mx-safety-title">{title}</h3>
+                    <p className="mx-safety-body">{body}</p>
                   </div>
-                </li>
+                </Reveal>
               ))}
             </ul>
           </div>
         </section>
 
-        <section className="border-y border-border bg-card">
-          <div className="mx-auto max-w-6xl px-5 py-20 md:py-24">
-            <SectionHeading
-              eyebrow="Who uses it"
-              title="One workflow, a clear job for every role"
-              body="Each step belongs to a role, and every action is recorded in the audit log under the person who took it."
-            />
-            <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+        <section className="mx-section">
+          <div className="mx-wrap">
+            <Reveal focus>
+              <p className="mx-section-eyebrow">04 — Who uses it</p>
+              <h2 className="mx-title">One workflow, a clear job for every role</h2>
+              <p className="mx-section-body">
+                Each step belongs to a role, and every action is recorded in the audit log under the person who took it.
+              </p>
+            </Reveal>
+            <div className="mx-roles">
               {ROLES.map((item) => (
-                <div key={item.role} className="bg-card p-6">
-                  <h3 className="font-semibold">{item.role}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.body}</p>
-                </div>
+                <Reveal key={item.role} className="mx-role">
+                  <h3 className="mx-role-title">{item.role}</h3>
+                  <p className="mx-role-body">{item.body}</p>
+                </Reveal>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="mx-auto max-w-6xl px-5 py-20 md:py-28">
-          <div className="relative isolate overflow-hidden rounded-3xl bg-[#0a1d3b] px-6 py-16 text-center text-white md:px-16">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_0%,rgba(45,212,191,0.25),transparent_60%)]"
-            />
-            <h2 className="mx-auto max-w-2xl text-3xl font-semibold tracking-tight text-balance md:text-4xl">
-              Put a safety layer between every invoice and your bank account.
-            </h2>
-            <p className="mx-auto mt-5 max-w-xl text-white/70 text-pretty">
-              Start with one invoice and see every check it passes through before anything is paid.
-            </p>
-            <div className="mt-9 flex flex-wrap justify-center gap-3">
-              <Link
-                href="/login?tab=signup"
-                className="inline-flex items-center gap-2 rounded-lg bg-[#2dd4bf] px-6 py-3 text-sm font-semibold text-[#052e2b] transition-colors hover:bg-[#5eead4]"
-              >
+        <section className="mx-section mx-closing">
+          <div className="mx-wrap mx-closing-inner">
+            <Reveal focus>
+              <p className="mx-section-eyebrow">Get started</p>
+              <h2 className="mx-title mx-closing-title">
+                Put a safety layer between every invoice and your bank account.
+              </h2>
+              <p className="mx-section-body mx-closing-body">
+                Start with one invoice and see every check it passes through before anything is paid.
+              </p>
+            </Reveal>
+            <div className="mx-closing-actions">
+              <Link href="/login?tab=signup" className="mx-btn-primary">
                 Create your account
-                <ArrowRight className="size-4" aria-hidden="true" />
+                <ArrowRight className="mx-btn-icon" aria-hidden="true" />
               </Link>
-              <Link
-                href="/login"
-                className="inline-flex items-center rounded-lg border border-white/20 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-white/10"
-              >
+              <Link href="/login" className="mx-btn-ghost">
                 Sign in
               </Link>
             </div>
@@ -308,39 +332,22 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-border">
-        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 px-5 py-10 md:flex-row md:items-center">
-          <Image src="/brand/logo.png" alt="InvoiceIQ" width={800} height={267} className="h-6 w-auto" />
-          <nav aria-label="Footer" className="flex flex-wrap gap-6 text-sm text-muted-foreground">
-            <a href="#product" className="hover:text-foreground">Product</a>
-            <a href="#safety" className="hover:text-foreground">Safety</a>
-            <Link href="/login" className="hover:text-foreground">Sign in</Link>
-            <Link href="/login?tab=signup" className="hover:text-foreground">Create account</Link>
+      <footer className="mx-footer">
+        <div className="mx-wrap mx-footer-inner">
+          <Image src="/brand/logo-light.png" alt="InvoiceIQ" width={800} height={267} className="mx-logo" />
+          <nav aria-label="Footer" className="mx-footer-nav">
+            <a href="#product">Product</a>
+            <a href="#safety">Safety</a>
+            <Link href="/login">Sign in</Link>
+            <Link href="/login?tab=signup">Create account</Link>
           </nav>
-          <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} InvoiceIQ</p>
+          <p className="mx-footer-copy">&copy; {new Date().getFullYear()} InvoiceIQ</p>
+          <a href="#main-content" className="mx-top">
+            Back to top
+            <ArrowUp className="mx-btn-icon" aria-hidden="true" />
+          </a>
         </div>
       </footer>
-    </div>
-  );
-}
-
-function SectionHeading({
-  eyebrow,
-  title,
-  body,
-  align = 'center',
-}: {
-  eyebrow: string;
-  title: string;
-  body: string;
-  align?: 'center' | 'left';
-}) {
-  const alignment = align === 'center' ? 'mx-auto text-center' : '';
-  return (
-    <div className={`max-w-2xl ${alignment}`}>
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{eyebrow}</p>
-      <h2 className="mt-3 text-3xl font-semibold tracking-tight text-balance md:text-4xl">{title}</h2>
-      <p className="mt-4 text-base leading-relaxed text-muted-foreground text-pretty">{body}</p>
     </div>
   );
 }
@@ -361,62 +368,54 @@ function HeroPanel() {
   const current = 3;
 
   return (
-    <div className="relative">
-      <div className="rounded-2xl border border-white/10 bg-[#0f2547]/80 p-5 shadow-2xl shadow-black/40 backdrop-blur md:p-6">
-        <div className="flex items-start justify-between gap-4">
+    <div className="mx-panel-wrap">
+      <div className="mx-panel">
+        <div className="mx-panel-head">
           <div>
-            <p className="font-mono text-xs text-white/50">INV-2041</p>
-            <p className="mt-1 font-semibold">Northwind Supplies Ltd.</p>
+            <p className="mx-panel-id">INV-2041</p>
+            <p className="mx-panel-vendor">Northwind Supplies Ltd.</p>
           </div>
-          <span className="rounded-full bg-amber-400/15 px-2.5 py-1 text-xs font-semibold text-amber-300 ring-1 ring-inset ring-amber-400/30">
-            On hold
-          </span>
+          <span className="mx-panel-badge">On hold</span>
         </div>
 
-        <div className="mt-5 flex gap-3 rounded-xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm text-amber-100">
-          <ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-300" aria-hidden="true" />
-          <p className="leading-relaxed">
-            Bank details changed 3 days ago. Payment is quarantined until the change is verified.
-          </p>
+        <div className="mx-panel-alert">
+          <ShieldAlert className="mx-panel-alert-icon" aria-hidden="true" />
+          <p>Bank details changed 3 days ago. Payment is quarantined until the change is verified.</p>
         </div>
 
-        <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4">
+        <dl className="mx-panel-fields">
           {fields.map((field) => (
             <div key={field.label}>
-              <dt className="text-xs text-white/50">{field.label}</dt>
-              <dd className="mt-1 font-medium tabular-nums">{field.value}</dd>
+              <dt>{field.label}</dt>
+              <dd>{field.value}</dd>
             </div>
           ))}
         </dl>
 
-        <div className="mt-6 space-y-3">
-          <p className="text-xs font-medium uppercase tracking-wider text-white/45">AI confidence</p>
+        <div className="mx-panel-confidence">
+          <p className="mx-panel-label">AI confidence</p>
           {confidence.map((item) => (
-            <div key={item.label} className="flex items-center gap-3 text-sm">
-              <span className="w-14 shrink-0 text-white/60">{item.label}</span>
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+            <div key={item.label} className="mx-bar-row">
+              <span className="mx-bar-name">{item.label}</span>
+              <div className="mx-bar-track">
                 <div
-                  className={`h-full rounded-full ${item.pct < 90 ? 'bg-amber-400' : 'bg-[#2dd4bf]'}`}
+                  className={`mx-bar-fill${item.pct < 90 ? ' mx-bar-fill-warn' : ''}`}
                   style={{ width: `${item.pct}%` }}
                 />
               </div>
-              <span className="w-9 text-right tabular-nums text-white/60">{item.pct}%</span>
+              <span className="mx-bar-pct">{item.pct}%</span>
             </div>
           ))}
         </div>
 
-        <ol className="mt-6 grid grid-cols-5 gap-1.5 border-t border-white/10 pt-5">
+        <ol className="mx-pipeline">
           {pipeline.map((stage, index) => {
             const done = index < current;
             const active = index === current;
             return (
-              <li key={stage} className="text-center">
-                <span
-                  className={`mx-auto block h-1 rounded-full ${
-                    done ? 'bg-[#2dd4bf]' : active ? 'bg-amber-400' : 'bg-white/10'
-                  }`}
-                />
-                <span className={`mt-2 block text-[11px] leading-tight ${active ? 'text-amber-200' : done ? 'text-white/70' : 'text-white/35'}`}>
+              <li key={stage}>
+                <span className={`mx-pipeline-bar${done ? ' mx-pipeline-done' : ''}${active ? ' mx-pipeline-active' : ''}`} />
+                <span className={`mx-pipeline-stage${active ? ' mx-pipeline-stage-active' : ''}${done ? ' mx-pipeline-stage-done' : ''}`}>
                   {stage}
                 </span>
               </li>
@@ -424,7 +423,7 @@ function HeroPanel() {
           })}
         </ol>
       </div>
-      <p className="mt-3 text-center text-xs text-white/40">Illustrative example</p>
+      <p className="mx-panel-caption">Illustrative example</p>
     </div>
   );
 }
