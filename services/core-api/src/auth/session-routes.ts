@@ -12,7 +12,6 @@ import {
   sessionClearCookie,
   sessionSetCookie,
   verifySessionToken,
-  type SessionDb,
 } from './session.js';
 
 /**
@@ -27,21 +26,22 @@ export interface SessionRoutesOptions {
 
 export function registerSessionRoutes(app: FastifyInstance, opts: SessionRoutesOptions): void {
   const secure = process.env['NODE_ENV'] === 'production';
-  const db: SessionDb | undefined = opts.ownerPool;
+  const pool = opts.ownerPool;
 
-  async function currentSession(req: { headers: { cookie?: string } }) {
-    if (!db) return undefined;
-    const token = readSessionToken(req.headers.cookie);
+  async function currentSession(req: { headers: { cookie?: unknown } }) {
+    if (!pool) return undefined;
+    const cookie = req.headers.cookie;
+    const token = readSessionToken(typeof cookie === 'string' ? cookie : undefined);
     if (!token) return undefined;
-    return verifySessionToken(db, token);
+    return verifySessionToken(pool, token);
   }
 
   app.get('/auth/me', async (req, reply) => {
     const session = await currentSession(req);
     if (!session) return reply.code(401).send({ authenticated: false });
     let tenants: Array<{ tenantId: string; login: string; roles: readonly ApproverRole[] }> = [];
-    if (db) {
-      const memberships = await findUserTenants(db, session.provider, session.externalId);
+    if (pool) {
+      const memberships = await findUserTenants(pool, session.provider, session.externalId);
       tenants = memberships.map((m) => ({ tenantId: m.tenantId, login: m.login, roles: m.roles }));
     }
     return {
@@ -58,34 +58,36 @@ export function registerSessionRoutes(app: FastifyInstance, opts: SessionRoutesO
   });
 
   app.post<{ Body: { tenantId: string } }>('/auth/switch-tenant', async (req, reply) => {
-    if (!db) return reply.code(500).send({ error: 'config', detail: 'sessions require database' });
-    const token = readSessionToken(req.headers.cookie);
+    if (!pool) return reply.code(500).send({ error: 'config', detail: 'sessions require database' });
+    const rawCookie = req.headers.cookie;
+    const token = readSessionToken(typeof rawCookie === 'string' ? rawCookie : undefined);
     if (!token) return reply.code(401).send({ error: 'not authenticated' });
     const tenantId = (req.body as { tenantId?: string } | undefined)?.tenantId;
     if (!tenantId) return reply.code(400).send({ error: 'tenantId required' });
-    const current = await verifySessionToken(db, token);
+    const current = await verifySessionToken(pool, token);
     if (!current) return reply.code(401).send({ error: 'session expired' });
-    const memberships = await findUserTenants(db, current.provider, current.externalId);
+    const memberships = await findUserTenants(ownerPool, current.provider, current.externalId);
     const target = memberships.find((m) => m.tenantId === tenantId);
     if (!target) return reply.code(403).send({ error: 'not a member of that tenant' });
-    await touchTenantUser(db, current.provider, current.externalId, tenantId);
-    const rotated = await rotateSession(db, token, { tenantId, roles: target.roles });
+    await touchTenantUser(ownerPool, current.provider, current.externalId, tenantId);
+    const rotated = await rotateSession(pool, token, { tenantId, roles: target.roles });
     if (!rotated) return reply.code(401).send({ error: 'session expired' });
     void reply.header('set-cookie', sessionSetCookie(rotated.token, secure));
     return { ok: true, tenantId };
   });
 
   app.post<{ Body: { all?: boolean } }>('/auth/logout', async (req, reply) => {
-    if (db) {
-      const token = readSessionToken(req.headers.cookie);
+    if (pool) {
+      const rawCookie = req.headers.cookie;
+      const token = readSessionToken(typeof rawCookie === 'string' ? rawCookie : undefined);
       if (token) {
-        const session = await verifySessionToken(db, token);
+        const session = await verifySessionToken(pool, token);
         if (session) {
           const body = req.body as { all?: boolean } | undefined;
           if (body?.all) {
-            await revokeAllSessions(db, session.provider, session.externalId);
+            await revokeAllSessions(pool, session.provider, session.externalId);
           } else {
-            await revokeSessionToken(db, token);
+            await revokeSessionToken(pool, token);
           }
         }
       }
@@ -95,10 +97,10 @@ export function registerSessionRoutes(app: FastifyInstance, opts: SessionRoutesO
   });
 
   app.get('/auth/sessions', async (req, reply) => {
-    if (!db) return reply.code(500).send({ error: 'config', detail: 'sessions require database' });
+    if (!pool) return reply.code(500).send({ error: 'config', detail: 'sessions require database' });
     const session = await currentSession(req);
     if (!session) return reply.code(401).send({ error: 'not authenticated' });
-    const sessions = await listSessions(db, session.provider, session.externalId);
+    const sessions = await listSessions(pool, session.provider, session.externalId);
     return {
       items: sessions.map((s) => ({
         id: s.id,
@@ -116,19 +118,19 @@ export function registerSessionRoutes(app: FastifyInstance, opts: SessionRoutesO
   });
 
   app.post<{ Params: { sessionId: string } }>('/auth/sessions/:sessionId/revoke', async (req, reply) => {
-    if (!db) return reply.code(500).send({ error: 'config', detail: 'sessions require database' });
+    if (!pool) return reply.code(500).send({ error: 'config', detail: 'sessions require database' });
     const session = await currentSession(req);
     if (!session) return reply.code(401).send({ error: 'not authenticated' });
-    const revoked = await revokeSessionById(db, session.provider, session.externalId, req.params.sessionId);
+    const revoked = await revokeSessionById(pool, session.provider, session.externalId, req.params.sessionId);
     if (!revoked) return reply.code(404).send({ error: 'not found', detail: 'no such live session' });
     return { ok: true };
   });
 
   app.post('/auth/sessions/revoke-others', async (req, reply) => {
-    if (!db) return reply.code(500).send({ error: 'config', detail: 'sessions require database' });
+    if (!pool) return reply.code(500).send({ error: 'config', detail: 'sessions require database' });
     const session = await currentSession(req);
     if (!session) return reply.code(401).send({ error: 'not authenticated' });
-    const count = await revokeAllSessions(db, session.provider, session.externalId, session.id);
+    const count = await revokeAllSessions(pool, session.provider, session.externalId, session.id);
     return { ok: true, revoked: count };
   });
 }
