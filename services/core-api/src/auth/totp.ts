@@ -48,14 +48,14 @@ function hotp(secret: Buffer, counter: bigint, digits: number): string {
   const counterBytes = Buffer.alloc(8);
   counterBytes.writeBigUInt64BE(counter);
   const hmac = createHmac('sha1', secret).update(counterBytes).digest();
-  const offset = hmac[hmac.length - 1]! & 0x0f;
+  const offset = (hmac[hmac.length - 1] ?? 0) & 0x0f;
+  const b0 = hmac[offset] ?? 0;
+  const b1 = hmac[offset + 1] ?? 0;
+  const b2 = hmac[offset + 2] ?? 0;
+  const b3 = hmac[offset + 3] ?? 0;
   // Arithmetic, not bit shifts: the 31-bit value can set the sign bit,
   // which would make a bitwise result negative and break the modulo.
-  const binary =
-    (hmac[offset]! & 0x7f) * 2 ** 24 +
-    hmac[offset + 1]! * 2 ** 16 +
-    hmac[offset + 2]! * 2 ** 8 +
-    hmac[offset + 3]!;
+  const binary = (b0 & 0x7f) * 2 ** 24 + b1 * 2 ** 16 + b2 * 2 ** 8 + b3;
   return String(binary % 10 ** digits).padStart(digits, '0');
 }
 
