@@ -26,7 +26,7 @@ export function logMailer(opts: MailerOptions): Mailer {
     // Deliberately includes the full link: with no mail provider, the log
     // is the delivery channel. Never log the recipient's password or token
     // hashes; the link itself is single-use and expiring.
-    console.info(`[mailer:${kind}] from=${opts.from} to=${to} link=${link}`);
+    console.log(`[mailer:${kind}] from=${opts.from} to=${to} link=${link}`);
   };
   return {
     async sendVerificationEmail(to, link) {
