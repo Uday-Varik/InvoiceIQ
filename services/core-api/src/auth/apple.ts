@@ -7,6 +7,7 @@ import type { Pool } from 'pg';
 import { findUserTenants, upsertTenantUser, touchTenantUser } from '../tenants/store.js';
 import { createSession, hashClientIp, parseCookie, sessionSetCookie } from './session.js';
 import { isMfaEnabled } from './mfa.js';
+import { recordAuthEvent } from './audit.js';
 import { mfaPendingSetCookie, signMfaPending } from './tokens.js';
 
 const STATE_COOKIE = 'iq_apple_oauth_state';
@@ -227,6 +228,14 @@ export function registerAppleAuthRoutes(app: FastifyInstance, opts: AppleAuthOpt
         { userAgent: req.headers['user-agent'], ipHash: hashClientIp(req.ip) },
       );
 
+      await recordAuthEvent(opts.ownerPool, {
+        tenantId: tid,
+        provider: 'apple',
+        externalId: appleUser.sub,
+        login: appleUser.email ?? appleUser.sub,
+        event: 'login',
+        ipHash: hashClientIp(req.ip),
+      });
       void reply.header('set-cookie', sessionSetCookie(token, secure));
       return reply.redirect(redirectTo);
     },

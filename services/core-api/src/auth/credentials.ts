@@ -26,6 +26,7 @@ import {
 } from './tokens.js';
 import { logMailer, resetLink, verificationLink, type Mailer } from './mailer.js';
 import { isMfaEnabled } from './mfa.js';
+import { recordAuthEvent } from './audit.js';
 import { mfaPendingSetCookie, signMfaPending } from './tokens.js';
 
 export interface CredentialsAuthOptions extends SessionOptions {
@@ -141,6 +142,14 @@ export function registerCredentialsAuthRoutes(app: FastifyInstance, opts: Creden
     });
 
     await issueVerificationToken(db, userId, email);
+    await recordAuthEvent(db, {
+      tenantId: opts.tenantId,
+      provider: 'credentials',
+      externalId: userId,
+      login: email,
+      event: 'register',
+      ipHash: hashClientIp(req.ip),
+    });
     return { ok: true, verificationRequired: true, login: email };
   });
 
@@ -219,6 +228,14 @@ export function registerCredentialsAuthRoutes(app: FastifyInstance, opts: Creden
       { userAgent: req.headers['user-agent'], ipHash: hashClientIp(req.ip) },
     );
 
+    await recordAuthEvent(db, {
+      tenantId: tid,
+      provider: 'credentials',
+      externalId: user.id,
+      login: user.email,
+      event: 'login',
+      ipHash: hashClientIp(req.ip),
+    });
     void reply.header('set-cookie', sessionSetCookie(token, secure));
     return { ok: true, login: user.email };
   });
@@ -236,6 +253,14 @@ export function registerCredentialsAuthRoutes(app: FastifyInstance, opts: Creden
     if (!row) return reply.code(400).send({ error: 'invalid_token', detail: 'verification link is invalid or expired' });
     await db.query('UPDATE credential_users SET email_verified_at = now() WHERE id = $1', [row.user_id]);
     await db.query('UPDATE email_verification_tokens SET used_at = now() WHERE token_hash = $1', [hashAccountToken(token)]);
+    const verified = await db.query<{ email: string }>('SELECT email FROM credential_users WHERE id = $1', [row.user_id]);
+    await recordAuthEvent(db, {
+      provider: 'credentials',
+      externalId: row.user_id,
+      login: verified.rows[0]?.email ?? row.user_id,
+      event: 'email_verified',
+      ipHash: hashClientIp(req.ip),
+    });
     return { ok: true };
   });
 
@@ -300,6 +325,14 @@ export function registerCredentialsAuthRoutes(app: FastifyInstance, opts: Creden
     // A reset ends every session: whoever holds the old password, or a
     // stolen session, is signed out everywhere.
     await revokeAllSessions(db, 'credentials', row.user_id);
+    const resetUser = await db.query<{ email: string }>('SELECT email FROM credential_users WHERE id = $1', [row.user_id]);
+    await recordAuthEvent(db, {
+      provider: 'credentials',
+      externalId: row.user_id,
+      login: resetUser.rows[0]?.email ?? row.user_id,
+      event: 'password_reset',
+      ipHash: hashClientIp(req.ip),
+    });
     return { ok: true };
   });
 
@@ -332,6 +365,14 @@ export function registerCredentialsAuthRoutes(app: FastifyInstance, opts: Creden
       await db.query('UPDATE credential_users SET password_hash = $2 WHERE id = $1', [user.id, hashPassword(newPassword)]);
       // Keep this session, end every other one.
       await revokeAllSessions(db, 'credentials', user.id, session.id);
+      await recordAuthEvent(db, {
+        tenantId: session.tenantId,
+        provider: 'credentials',
+        externalId: user.id,
+        login: user.email,
+        event: 'password_changed',
+        ipHash: hashClientIp(req.ip),
+      });
       return { ok: true };
     },
   );

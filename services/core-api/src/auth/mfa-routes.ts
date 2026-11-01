@@ -15,6 +15,7 @@ import {
   type MfaDb,
 } from './mfa.js';
 import { otpauthUrl, verifyTotp } from './totp.js';
+import { recordAuthEvent } from './audit.js';
 import {
   createSession,
   hashClientIp,
@@ -102,6 +103,14 @@ export function registerMfaRoutes(app: FastifyInstance, opts: MfaRoutesOptions):
       return reply.code(401).send({ error: 'auth', detail: 'that code does not match' });
     }
     const recoveryCodes = await enableMfa(db, session.provider, session.externalId);
+    await recordAuthEvent(db, {
+      tenantId: session.tenantId,
+      provider: session.provider,
+      externalId: session.externalId,
+      login: session.login,
+      event: 'mfa_setup',
+      ipHash: hashClientIp(req.ip),
+    });
     return { ok: true, recoveryCodes };
   });
 
@@ -124,6 +133,14 @@ export function registerMfaRoutes(app: FastifyInstance, opts: MfaRoutesOptions):
       if (!ok) return reply.code(401).send({ error: 'auth', detail: 'that code does not match' });
     }
     await disableMfa(db, session.provider, session.externalId);
+    await recordAuthEvent(db, {
+      tenantId: session.tenantId,
+      provider: session.provider,
+      externalId: session.externalId,
+      login: session.login,
+      event: 'mfa_disabled',
+      ipHash: hashClientIp(req.ip),
+    });
     return { ok: true };
   });
 
@@ -159,6 +176,14 @@ export function registerMfaRoutes(app: FastifyInstance, opts: MfaRoutesOptions):
       },
       { userAgent: req.headers['user-agent'], ipHash: hashClientIp(req.ip) },
     );
+    await recordAuthEvent(db, {
+      tenantId: pending.tid,
+      provider: pending.provider,
+      externalId: pending.uid,
+      login: pending.login,
+      event: 'mfa_challenge',
+      ipHash: hashClientIp(req.ip),
+    });
     void reply.header('set-cookie', [sessionSetCookie(token, secure), mfaPendingClearCookie(secure)]);
     return { ok: true, login: pending.login };
   });

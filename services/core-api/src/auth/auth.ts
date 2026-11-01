@@ -8,6 +8,15 @@ export interface Principal {
   readonly tenantId: string;
   readonly userId: string;
   readonly roles: readonly ApproverRole[];
+  /**
+   * Session-mode identity, when known: the provider and external id the
+   * session was issued for. Membership checks (is this caller a member
+   * of the tenant they are asking about?) need these; the login name in
+   * userId is not enough, because logins collide across providers.
+   * Undefined in demo and OIDC modes, which have no tenant memberships.
+   */
+  readonly provider?: string | undefined;
+  readonly externalId?: string | undefined;
 }
 
 export class AuthError extends Error {

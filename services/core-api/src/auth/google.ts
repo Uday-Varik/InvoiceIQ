@@ -5,6 +5,7 @@ import type { ApproverRole } from './auth.js';
 import { findUserTenants, upsertTenantUser, touchTenantUser } from '../tenants/store.js';
 import { createSession, hashClientIp, sessionSetCookie, type SessionOptions } from './session.js';
 import { isMfaEnabled } from './mfa.js';
+import { recordAuthEvent } from './audit.js';
 import { mfaPendingSetCookie, signMfaPending } from './tokens.js';
 
 export interface GoogleAuthOptions extends SessionOptions {
@@ -149,6 +150,14 @@ export function registerGoogleAuthRoutes(app: FastifyInstance, opts: GoogleAuthO
         { userAgent: req.headers['user-agent'], ipHash: hashClientIp(req.ip) },
       );
 
+      await recordAuthEvent(opts.ownerPool, {
+        tenantId: tid,
+        provider: 'google',
+        externalId: googleUser.id,
+        login: googleUser.email,
+        event: 'login',
+        ipHash: hashClientIp(req.ip),
+      });
       void reply.header('set-cookie', sessionSetCookie(token, secure));
       return reply.redirect(redirectTo);
     },
