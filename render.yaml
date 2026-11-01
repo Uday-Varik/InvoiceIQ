@@ -118,6 +118,11 @@ services:
       # Signs session cookies (>= 32 chars, required when AUTH_MODE=github).
       - key: SESSION_SECRET
         generateValue: true
+      # Encrypts stored TOTP secrets (>= 32 chars). Optional: when unset,
+      # SESSION_SECRET is used instead, with a startup warning. Rotating
+      # this without re-encrypting secrets locks MFA users out.
+      - key: MFA_SECRET_KEY
+        sync: false
       # Frontend origin to redirect to after OAuth login.
       - key: FRONTEND_URL
         sync: false

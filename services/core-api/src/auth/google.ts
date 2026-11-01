@@ -4,6 +4,8 @@ import type { Pool } from 'pg';
 import type { ApproverRole } from './auth.js';
 import { findUserTenants, upsertTenantUser, touchTenantUser } from '../tenants/store.js';
 import { createSession, hashClientIp, sessionSetCookie, type SessionOptions } from './session.js';
+import { isMfaEnabled } from './mfa.js';
+import { mfaPendingSetCookie, signMfaPending } from './tokens.js';
 
 export interface GoogleAuthOptions extends SessionOptions {
   readonly clientId: string;
@@ -127,6 +129,14 @@ export function registerGoogleAuthRoutes(app: FastifyInstance, opts: GoogleAuthO
       }
 
       if (!opts.ownerPool) throw new Error('sessions require database');
+      if (await isMfaEnabled(opts.ownerPool, 'google', googleUser.id)) {
+        const pending = signMfaPending(
+          { uid: googleUser.id, provider: 'google', login: googleUser.email, tid, roles: [...roles] },
+          opts.sessionSecret,
+        );
+        void reply.header('set-cookie', mfaPendingSetCookie(pending, secure));
+        return reply.redirect(`${opts.frontendUrl ?? ''}/login?mfa=1`);
+      }
       const { token } = await createSession(
         opts.ownerPool,
         {

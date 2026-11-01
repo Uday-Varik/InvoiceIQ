@@ -4,6 +4,8 @@ import type { ApproverRole } from './auth.js';
 import type { Pool } from 'pg';
 import { findUserTenants, upsertTenantUser, touchTenantUser } from '../tenants/store.js';
 import { createSession, hashClientIp, parseCookie, sessionSetCookie } from './session.js';
+import { isMfaEnabled } from './mfa.js';
+import { mfaPendingSetCookie, signMfaPending } from './tokens.js';
 
 const STATE_COOKIE = 'iq_oauth_state';
 
@@ -111,6 +113,14 @@ export function registerGitHubAuthRoutes(app: FastifyInstance, opts: GitHubAuthO
       }
 
       if (!opts.ownerPool) throw new Error('sessions require database');
+      if (await isMfaEnabled(opts.ownerPool, 'github', String(ghUser.id))) {
+        const pending = signMfaPending(
+          { uid: String(ghUser.id), provider: 'github', login: ghUser.login, tid, roles: [...roles] },
+          opts.sessionSecret,
+        );
+        void reply.header('set-cookie', mfaPendingSetCookie(pending, secure));
+        return reply.redirect(`${opts.frontendUrl ?? ''}/login?mfa=1`);
+      }
       const { token } = await createSession(
         opts.ownerPool,
         {

@@ -3,6 +3,7 @@ import { httpAiClient, type AiClient } from './clients/ai-service.js';
 import { demoAuthenticator, oidcAuthenticator, remoteKeys, type Authenticator } from './auth/auth.js';
 import { registerGitHubAuthRoutes, type GitHubAuthOptions } from './auth/github.js';
 import { registerSessionRoutes } from './auth/session-routes.js';
+import { registerMfaRoutes } from './auth/mfa-routes.js';
 import { registerGoogleAuthRoutes, type GoogleAuthOptions } from './auth/google.js';
 import { registerAppleAuthRoutes, type AppleAuthOptions } from './auth/apple.js';
 import { registerCredentialsAuthRoutes, type CredentialsAuthOptions } from './auth/credentials.js';
@@ -242,6 +243,14 @@ export async function startRuntime(config: Config): Promise<Runtime> {
   if (config.AUTH_MODE === 'github') {
     registerGitHubAuthRoutes(app, githubAuthOptionsFor(config, ownerPool));
     registerSessionRoutes(app, { ownerPool });
+    if (!config.MFA_SECRET_KEY) {
+      app.log.warn('MFA_SECRET_KEY is not set; TOTP secrets are encrypted with SESSION_SECRET instead');
+    }
+    registerMfaRoutes(app, {
+      ownerPool,
+      sessionSecret: config.SESSION_SECRET as string,
+      mfaSecret: config.MFA_SECRET_KEY,
+    });
     if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) {
       registerGoogleAuthRoutes(app, googleAuthOptionsFor(config, ownerPool));
     }

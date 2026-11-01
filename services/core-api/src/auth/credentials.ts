@@ -25,6 +25,8 @@ import {
   VERIFICATION_TOKEN_HOURS,
 } from './tokens.js';
 import { logMailer, resetLink, verificationLink, type Mailer } from './mailer.js';
+import { isMfaEnabled } from './mfa.js';
+import { mfaPendingSetCookie, signMfaPending } from './tokens.js';
 
 export interface CredentialsAuthOptions extends SessionOptions {
   readonly frontendUrl?: string | undefined;
@@ -195,6 +197,15 @@ export function registerCredentialsAuthRoutes(app: FastifyInstance, opts: Creden
     const first = memberships[0];
     const tid = first?.tenantId ?? opts.tenantId;
     const roles: readonly ApproverRole[] = first?.roles ?? [opts.defaultRole];
+
+    if (await isMfaEnabled(db, 'credentials', user.id)) {
+      const pending = signMfaPending(
+        { uid: user.id, provider: 'credentials', login: user.email, tid, roles: [...roles] },
+        opts.sessionSecret,
+      );
+      void reply.header('set-cookie', mfaPendingSetCookie(pending, secure));
+      return { ok: true, mfaRequired: true, login: user.email };
+    }
 
     const { token } = await createSession(
       db,

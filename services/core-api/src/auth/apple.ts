@@ -6,6 +6,8 @@ import type { ApproverRole } from './auth.js';
 import type { Pool } from 'pg';
 import { findUserTenants, upsertTenantUser, touchTenantUser } from '../tenants/store.js';
 import { createSession, hashClientIp, parseCookie, sessionSetCookie } from './session.js';
+import { isMfaEnabled } from './mfa.js';
+import { mfaPendingSetCookie, signMfaPending } from './tokens.js';
 
 const STATE_COOKIE = 'iq_apple_oauth_state';
 const NONCE_COOKIE = 'iq_apple_oauth_nonce';
@@ -205,6 +207,14 @@ export function registerAppleAuthRoutes(app: FastifyInstance, opts: AppleAuthOpt
       }
 
       if (!opts.ownerPool) throw new Error('sessions require database');
+      if (await isMfaEnabled(opts.ownerPool, 'apple', appleUser.sub)) {
+        const pending = signMfaPending(
+          { uid: appleUser.sub, provider: 'apple', login: appleUser.email ?? appleUser.sub, tid, roles: [...roles] },
+          opts.sessionSecret,
+        );
+        void reply.header('set-cookie', mfaPendingSetCookie(pending, secure));
+        return reply.redirect(`${opts.frontendUrl ?? ''}/login?mfa=1`);
+      }
       const { token } = await createSession(
         opts.ownerPool,
         {
