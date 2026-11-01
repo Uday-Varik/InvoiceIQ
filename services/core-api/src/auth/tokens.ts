@@ -1,4 +1,5 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import type { ApproverRole } from './auth.js';
 
 /**
  * Single-use account tokens (email verification, password reset) and the
@@ -45,4 +46,59 @@ export function isLocked(lockedUntil: Date | null, now: number = Date.now()): bo
 export function lockRetryAfterSeconds(lockedUntil: Date | null, now: number = Date.now()): number {
   if (!lockedUntil) return 0;
   return Math.max(0, Math.ceil((lockedUntil.getTime() - now) / 1000));
+}
+
+/**
+ * MFA step-up tokens. After primary authentication, an identity with MFA
+ * enabled gets this short-lived signed token (10 minutes) instead of a
+ * session; the challenge endpoint exchanges it for a session once the
+ * TOTP code or a recovery code checks out. The token carries no secret,
+ * only the already-verified identity, and it is purpose-tagged so it can
+ * never be mistaken for a session.
+ */
+export interface MfaPendingPayload {
+  readonly uid: string;
+  readonly provider: string;
+  readonly login: string;
+  readonly tid: string;
+  readonly roles: readonly ApproverRole[];
+  readonly exp: number;
+}
+
+export const MFA_PENDING_TTL_MS = 10 * 60 * 1000;
+export const MFA_PENDING_COOKIE = 'iq_mfa_pending';
+
+export function signMfaPending(payload: Omit<MfaPendingPayload, 'exp'>, secret: string): string {
+  const full: MfaPendingPayload = { ...payload, exp: Date.now() + MFA_PENDING_TTL_MS };
+  const data = Buffer.from(JSON.stringify({ ...full, purpose: 'mfa-pending' })).toString('base64url');
+  const mac = createHmac('sha256', secret).update(data).digest('base64url');
+  return `${data}.${mac}`;
+}
+
+export function verifyMfaPending(token: string, secret: string): MfaPendingPayload | undefined {
+  const dot = token.indexOf('.');
+  if (dot < 1) return undefined;
+  const data = token.slice(0, dot);
+  const mac = token.slice(dot + 1);
+  const expected = createHmac('sha256', secret).update(data).digest('base64url');
+  const macBuf = Buffer.from(mac);
+  const expectedBuf = Buffer.from(expected);
+  if (macBuf.length !== expectedBuf.length || !timingSafeEqual(macBuf, expectedBuf)) return undefined;
+  try {
+    const payload = JSON.parse(Buffer.from(data, 'base64url').toString()) as MfaPendingPayload & { purpose?: string };
+    if (payload.purpose !== 'mfa-pending') return undefined;
+    if (typeof payload.exp !== 'number' || Date.now() > payload.exp) return undefined;
+    if (!payload.uid || !payload.provider || !payload.login || !payload.tid) return undefined;
+    return payload;
+  } catch {
+    return undefined;
+  }
+}
+
+export function mfaPendingSetCookie(token: string, secure: boolean): string {
+  return `${MFA_PENDING_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}; Max-Age=600`;
+}
+
+export function mfaPendingClearCookie(secure: boolean): string {
+  return `${MFA_PENDING_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
 }

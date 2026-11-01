@@ -24,6 +24,11 @@ function LoginForm() {
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotError, setForgotError] = useState('');
   const [resendSent, setResendSent] = useState(false);
+  const [mfaStep, setMfaStep] = useState(false);
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaUseRecovery, setMfaUseRecovery] = useState(false);
+  const [mfaError, setMfaError] = useState('');
+  const [mfaSubmitting, setMfaSubmitting] = useState(false);
 
   useEffect(() => {
     fetch('/auth/providers')
@@ -46,6 +51,10 @@ function LoginForm() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('mfa') === '1') setMfaStep(true);
+  }, [searchParams]);
 
   useEffect(() => {
     const token = searchParams.get('verify');
@@ -72,10 +81,15 @@ function LoginForm() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      const body = (await res.json().catch(() => ({}))) as { detail?: string; error?: string; verificationRequired?: boolean };
+      const body = (await res.json().catch(() => ({}))) as { detail?: string; error?: string; verificationRequired?: boolean; mfaRequired?: boolean };
       if (!res.ok) {
         setErrorCode(body.error ?? '');
         throw new Error(body.detail || `Authentication failed (${res.status})`);
+      }
+      if (body.mfaRequired) {
+        setMfaStep(true);
+        setSubmitting(false);
+        return;
       }
       if (body.verificationRequired) {
         setVerificationSent(true);
@@ -97,6 +111,27 @@ function LoginForm() {
       body: JSON.stringify({ email }),
     }).catch(() => undefined);
     setResendSent(true);
+  }
+
+  async function handleMfaChallenge(e: React.FormEvent) {
+    e.preventDefault();
+    setMfaError('');
+    setMfaSubmitting(true);
+    try {
+      const res = await fetch('/auth/mfa/challenge', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(mfaUseRecovery ? { recoveryCode: mfaCode } : { code: mfaCode }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(body.detail || 'That code does not match. Try again.');
+      }
+      window.location.href = '/dashboard';
+    } catch (err: unknown) {
+      setMfaError(err instanceof Error ? err.message : String(err));
+      setMfaSubmitting(false);
+    }
   }
 
   async function handleForgotPassword(e: React.FormEvent) {
@@ -145,7 +180,38 @@ function LoginForm() {
           </p>
         )}
 
-        {verificationSent ? (
+        {mfaStep ? (
+          <form onSubmit={handleMfaChallenge} className="auth-form">
+            <p className="auth-subtitle">
+              Enter the 6-digit code from your authenticator app to finish signing in.
+            </p>
+            <label className="auth-field">
+              <span className="auth-label">{mfaUseRecovery ? 'Recovery code' : 'Authentication code'}</span>
+              <input
+                type="text"
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value)}
+                placeholder={mfaUseRecovery ? 'XXXX-XXXX' : '123456'}
+                required
+                autoComplete="one-time-code"
+                className="auth-input"
+              />
+            </label>
+            {mfaError && <p className="login-error">{mfaError}</p>}
+            <button type="submit" className="btn btn-primary auth-submit" disabled={mfaSubmitting}>
+              {mfaSubmitting ? 'Checking...' : 'Verify and sign in'}
+            </button>
+            <p className="auth-switch muted small">
+              <button
+                type="button"
+                className="btn-link"
+                onClick={() => { setMfaUseRecovery(!mfaUseRecovery); setMfaCode(''); setMfaError(''); }}
+              >
+                {mfaUseRecovery ? 'Use an authenticator code instead' : 'Use a recovery code instead'}
+              </button>
+            </p>
+          </form>
+        ) : verificationSent ? (
           <div>
             <p className="auth-subtitle">
               Check your email for a verification link. You will be able to sign in once your address is verified.

@@ -64,6 +64,10 @@ const EnvSchema = z
     MAILER_PROVIDER: z.enum(['log']).default('log'),
     /** Sender address shown once a real mail provider exists. */
     MAILER_FROM: z.string().min(1).default('no-reply@invoiceiq.local'),
+    /** Key that encrypts stored TOTP secrets. Falls back to SESSION_SECRET
+        when unset (with a startup warning); rotating it without
+        re-encrypting secrets locks MFA users out. */
+    MFA_SECRET_KEY: z.string().min(32, 'MFA_SECRET_KEY must be at least 32 characters').optional(),
 
     AI_SERVICE_URL: z.string().url(),
     AI_SIGNING_SECRET: z.string().min(32, 'AI_SIGNING_SECRET must be at least 32 characters'),

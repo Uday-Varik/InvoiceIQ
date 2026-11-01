@@ -26,7 +26,10 @@ const SECTIONS: readonly { label: string; links: readonly { href: Route; label: 
   },
   {
     label: 'Help',
-    links: [{ href: '/lifecycle', label: 'Invoice states' }],
+    links: [
+      { href: '/lifecycle', label: 'Invoice states' },
+      { href: '/settings', label: 'Account & security' },
+    ],
   },
 ];
 
