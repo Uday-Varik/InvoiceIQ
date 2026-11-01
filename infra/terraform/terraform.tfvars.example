@@ -15,3 +15,15 @@ auth_mode     = "demo"
 #   audience = "invoiceiq"
 #   jwks_url = "https://login.example.com/.well-known/jwks.json"
 # }
+
+# auth_mode = "github" (session mode, ADR-0022). Put real values in
+# terraform.tfvars or -var flags; never commit secrets. Only the
+# providers you fill in are offered at sign-in. frontend_url is the
+# public web origin, no trailing slash.
+# frontend_url = "https://invoice-iq-web.vercel.app"
+# session_auth = {
+#   github_client_id     = "Ov23..."
+#   github_client_secret = "..."
+#   github_callback_url  = "https://invoice-iq-web.vercel.app/auth/github/callback"
+#   credentials_enabled  = false
+# }

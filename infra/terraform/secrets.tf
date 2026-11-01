@@ -17,6 +17,16 @@ resource "random_password" "metrics_token" {
   special = false
 }
 
+# Signs session cookies in github (session) mode, and encrypts TOTP
+# secrets when MFA_SECRET_KEY is unset. Generated once and kept in
+# state; rotating it does NOT sign users out (sessions are server-side
+# rows, ADR-0022), but it invalidates in-flight MFA step-up tokens.
+# Supply session_secret in session_auth instead to manage it yourself.
+resource "random_password" "session_secret" {
+  length  = 64
+  special = false
+}
+
 # Signs audit checkpoints. A stable key means checkpoints stay verifiable
 # across restarts (ADR-0016); publish the public half where auditors can read it.
 resource "tls_private_key" "audit_checkpoint" {

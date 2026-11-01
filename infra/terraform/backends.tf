@@ -8,6 +8,39 @@ locals {
     OIDC_TENANT_CLAIM = { value = var.oidc.tenant_claim }
     OIDC_ROLES_CLAIM  = { value = var.oidc.roles_claim }
   } : {}
+
+  # Session mode (auth_mode = "github", ADR-0022). Only the configured
+  # providers get variables: the backend advertises exactly the providers
+  # whose credentials are present, so an unconfigured provider stays off.
+  session_env = var.auth_mode == "github" && var.session_auth != null ? merge(
+    {
+      SESSION_SECRET = { value = coalesce(var.session_auth.session_secret, random_password.session_secret.result) }
+      FRONTEND_URL   = { value = var.frontend_url }
+    },
+    var.session_auth.github_client_id != null ? {
+      GITHUB_CLIENT_ID     = { value = var.session_auth.github_client_id }
+      GITHUB_CLIENT_SECRET = { value = var.session_auth.github_client_secret }
+      GITHUB_CALLBACK_URL  = { value = var.session_auth.github_callback_url }
+    } : {},
+    var.session_auth.google_client_id != null ? {
+      GOOGLE_CLIENT_ID     = { value = var.session_auth.google_client_id }
+      GOOGLE_CLIENT_SECRET = { value = var.session_auth.google_client_secret }
+      GOOGLE_CALLBACK_URL  = { value = var.session_auth.google_callback_url }
+    } : {},
+    var.session_auth.apple_client_id != null ? {
+      APPLE_CLIENT_ID    = { value = var.session_auth.apple_client_id }
+      APPLE_TEAM_ID      = { value = var.session_auth.apple_team_id }
+      APPLE_KEY_ID       = { value = var.session_auth.apple_key_id }
+      APPLE_PRIVATE_KEY  = { value = var.session_auth.apple_private_key }
+      APPLE_CALLBACK_URL = { value = var.session_auth.apple_callback_url }
+    } : {},
+    var.session_auth.credentials_enabled ? {
+      CREDENTIALS_AUTH_ENABLED = { value = "true" }
+    } : {},
+    var.session_auth.mfa_secret_key != null ? {
+      MFA_SECRET_KEY = { value = var.session_auth.mfa_secret_key }
+    } : {},
+  ) : {}
 }
 
 # ai-service: extraction and advisory signals. It gets no database credentials
@@ -94,12 +127,36 @@ resource "render_web_service" "core" {
       TRUST_PROXY_HOPS              = { value = tostring(var.trust_proxy_hops) }
     },
     local.oidc_env,
+    local.session_env,
   )
 
   lifecycle {
     precondition {
       condition     = var.auth_mode == "demo" || var.oidc != null
       error_message = "auth_mode = \"oidc\" needs the oidc variable (issuer, audience, jwks_url)."
+    }
+    precondition {
+      condition = var.auth_mode != "github" || (
+        var.session_auth != null && var.frontend_url != null && (
+          var.session_auth.github_client_id != null ||
+          var.session_auth.google_client_id != null ||
+          var.session_auth.apple_client_id != null ||
+          var.session_auth.credentials_enabled
+        ) &&
+        (var.session_auth.github_client_id == null || (
+          var.session_auth.github_client_secret != null && var.session_auth.github_callback_url != null
+        )) &&
+        (var.session_auth.google_client_id == null || (
+          var.session_auth.google_client_secret != null && var.session_auth.google_callback_url != null
+        )) &&
+        (var.session_auth.apple_client_id == null || (
+          var.session_auth.apple_team_id != null &&
+          var.session_auth.apple_key_id != null &&
+          var.session_auth.apple_private_key != null &&
+          var.session_auth.apple_callback_url != null
+        ))
+      )
+      error_message = "auth_mode = \"github\" needs frontend_url and session_auth with at least one complete provider (GitHub, Google, Apple) or credentials_enabled."
     }
   }
 }

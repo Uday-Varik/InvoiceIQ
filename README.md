@@ -10,7 +10,7 @@ bank-detail-change quarantine and a hash-chained audit ledger. Models help with
 extraction and risk signals, but every AI output is structurally limited to
 putting an invoice on HOLD.
 
-> Status: **Phase 15 (production sign-in).** All 16 phases (0–15) are merged.
+> Status: **Phase 16 (authentication v2).** All 17 phases (0–16) are merged.
 > The pipeline extracts 12 fields including payment terms, PO number, vendor
 > address and tax ID. GitHub, Google, and Apple OAuth, email/password
 > sign-in, multi-tenant onboarding, and a reporting dashboard are live. The
@@ -250,6 +250,17 @@ Same labels as above. Decisions in [ADR-0020](docs/adr/0020-pluggable-extraction
 | 4 | Onboarding lands in the app and offers continuing with an existing organization | Verified-in-sandbox | `apps/web/app/onboarding/page.tsx` |
 | 5 | Production sign-in setup: provider apps, Render variables, callback-URL rules, session notes | Verified-in-sandbox | `docs/runbooks/deploy-free-tier.md` |
 | 6 | ADR-0021 production sign-in decision record | Verified-in-sandbox | `docs/adr/0021-production-sign-in.md` |
+
+## Phase 16 deliverables
+
+| # | Deliverable | Label | Where |
+| --- | --- | --- | --- |
+| 1 | Server-side sessions: opaque tokens, hash-only storage, per-session and account-wide revocation, session list | Verified-in-sandbox | `services/core-api/src/auth/session.ts`, `services/core-api/src/auth/session-routes.ts` |
+| 2 | Credential lifecycle: email verification, password reset, 15-minute lockout, 12-character minimum, log mailer seam | Verified-in-sandbox | `services/core-api/src/auth/credentials.ts`, `services/core-api/src/auth/tokens.ts`, `services/core-api/src/auth/mailer.ts` |
+| 3 | TOTP two-factor authentication with recovery codes, enforced at sign-in for every provider; Account & security page | Verified-in-sandbox | `services/core-api/src/auth/totp.ts`, `services/core-api/src/auth/mfa.ts`, `apps/web/app/(app)/settings/page.tsx` |
+| 4 | RBAC permission matrix, tenant membership checks on admin routes, member guardrails, role-change endpoint, auth audit trail | Verified-in-sandbox | `services/core-api/src/auth/permissions.ts`, `services/core-api/src/http/admin-http.ts`, `services/core-api/src/auth/audit.ts` |
+| 5 | Terraform session mode: `auth_mode = "github"`, provider variables, preconditions | Verified-in-sandbox | `infra/terraform/variables.tf`, `infra/terraform/backends.tf` |
+| 6 | ADR-0022 authentication v2 decision record; runbook §5; threat-model T-03 updated | Verified-in-sandbox | `docs/adr/0022-authentication-v2.md`, `docs/runbooks/deploy-free-tier.md` |
 
 ## Getting started
 
