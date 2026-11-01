@@ -15,7 +15,15 @@ function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [verifyStatus, setVerifyStatus] = useState<'idle' | 'checking' | 'done' | 'failed'>('idle');
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+  const [resendSent, setResendSent] = useState(false);
 
   useEffect(() => {
     fetch('/auth/providers')
@@ -39,9 +47,23 @@ function LoginForm() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    const token = searchParams.get('verify');
+    if (!token) return;
+    setVerifyStatus('checking');
+    fetch('/auth/credentials/verify-email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+      .then((r) => setVerifyStatus(r.ok ? 'done' : 'failed'))
+      .catch(() => setVerifyStatus('failed'));
+  }, [searchParams]);
+
   async function handleCredentials(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setErrorCode('');
     setSubmitting(true);
     try {
       const endpoint = tab === 'signup' ? '/auth/credentials/register' : '/auth/credentials/login';
@@ -50,14 +72,46 @@ function LoginForm() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
+      const body = (await res.json().catch(() => ({}))) as { detail?: string; error?: string; verificationRequired?: boolean };
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { detail?: string };
+        setErrorCode(body.error ?? '');
         throw new Error(body.detail || `Authentication failed (${res.status})`);
+      }
+      if (body.verificationRequired) {
+        setVerificationSent(true);
+        setSubmitting(false);
+        return;
       }
       window.location.href = tab === 'signup' ? '/onboarding' : '/dashboard';
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
       setSubmitting(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    setResendSent(false);
+    await fetch('/auth/credentials/resend-verification', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email }),
+    }).catch(() => undefined);
+    setResendSent(true);
+  }
+
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotError('');
+    try {
+      const res = await fetch('/auth/credentials/forgot-password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      if (!res.ok) throw new Error('Could not send the reset email. Try again in a moment.');
+      setForgotSent(true);
+    } catch (err: unknown) {
+      setForgotError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -80,7 +134,31 @@ function LoginForm() {
             : 'Create your account with one of these methods. Signing in with GitHub, Google, or Apple for the first time creates your account and organization.'}
         </p>
 
-        {loading ? (
+        {verifyStatus === 'done' && (
+          <p className="auth-subtitle" role="status">
+            Your email is verified. Sign in below.
+          </p>
+        )}
+        {verifyStatus === 'failed' && (
+          <p className="login-error" role="alert">
+            That verification link is invalid or has expired. Sign in to request a new one.
+          </p>
+        )}
+
+        {verificationSent ? (
+          <div>
+            <p className="auth-subtitle">
+              Check your email for a verification link. You will be able to sign in once your address is verified.
+            </p>
+            <p className="auth-switch muted small">
+              Didn&apos;t get it?{' '}
+              <button className="btn-link" onClick={handleResendVerification}>
+                Resend the verification email
+              </button>
+              {resendSent && ' — sent.'}
+            </p>
+          </div>
+        ) : loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
             <span className="spinner" />
           </div>
@@ -148,14 +226,22 @@ function LoginForm() {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder={tab === 'signup' ? 'At least 8 characters' : ''}
+                      placeholder={tab === 'signup' ? 'At least 12 characters' : ''}
                       required
-                      minLength={tab === 'signup' ? 8 : undefined}
+                      minLength={tab === 'signup' ? 12 : undefined}
                       autoComplete={tab === 'signup' ? 'new-password' : 'current-password'}
                       className="auth-input"
                     />
                   </label>
                   {error && <p className="login-error">{error}</p>}
+                  {errorCode === 'email_not_verified' && (
+                    <p className="auth-switch muted small">
+                      <button type="button" className="btn-link" onClick={handleResendVerification}>
+                        Resend the verification email
+                      </button>
+                      {resendSent && ' — sent.'}
+                    </p>
+                  )}
                   <button type="submit" className="btn btn-primary auth-submit" disabled={submitting}>
                     {submitting ? (
                       <span className="login-btn-loading"><span className="spinner" /> {tab === 'signup' ? 'Creating account...' : 'Signing in...'}</span>
@@ -177,6 +263,40 @@ function LoginForm() {
                     </>
                   )}
                 </p>
+                {tab === 'signin' && (
+                  forgotMode ? (
+                    forgotSent ? (
+                      <p className="auth-subtitle" role="status">
+                        If an account exists for that address, a reset link is on its way. It expires in one hour.
+                      </p>
+                    ) : (
+                      <form onSubmit={handleForgotPassword} className="auth-form">
+                        <label className="auth-field">
+                          <span className="auth-label">Email for the reset link</span>
+                          <input
+                            type="email"
+                            value={forgotEmail}
+                            onChange={(e) => setForgotEmail(e.target.value)}
+                            placeholder="you@company.com"
+                            required
+                            autoComplete="email"
+                            className="auth-input"
+                          />
+                        </label>
+                        {forgotError && <p className="login-error">{forgotError}</p>}
+                        <button type="submit" className="btn btn-primary auth-submit">
+                          Send reset link
+                        </button>
+                      </form>
+                    )
+                  ) : (
+                    <p className="auth-switch muted small">
+                      <button className="btn-link" onClick={() => { setForgotMode(true); setForgotEmail(email); }}>
+                        Forgot your password?
+                      </button>
+                    </p>
+                  )
+                )}
               </>
             )}
           </>

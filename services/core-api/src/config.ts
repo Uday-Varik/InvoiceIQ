@@ -59,6 +59,11 @@ const EnvSchema = z
     APPLE_CALLBACK_URL: z.string().url().optional(),
     /** Enable email/password credential-based authentication. */
     CREDENTIALS_AUTH_ENABLED: z.enum(['true', 'false']).default('false'),
+    /** Account-email provider. Only the log mailer exists today; a real
+        transactional provider plugs into the Mailer interface later. */
+    MAILER_PROVIDER: z.enum(['log']).default('log'),
+    /** Sender address shown once a real mail provider exists. */
+    MAILER_FROM: z.string().min(1).default('no-reply@invoiceiq.local'),
 
     AI_SERVICE_URL: z.string().url(),
     AI_SIGNING_SECRET: z.string().min(32, 'AI_SIGNING_SECRET must be at least 32 characters'),
