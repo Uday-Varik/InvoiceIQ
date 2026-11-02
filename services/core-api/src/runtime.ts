@@ -7,7 +7,7 @@ import { registerMfaRoutes } from './auth/mfa-routes.js';
 import { registerGoogleAuthRoutes, type GoogleAuthOptions } from './auth/google.js';
 import { registerAppleAuthRoutes, type AppleAuthOptions } from './auth/apple.js';
 import { registerCredentialsAuthRoutes, type CredentialsAuthOptions } from './auth/credentials.js';
-import { logMailer } from './auth/mailer.js';
+import { logMailer, resendMailer } from './auth/mailer.js';
 import { sessionAuthenticator } from './auth/session.js';
 import { parseCheckpointKey, type Config } from './config.js';
 import { checkpointSigner } from './audit/checkpoints.js';
@@ -66,13 +66,17 @@ export function appleAuthOptionsFor(config: Config, ownerPool?: pg.Pool): AppleA
 }
 
 export function credentialsAuthOptionsFor(config: Config, ownerPool?: pg.Pool): CredentialsAuthOptions {
+  const mailer =
+    config.MAILER_PROVIDER === 'resend'
+      ? resendMailer({ from: config.MAILER_FROM, apiKey: config.MAILER_API_KEY as string })
+      : logMailer({ from: config.MAILER_FROM });
   return {
     sessionSecret: config.SESSION_SECRET as string,
     frontendUrl: config.FRONTEND_URL,
     defaultRole: config.GITHUB_DEFAULT_ROLE,
     tenantId: DEMO_TENANT_ID,
     ownerPool,
-    mailer: logMailer({ from: config.MAILER_FROM }),
+    mailer,
     appBaseUrl: config.FRONTEND_URL,
   };
 }
