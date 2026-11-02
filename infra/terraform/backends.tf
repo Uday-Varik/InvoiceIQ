@@ -40,6 +40,11 @@ locals {
     var.session_auth.mfa_secret_key != null ? {
       MFA_SECRET_KEY = { value = var.session_auth.mfa_secret_key }
     } : {},
+    var.session_auth.mailer_provider != null ? {
+      MAILER_PROVIDER = { value = var.session_auth.mailer_provider }
+      MAILER_API_KEY  = { value = var.session_auth.mailer_api_key }
+      MAILER_FROM     = { value = var.session_auth.mailer_from }
+    } : {},
   ) : {}
 }
 

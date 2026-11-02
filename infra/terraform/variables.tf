@@ -89,6 +89,9 @@ variable "session_auth" {
     credentials_enabled  = optional(bool, false)
     session_secret       = optional(string)
     mfa_secret_key       = optional(string)
+    mailer_provider      = optional(string)
+    mailer_api_key       = optional(string)
+    mailer_from          = optional(string)
   })
   default   = null
   sensitive = true

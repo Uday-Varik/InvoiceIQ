@@ -115,6 +115,15 @@ services:
       # Enable email/password sign-in (AUTH_MODE=github only). Unset means off.
       - key: CREDENTIALS_AUTH_ENABLED
         sync: false
+      # Account-email provider: 'log' (default, sends nothing) or 'resend'.
+      # With 'resend', MAILER_API_KEY is required and MAILER_FROM must be
+      # a sender on a domain verified in Resend.
+      - key: MAILER_PROVIDER
+        sync: false
+      - key: MAILER_API_KEY
+        sync: false
+      - key: MAILER_FROM
+        sync: false
       # Signs session cookies (>= 32 chars, required when AUTH_MODE=github).
       - key: SESSION_SECRET
         generateValue: true

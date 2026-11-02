@@ -59,10 +59,13 @@ const EnvSchema = z
     APPLE_CALLBACK_URL: z.string().url().optional(),
     /** Enable email/password credential-based authentication. */
     CREDENTIALS_AUTH_ENABLED: z.enum(['true', 'false']).default('false'),
-    /** Account-email provider. Only the log mailer exists today; a real
-        transactional provider plugs into the Mailer interface later. */
-    MAILER_PROVIDER: z.enum(['log']).default('log'),
-    /** Sender address shown once a real mail provider exists. */
+    /** Account-email provider. 'log' writes links to the server log and
+        sends nothing; 'resend' sends through the Resend API. */
+    MAILER_PROVIDER: z.enum(['log', 'resend']).default('log'),
+    /** Resend API key. Required when MAILER_PROVIDER=resend. */
+    MAILER_API_KEY: z.string().min(1).optional(),
+    /** Sender address. Must be on a domain verified in Resend when
+        MAILER_PROVIDER=resend; the .local default is log-only. */
     MAILER_FROM: z.string().min(1).default('no-reply@invoiceiq.local'),
     /** Key that encrypts stored TOTP secrets. Falls back to SESSION_SECRET
         when unset (with a startup warning); rotating it without
@@ -127,6 +130,18 @@ const EnvSchema = z
         for (const key of ['APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY'] as const) {
           if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required when APPLE_CLIENT_ID is set` });
         }
+      }
+    }
+    if (env.MAILER_PROVIDER === 'resend') {
+      if (!env.MAILER_API_KEY) {
+        ctx.addIssue({ code: 'custom', path: ['MAILER_API_KEY'], message: 'MAILER_API_KEY is required when MAILER_PROVIDER=resend' });
+      }
+      if (env.MAILER_FROM.endsWith('.local')) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['MAILER_FROM'],
+          message: 'MAILER_FROM must be a sender on a domain verified in Resend when MAILER_PROVIDER=resend',
+        });
       }
     }
     if (env.APP_DB_PASSWORD && !env.MIGRATION_DATABASE_URL) {

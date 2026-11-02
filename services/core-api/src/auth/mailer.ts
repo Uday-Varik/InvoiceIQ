@@ -1,10 +1,9 @@
 /**
- * Outbound account email. The interface is the seam: today the only
- * provider is the log mailer, which writes the full link to the server
- * log so an operator can retrieve it (and so local development works
- * with no mail account at all). A real transactional provider (Resend,
- * SendGrid, SES) plugs in here behind MAILER_PROVIDER with no route or
- * token-flow changes; until one is configured, no email leaves the
+ * Outbound account email. The interface is the seam: the log mailer
+ * writes the full link to the server log so local development works
+ * with no mail account at all, and the Resend mailer sends through
+ * the Resend API. No route or token-flow changes are needed to switch
+ * providers; until a real provider is configured, no email leaves the
  * server, and the runbook says so plainly.
  *
  * Links are built from the frontend origin so they land on the web app,
@@ -19,6 +18,62 @@ export interface Mailer {
 export interface MailerOptions {
   /** Address shown as the sender once a real provider exists. */
   readonly from: string;
+}
+
+export interface ResendMailerOptions extends MailerOptions {
+  readonly apiKey: string;
+  /** Injectable for tests; defaults to the global fetch. */
+  readonly fetchFn?: typeof fetch | undefined;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * Sends account email through Resend (POST /emails, Bearer API key).
+ * A non-2xx response throws with the status and Resend's message, so a
+ * failed send fails the sign-up/reset request instead of pretending
+ * the email went out. The API key never appears in the error.
+ */
+export function resendMailer(opts: ResendMailerOptions): Mailer {
+  const send = async (to: string, subject: string, body: string, link: string): Promise<void> => {
+    const fetchFn = opts.fetchFn ?? fetch;
+    const res = await fetchFn('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${opts.apiKey}`,
+        'content-type': 'application/json',
+        // Resend rejects requests without a User-Agent.
+        'user-agent': 'InvoiceIQ/1.0',
+      },
+      body: JSON.stringify({
+        from: opts.from,
+        to,
+        subject,
+        html: `<p>${escapeHtml(body)}</p><p><a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p>`,
+        text: `${body}\n\n${link}`,
+      }),
+    });
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const payload = (await res.json()) as { message?: unknown };
+        if (typeof payload.message === 'string') detail = `: ${payload.message}`;
+      } catch {
+        // The body was not JSON; the status alone is the report.
+      }
+      throw new Error(`Resend send failed (HTTP ${res.status})${detail}`);
+    }
+  };
+  return {
+    async sendVerificationEmail(to, link) {
+      await send(to, 'Verify your InvoiceIQ email', 'Verify your email address to finish creating your InvoiceIQ account:', link);
+    },
+    async sendPasswordResetEmail(to, link) {
+      await send(to, 'Reset your InvoiceIQ password', 'Use this link to reset your InvoiceIQ password. It expires in one hour:', link);
+    },
+  };
 }
 
 export function logMailer(opts: MailerOptions): Mailer {
