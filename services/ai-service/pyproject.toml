@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
   "fastapi==0.162.0",
   "invoiceiq-contracts",
-  "pydantic==2.14.1",
+  "pydantic==2.14.3",
   "pypdf==6.21.3",
   "uvicorn==0.54.0",
 ]
