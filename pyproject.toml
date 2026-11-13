@@ -4,12 +4,12 @@ members = ["packages/contracts", "services/ai-service", "data", "evals"]
 
 [dependency-groups]
 dev = [
-  "datamodel-code-generator==0.83.0",
+  "datamodel-code-generator==0.92.0",
   "httpx2==2.16.0",
-  "import-linter==2.15",
-  "mypy==2.4.0",
-  "pytest==9.1.1",
-  "ruff==0.16.10",
+  "import-linter==2.16",
+  "mypy==2.4.1",
+  "pytest==9.2.0",
+  "ruff==0.17.4",
   "types-PyYAML==6.0.12.20260906",
 ]
 
